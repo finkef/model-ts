@@ -18,6 +18,7 @@ import { OutputOf, TypeOf, ModelOf } from "@model-ts/core"
 import { RaceConditionError } from "./errors"
 import { absurd } from "fp-ts/lib/function"
 import { encodeDDBCursor, PaginationInput } from "./pagination"
+import { GSI_NAMES, GSIPK, GSISK } from "./gsi"
 
 export interface DynamoDBInternals<M extends Decodable> {
   __dynamoDBDecode(
@@ -512,18 +513,17 @@ export const getProvider = (client: Client) => {
     },
     instanceProps: {
       dynamodb: client,
-      keys<T extends DynamoDBModelInstance>(this: T) {
+      keys<T extends DynamoDBModelInstance>(
+        this: T
+      ): { PK: string; SK: string } & { [key in GSIPK]?: string } &
+        { [key in GSISK]?: string } {
         return {
           PK: this.PK,
           SK: this.SK,
-          GSI2PK: this.GSI2PK,
-          GSI2SK: this.GSI2SK,
-          GSI3PK: this.GSI3PK,
-          GSI3SK: this.GSI3SK,
-          GSI4PK: this.GSI4PK,
-          GSI4SK: this.GSI4SK,
-          GSI5PK: this.GSI5PK,
-          GSI5SK: this.GSI5SK,
+          ...GSI_NAMES.map((GSI) => ({
+            [`${GSI}PK`]: this[`${GSI}PK`],
+            [`${GSI}SK`]: this[`${GSI}SK`],
+          })).reduce((acc, cur) => Object.assign(acc, cur), {}),
         }
       },
       cursor<T extends DynamoDBModelInstance>(this: T) {

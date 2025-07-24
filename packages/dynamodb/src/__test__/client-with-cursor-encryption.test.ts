@@ -81,6 +81,12 @@ class MultiGSI extends model("MultiGSI", SIMPLE_CODEC, provider) {
   get GSI5SK() {
     return `GSI5SK#${this.bar}${this.bar}`
   }
+  get GSI19PK() {
+    return `GSI19PK#FIXED`
+  }
+  get GSI19SK() {
+    return `GSI19SK#${this.bar}${this.bar}`
+  }
 }
 
 class A extends model(
@@ -138,6 +144,10 @@ class Union extends union([C, D], provider) {}
 let sandbox: Sandbox
 beforeEach(async () => {
   sandbox = await createSandbox(client)
+})
+
+afterEach(async () => {
+  await sandbox.destroy()
 })
 
 describe("put", () => {
@@ -205,6 +215,8 @@ describe("put", () => {
         - Object {}
         + Object {
         +   "PK#yes__SK#42": Object {
+        +     "GSI19PK": "GSI19PK#FIXED",
+        +     "GSI19SK": "GSI19SK#4242",
         +     "GSI2PK": "GSI2PK#yesyes",
         +     "GSI2SK": "GSI2SK#FIXED",
         +     "GSI3PK": "GSI3PK#FIXED",
@@ -305,6 +317,8 @@ describe("put", () => {
         - Object {}
         + Object {
         +   "PK#yes__SK#42": Object {
+        +     "GSI19PK": "GSI19PK#FIXED",
+        +     "GSI19SK": "GSI19SK#4242",
         +     "GSI2PK": "GSI2PK#yesyes",
         +     "GSI2SK": "GSI2SK#FIXED",
         +     "GSI3PK": "GSI3PK#FIXED",
@@ -542,9 +556,11 @@ describe("softDelete", () => {
         - First value
         + Second value
 
-        @@ -1,25 +1,27 @@
+        @@ -1,27 +1,29 @@
           Object {
         -   "PK#hello__SK#42": Object {
+        -     "GSI19PK": "GSI19PK#FIXED",
+        -     "GSI19SK": "GSI19SK#4242",
         -     "GSI2PK": "GSI2PK#hellohello",
         -     "GSI2SK": "GSI2SK#FIXED",
         -     "GSI3PK": "GSI3PK#FIXED",
@@ -556,6 +572,8 @@ describe("softDelete", () => {
         -     "PK": "PK#hello",
         -     "SK": "SK#42",
         +   "$$DELETED$$PK#hello__$$DELETED$$SK#42": Object {
+        +     "GSI19PK": "$$DELETED$$GSI19PK#FIXED",
+        +     "GSI19SK": "$$DELETED$$GSI19SK#4242",
         +     "GSI2PK": "$$DELETED$$GSI2PK#hellohello",
         +     "GSI2SK": "$$DELETED$$GSI2SK#FIXED",
         +     "GSI3PK": "$$DELETED$$GSI3PK#FIXED",
@@ -1842,13 +1860,13 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(20)
       expect(page1.edges[0].node.c).toBe("0")
       expect(page1.edges[19].node.c).toBe("19")
@@ -1862,13 +1880,13 @@ Object {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(page2.edges.length).toBe(20)
       expect(page2.edges[0].node.c).toBe("20")
       expect(page2.edges[19].node.c).toBe("39")
@@ -1882,13 +1900,13 @@ Object {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
+        }
+      `)
       expect(page3.edges.length).toBe(20)
       expect(page3.edges[0].node.c).toBe("40")
       expect(page3.edges[19].node.c).toBe("59")
@@ -1903,13 +1921,13 @@ Object {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": true,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": true,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage2.edges.length).toBe(20)
       expect(backwardsPage2.edges[0].node.c).toBe("20")
       expect(backwardsPage2.edges[19].node.c).toBe("39")
@@ -1923,13 +1941,13 @@ Object {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage1.edges.length).toBe(20)
       expect(backwardsPage1.edges[0].node.c).toBe("0")
       expect(backwardsPage1.edges[19].node.c).toBe("19")
@@ -1954,13 +1972,13 @@ Object {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(20)
       expect(page1.edges[0].node.SK).toBe("000")
       expect(page1.edges[19].node.SK).toBe("019")
@@ -1974,13 +1992,13 @@ Object {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(page2.edges.length).toBe(20)
       expect(page2.edges[0].node.SK).toBe("020")
       expect(page2.edges[19].node.SK).toBe("039")
@@ -1994,13 +2012,13 @@ Object {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
+        }
+      `)
       expect(page3.edges.length).toBe(20)
       expect(page3.edges[0].node.SK).toBe("040")
       expect(page3.edges[19].node.SK).toBe("059")
@@ -2015,13 +2033,13 @@ Object {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": true,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": true,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage2.edges.length).toBe(20)
       expect(backwardsPage2.edges[0].node.SK).toBe("020")
       expect(backwardsPage2.edges[19].node.SK).toBe("039")
@@ -2035,13 +2053,13 @@ Object {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage1.edges.length).toBe(20)
       expect(backwardsPage1.edges[0].node.SK).toBe("000")
       expect(backwardsPage1.edges[19].node.SK).toBe("019")
@@ -2065,13 +2083,13 @@ Object {
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page.edges.length).toBe(10)
       expect(page.edges[0].node.c).toBe("0")
       expect(page.edges[9].node.c).toBe("9")
@@ -2095,13 +2113,13 @@ Object {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKvfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKvfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(50)
       expect(page1.edges[0].node.c).toBe("0")
       expect(page1.edges[49].node.c).toBe("49")
@@ -2126,13 +2144,13 @@ Object {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(20)
       expect(page1.edges[0].node.c).toBe("0")
       expect(page1.edges[19].node.c).toBe("19")
@@ -2145,13 +2163,13 @@ Object {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(page2.edges.length).toBe(20)
       expect(page2.edges[0].node.c).toBe("20")
       expect(page2.edges[19].node.c).toBe("39")
@@ -2164,13 +2182,13 @@ Object {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
+        }
+      `)
       expect(page3.edges.length).toBe(20)
       expect(page3.edges[0].node.c).toBe("40")
       expect(page3.edges[19].node.c).toBe("59")
@@ -2184,13 +2202,13 @@ Object {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": true,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": true,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage2.edges.length).toBe(20)
       expect(backwardsPage2.edges[0].node.c).toBe("20")
       expect(backwardsPage2.edges[19].node.c).toBe("39")
@@ -2203,13 +2221,13 @@ Object {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage1.edges.length).toBe(20)
       expect(backwardsPage1.edges[0].node.c).toBe("0")
       expect(backwardsPage1.edges[19].node.c).toBe("19")
@@ -2232,13 +2250,13 @@ Object {
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page.edges.length).toBe(10)
       expect(page.edges[0].node.c).toBe("0")
       expect(page.edges[9].node.c).toBe("9")
@@ -2261,13 +2279,13 @@ Object {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKvfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKvfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(50)
       expect(page1.edges[0].node.c).toBe("0")
       expect(page1.edges[49].node.c).toBe("49")
@@ -2293,13 +2311,13 @@ Object {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(20)
       expect(page1.edges[0].node.SK).toBe("000")
       expect(page1.edges[19].node.SK).toBe("019")
@@ -2312,13 +2330,13 @@ Object {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(page2.edges.length).toBe(20)
       expect(page2.edges[0].node.SK).toBe("020")
       expect(page2.edges[19].node.SK).toBe("039")
@@ -2331,13 +2349,13 @@ Object {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoLvfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKv1n9aOeA8=",
+        }
+      `)
       expect(page3.edges.length).toBe(20)
       expect(page3.edges[0].node.SK).toBe("040")
       expect(page3.edges[19].node.SK).toBe("059")
@@ -2351,13 +2369,13 @@ Object {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": true,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo5Xfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": true,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo4X1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage2.edges.length).toBe(20)
       expect(backwardsPage2.edges[0].node.SK).toBe("020")
       expect(backwardsPage2.edges[19].node.SK).toBe("039")
@@ -2370,13 +2388,13 @@ Object {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
-  "hasNextPage": false,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo7vfn9aOeA8=",
+          "hasNextPage": false,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(backwardsPage1.edges.length).toBe(20)
       expect(backwardsPage1.edges[0].node.SK).toBe("000")
       expect(backwardsPage1.edges[19].node.SK).toBe("019")
@@ -2400,13 +2418,13 @@ Object {
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6vfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6vfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page.edges.length).toBe(10)
       expect(page.edges[0].node.SK).toBe("000")
       expect(page.edges[9].node.SK).toBe("009")
@@ -2430,13 +2448,13 @@ Object {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-Object {
-  "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKvfn9aOeA8=",
-  "hasNextPage": true,
-  "hasPreviousPage": false,
-  "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
-}
-`)
+        Object {
+          "endCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOoKvfn9aOeA8=",
+          "hasNextPage": true,
+          "hasPreviousPage": false,
+          "startCursor": "cC4wNVXawu0oBvB8vqW4J/RG6hbr3ndOo6v1n9aOeA8=",
+        }
+      `)
       expect(page1.edges.length).toBe(50)
       expect(page1.edges[0].node.SK).toBe("000")
       expect(page1.edges[49].node.SK).toBe("049")

@@ -3,6 +3,7 @@ import { chunksOf } from "fp-ts/lib/Array"
 import DynamoDB from "aws-sdk/clients/dynamodb"
 import diff from "snapshot-diff"
 import { Client } from "./client"
+import { GSI_NAMES } from "./gsi"
 
 const ddb = new DynamoDB({
   accessKeyId: "xxx",
@@ -27,14 +28,10 @@ export const createTable = async () => {
       AttributeDefinitions: [
         { AttributeName: "PK", AttributeType: "S" },
         { AttributeName: "SK", AttributeType: "S" },
-        { AttributeName: "GSI2PK", AttributeType: "S" },
-        { AttributeName: "GSI2SK", AttributeType: "S" },
-        { AttributeName: "GSI3PK", AttributeType: "S" },
-        { AttributeName: "GSI3SK", AttributeType: "S" },
-        { AttributeName: "GSI4PK", AttributeType: "S" },
-        { AttributeName: "GSI4SK", AttributeType: "S" },
-        { AttributeName: "GSI5PK", AttributeType: "S" },
-        { AttributeName: "GSI5SK", AttributeType: "S" },
+        ...GSI_NAMES.flatMap((GSI) => [
+          { AttributeName: `${GSI}PK`, AttributeType: "S" },
+          { AttributeName: `${GSI}SK`, AttributeType: "S" },
+        ]),
       ],
       KeySchema: [
         { AttributeName: "PK", KeyType: "HASH" },
@@ -51,46 +48,16 @@ export const createTable = async () => {
             ProjectionType: "ALL",
           },
         },
-        {
-          IndexName: "GSI2",
+        ...GSI_NAMES.map((GSI) => ({
+          IndexName: GSI,
           KeySchema: [
-            { AttributeName: "GSI2PK", KeyType: "HASH" },
-            { AttributeName: "GSI2SK", KeyType: "RANGE" },
+            { AttributeName: `${GSI}PK`, KeyType: "HASH" },
+            { AttributeName: `${GSI}SK`, KeyType: "RANGE" },
           ],
           Projection: {
             ProjectionType: "ALL",
           },
-        },
-        {
-          IndexName: "GSI3",
-          KeySchema: [
-            { AttributeName: "GSI3PK", KeyType: "HASH" },
-            { AttributeName: "GSI3SK", KeyType: "RANGE" },
-          ],
-          Projection: {
-            ProjectionType: "ALL",
-          },
-        },
-        {
-          IndexName: "GSI4",
-          KeySchema: [
-            { AttributeName: "GSI4PK", KeyType: "HASH" },
-            { AttributeName: "GSI4SK", KeyType: "RANGE" },
-          ],
-          Projection: {
-            ProjectionType: "ALL",
-          },
-        },
-        {
-          IndexName: "GSI5",
-          KeySchema: [
-            { AttributeName: "GSI5PK", KeyType: "HASH" },
-            { AttributeName: "GSI5SK", KeyType: "RANGE" },
-          ],
-          Projection: {
-            ProjectionType: "ALL",
-          },
-        },
+        })),
       ],
       BillingMode: "PAY_PER_REQUEST",
     })

@@ -42,6 +42,7 @@ import {
   PaginationInput,
   PaginationResult,
 } from "./pagination"
+import { GSI, GSI_NAMES, GSIPK, GSISK } from "./gsi"
 
 export type QueryParams = Omit<
   DocumentClient.QueryInput,
@@ -537,7 +538,7 @@ export class Client {
               cursor,
               // GSI1 is the inverse index and uses PK and SK (switched around)
               params.IndexName && params.IndexName !== "GSI1"
-                ? (params.IndexName as "GSI2" | "GSI3" | "GSI4" | "GSI5")
+                ? (params.IndexName as GSI)
                 : undefined,
               this.cursorEncryptionKey
             )
@@ -888,15 +889,8 @@ export class Client {
     T extends {
       PK: string
       SK: string
-      GSI2PK?: string
-      GSI2SK?: string
-      GSI3PK?: string
-      GSI3SK?: string
-      GSI4PK?: string
-      GSI4SK?: string
-      GSI5PK?: string
-      GSI5SK?: string
-    }
+    } & { [key in GSIPK]?: string } &
+      { [key in GSISK]?: string }
   >(item: T): T {
     const prefix = "$$DELETED$$"
 
@@ -908,14 +902,10 @@ export class Client {
       ...item,
       PK: maybeWithPrefix(item.PK),
       SK: maybeWithPrefix(item.SK),
-      GSI2PK: maybeWithPrefix(item.GSI2PK),
-      GSI2SK: maybeWithPrefix(item.GSI2SK),
-      GSI3PK: maybeWithPrefix(item.GSI3PK),
-      GSI3SK: maybeWithPrefix(item.GSI3SK),
-      GSI4PK: maybeWithPrefix(item.GSI4PK),
-      GSI4SK: maybeWithPrefix(item.GSI4SK),
-      GSI5PK: maybeWithPrefix(item.GSI5PK),
-      GSI5SK: maybeWithPrefix(item.GSI5SK),
+      ...GSI_NAMES.map((GSI) => ({
+        [`${GSI}PK`]: maybeWithPrefix(item[`${GSI}PK`]),
+        [`${GSI}SK`]: maybeWithPrefix(item[`${GSI}SK`]),
+      })).reduce((acc, cur) => Object.assign(acc, cur), {}),
     }
   }
 }
