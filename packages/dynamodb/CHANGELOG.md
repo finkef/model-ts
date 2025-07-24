@@ -1,5 +1,17 @@
 # @model-ts/dynamodb
 
+## 3.0.0
+
+### Major Changes
+
+- 647be0e: Add support for additional GSIs.
+
+  Note: This is potentially breaking due to cursor sizes growing significantly, hence releasing as a major version.
+
+### Minor Changes
+
+- c148fb9: Allow passing custom pagination options
+
 ## 2.0.0
 
 ### Patch Changes
