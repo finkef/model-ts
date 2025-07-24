@@ -34,13 +34,27 @@ export interface PaginationInput {
   after?: string | null
 }
 
-// TODO: make configurable
+export interface PaginationOptions {
+  /**
+   * Maximum number of items to return.
+   */
+  limit?: number
+
+  /**
+   * Default number of items to return if no limit is provided.
+   */
+  default?: number
+}
+
 const DEFAULT_OPTIONS = {
   limit: 50,
   default: 20,
 }
 
-export function decodePagination(pagination: PaginationInput): {
+export function decodePagination(
+  pagination: PaginationInput,
+  paginationOptions: PaginationOptions = DEFAULT_OPTIONS
+): {
   cursor?: string
   limit: number
   direction: PaginationDirection
@@ -66,8 +80,8 @@ export function decodePagination(pagination: PaginationInput): {
   return {
     cursor: before ?? after ?? undefined,
     limit: Math.min(
-      first ?? last ?? DEFAULT_OPTIONS.default,
-      DEFAULT_OPTIONS.limit
+      first ?? last ?? paginationOptions.default ?? DEFAULT_OPTIONS.default,
+      paginationOptions.limit ?? DEFAULT_OPTIONS.limit
     ),
     direction:
       before || last

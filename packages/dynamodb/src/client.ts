@@ -40,6 +40,7 @@ import {
   encodeDDBCursor,
   PaginationDirection,
   PaginationInput,
+  PaginationOptions,
   PaginationResult,
 } from "./pagination"
 import { GSI, GSI_NAMES, GSIPK, GSISK } from "./gsi"
@@ -86,6 +87,11 @@ export interface ClientProps
    * Must be a 32 character string, 256 bits.
    */
   cursorEncryptionKey?: Buffer
+
+  /**
+   * Defaults for pagination.
+   */
+  paginationOptions?: PaginationOptions
 }
 
 export interface Key {
@@ -98,10 +104,12 @@ export class Client {
   documentClient: DocumentClient
   dataLoader: DataLoader<GetOperation<Decodable>, DynamoDBModelInstance, string>
   cursorEncryptionKey?: Buffer
+  paginationOptions?: PaginationOptions
 
   constructor(props: ClientProps) {
     this.tableName = props?.tableName
     this.cursorEncryptionKey = props?.cursorEncryptionKey
+    this.paginationOptions = props?.paginationOptions
     this.documentClient = new DocumentClient(props)
     this.dataLoader = new DataLoader<
       GetOperation<Decodable>,
@@ -526,7 +534,10 @@ export class Client {
     args: PaginationInput,
     params: PaginationParams
   ): Promise<PaginationResult<DecodableInstance<M>>> {
-    const { cursor, limit, direction } = decodePagination(args)
+    const { cursor, limit, direction } = decodePagination(
+      args,
+      this.paginationOptions
+    )
 
     const { results } = await this.query(
       {

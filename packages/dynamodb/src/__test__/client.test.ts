@@ -2139,6 +2139,56 @@ describe("paginate", () => {
       expect(page1.edges[0].node.c).toBe("0")
       expect(page1.edges[49].node.c).toBe("49")
     })
+
+    test("it respects custom pagination default", async () => {
+      client.paginationOptions = {
+        default: 40,
+      }
+
+      const items = Array.from({ length: 50 }).map(
+        (_, i) =>
+          new C({ pk: "PK", sk: String(i).padStart(3, "0"), c: String(i) })
+      )
+
+      await sandbox.seed(...items)
+
+      const page = await client.paginate(
+        C,
+        {},
+        {
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "PK" },
+        }
+      )
+      expect(page.edges.length).toBe(40)
+
+      delete client.paginationOptions
+    })
+
+    test("it respects custom pagination limit", async () => {
+      client.paginationOptions = {
+        limit: 100,
+      }
+
+      const items = Array.from({ length: 120 }).map(
+        (_, i) =>
+          new C({ pk: "PK", sk: String(i).padStart(3, "0"), c: String(i) })
+      )
+
+      await sandbox.seed(...items)
+
+      const page = await client.paginate(
+        C,
+        { first: 110 },
+        {
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "PK" },
+        }
+      )
+      expect(page.edges.length).toBe(100)
+
+      delete client.paginationOptions
+    })
   })
 
   describe("model", () => {
@@ -2304,6 +2354,54 @@ describe("paginate", () => {
       expect(page1.edges.length).toBe(50)
       expect(page1.edges[0].node.c).toBe("0")
       expect(page1.edges[49].node.c).toBe("49")
+    })
+
+    test("it respects custom pagination default", async () => {
+      client.paginationOptions = {
+        default: 40,
+      }
+
+      const items = Array.from({ length: 50 }).map(
+        (_, i) =>
+          new C({ pk: "PK", sk: String(i).padStart(3, "0"), c: String(i) })
+      )
+
+      await sandbox.seed(...items)
+
+      const page = await C.paginate(
+        {},
+        {
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "PK" },
+        }
+      )
+      expect(page.edges.length).toBe(40)
+
+      delete client.paginationOptions
+    })
+
+    test("it respects custom pagination limit", async () => {
+      client.paginationOptions = {
+        limit: 100,
+      }
+
+      const items = Array.from({ length: 120 }).map(
+        (_, i) =>
+          new C({ pk: "PK", sk: String(i).padStart(3, "0"), c: String(i) })
+      )
+
+      await sandbox.seed(...items)
+
+      const page = await C.paginate(
+        { first: 110 },
+        {
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "PK" },
+        }
+      )
+      expect(page.edges.length).toBe(100)
+
+      delete client.paginationOptions
     })
   })
 
@@ -2473,6 +2571,72 @@ describe("paginate", () => {
       expect(page1.edges.length).toBe(50)
       expect(page1.edges[0].node.SK).toBe("000")
       expect(page1.edges[49].node.SK).toBe("049")
+    })
+
+    test("it respects custom pagination default", async () => {
+      client.paginationOptions = {
+        default: 40,
+      }
+
+      const items = Array.from({ length: 50 }).map((_, i) =>
+        i > 30
+          ? new C({
+              pk: "PK",
+              sk: String(i).padStart(3, "0"),
+              c: String(i),
+            })
+          : new D({
+              pk: "PK",
+              sk: String(i).padStart(3, "0"),
+              d: String(i),
+            })
+      )
+
+      await sandbox.seed(...items)
+
+      const page = await Union.paginate(
+        {},
+        {
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "PK" },
+        }
+      )
+      expect(page.edges.length).toBe(40)
+
+      delete client.paginationOptions
+    })
+
+    test("it respects custom pagination limit", async () => {
+      client.paginationOptions = {
+        limit: 100,
+      }
+
+      const items = Array.from({ length: 110 }).map((_, i) =>
+        i > 30
+          ? new C({
+              pk: "PK",
+              sk: String(i).padStart(3, "0"),
+              c: String(i),
+            })
+          : new D({
+              pk: "PK",
+              sk: String(i).padStart(3, "0"),
+              d: String(i),
+            })
+      )
+
+      await sandbox.seed(...items)
+
+      const page = await Union.paginate(
+        { first: 110 },
+        {
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "PK" },
+        }
+      )
+      expect(page.edges.length).toBe(100)
+
+      delete client.paginationOptions
     })
   })
 })
