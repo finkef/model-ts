@@ -1,7 +1,7 @@
 name: CI
 on: [pull_request]
 jobs:
-  "test:core":
+  test_core:
     name: "test:core"
     runs-on: ubuntu-latest
     steps:
@@ -21,7 +21,7 @@ jobs:
       - name: Test
         run: yarn workspace @model-ts/core test
 
-  "test:dynamodb":
+  test_dynamodb:
     name: "test:dynamodb"
     runs-on: ubuntu-latest
     services:
