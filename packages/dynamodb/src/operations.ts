@@ -6,6 +6,7 @@ import {
   Decodable,
 } from "./dynamodb-model"
 import { Key } from "./client"
+import { GSIPK, GSISK } from "./gsi"
 
 export type Operation<
   T extends DynamoDBModelInstance,
@@ -57,16 +58,9 @@ export interface UpdateRawOperation<M extends DynamoDBModelConstructor<any>>
   _operation: "updateRaw"
   _model: M
   key: Key
-  attributes: Partial<TypeOf<M>> & {
-    GSI2PK?: string | null
-    GSI2SK?: string | null
-    GSI3PK?: string | null
-    GSI3SK?: string | null
-    GSI4PK?: string | null
-    GSI4SK?: string | null
-    GSI5PK?: string | null
-    GSI5SK?: string | null
-  }
+  attributes: Partial<TypeOf<M>> &
+    { [key in GSIPK]?: string | null } &
+    { [key in GSISK]?: string | null }
 }
 
 // -------------------------------------------------------------------------------------

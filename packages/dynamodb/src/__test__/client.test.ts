@@ -134,6 +134,10 @@ beforeEach(async () => {
   sandbox = await createSandbox(client)
 })
 
+afterEach(async () => {
+  await sandbox.destroy()
+})
+
 describe("put", () => {
   describe("via instance", () => {
     test("it inserts a simple model", async () => {
