@@ -914,8 +914,8 @@ export class Client {
       PK: maybeWithPrefix(item.PK),
       SK: maybeWithPrefix(item.SK),
       ...GSI_NAMES.map((GSI) => ({
-        [`${GSI}PK`]: maybeWithPrefix(item[`${GSI}PK`]),
-        [`${GSI}SK`]: maybeWithPrefix(item[`${GSI}SK`]),
+        [`${GSI}PK`]: maybeWithPrefix(item[`${GSI}PK` as const]),
+        [`${GSI}SK`]: maybeWithPrefix(item[`${GSI}SK` as const]),
       })).reduce((acc, cur) => Object.assign(acc, cur), {}),
     }
   }

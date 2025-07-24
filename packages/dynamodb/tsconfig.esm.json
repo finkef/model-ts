@@ -5,9 +5,19 @@
     "module": "ES2015",
     "outDir": "./dist/esm",
     "paths": {
-      "@model-ts/core": ["../core"]
+      "@model-ts/core": [
+        "../core"
+      ]
     }
   },
-  "references": [{ "path": "../core/tsconfig.esm.json" }],
-  "exclude": ["__test__", "test-utils"]
+  "references": [
+    {
+      "path": "../core/tsconfig.esm.json"
+    }
+  ],
+  "exclude": [
+    "dist",
+    "__test__",
+    "test-utils"
+  ]
 }

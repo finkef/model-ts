@@ -4,9 +4,19 @@
     "rootDir": "./src",
     "outDir": "./dist/cjs",
     "paths": {
-      "@model-ts/core": ["../core"]
+      "@model-ts/core": [
+        "../core"
+      ]
     }
   },
-  "references": [{ "path": "../core" }],
-  "exclude": ["__test__", "test-utils"]
+  "references": [
+    {
+      "path": "../core"
+    }
+  ],
+  "exclude": [
+    "dist",
+    "__test__",
+    "test-utils"
+  ]
 }

@@ -148,8 +148,8 @@ export const encodeDDBCursor = (
       PK,
       SK,
       ...GSI_NAMES.map((GSI) => ({
-        [`${GSI}PK`]: values[`${GSI}PK`],
-        [`${GSI}SK`]: values[`${GSI}SK`],
+        [`${GSI}PK`]: values[`${GSI}PK` as const],
+        [`${GSI}SK`]: values[`${GSI}SK` as const],
       })).reduce((acc, cur) => Object.assign(acc, cur), {}),
     })
   ).toString("base64")

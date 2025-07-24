@@ -4,6 +4,10 @@
     "rootDir": "./src",
     "outDir": "./dist/cjs"
   },
-  "exclude": ["__test__", "test-utils"],
+  "exclude": [
+    "dist",
+    "__test__",
+    "test-utils"
+  ],
   "references": []
 }
