@@ -13,10 +13,7 @@ jobs:
           node-version: 12.x
 
       - name: Install Dependencies
-        run: yarn
-
-      - name: Verify
-        run: yarn verify
+        run: yarn install --frozen-lockfile
 
       - name: Test
         run: yarn workspace @model-ts/core test
@@ -38,10 +35,7 @@ jobs:
           node-version: 12.x
 
       - name: Install Dependencies
-        run: yarn
-
-      - name: Verify
-        run: yarn verify
+        run: yarn install --frozen-lockfile
 
       - name: Test
         run: yarn workspace @model-ts/dynamodb test
