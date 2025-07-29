@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 3.0.1
+
+### Patch Changes
+
+- 7f272bd: Fix rest/spread operator removing computed fields
+
 ## 3.0.0
 
 ### Major Changes
