@@ -132,11 +132,7 @@ const decryptCursor = (key: Buffer, encryptedCursor: string) => {
 }
 
 export const encodeDDBCursor = (
-  {
-    PK,
-    SK,
-    ...values
-  }: {
+  item: {
     PK: string
     SK: string
   } & { [key in GSIPK]?: string } &
@@ -145,11 +141,11 @@ export const encodeDDBCursor = (
 ) => {
   const cursor = Buffer.from(
     JSON.stringify({
-      PK,
-      SK,
+      PK: item.PK,
+      SK: item.SK,
       ...GSI_NAMES.map((GSI) => ({
-        [`${GSI}PK`]: values[`${GSI}PK` as const],
-        [`${GSI}SK`]: values[`${GSI}SK` as const],
+        [`${GSI}PK`]: item[`${GSI}PK` as const],
+        [`${GSI}SK`]: item[`${GSI}SK` as const],
       })).reduce((acc, cur) => Object.assign(acc, cur), {}),
     })
   ).toString("base64")
