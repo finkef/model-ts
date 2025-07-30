@@ -125,23 +125,25 @@ export const createSandbox = async (client: Client): Promise<Sandbox> => {
     seed: async (...args: Array<{ [key: string]: any }>) => {
       const chunks = chunksOf(25)(args)
 
-      for (const chunk of chunks) {
-        const items = chunk.map((i) =>
-          typeof i?._model?.__dynamoDBEncode === "function"
-            ? i._model.__dynamoDBEncode(i)
-            : typeof i.encode === "function"
-            ? i.encode()
-            : i
-        )
+      await Promise.all(
+        chunks.map(async (chunk) => {
+          const items = chunk.map((i) =>
+            typeof i?._model?.__dynamoDBEncode === "function"
+              ? i._model.__dynamoDBEncode(i)
+              : typeof i.encode === "function"
+              ? i.encode()
+              : i
+          )
 
-        await client.documentClient
-          .batchWrite({
-            RequestItems: {
-              [tableName]: items.map((i) => ({ PutRequest: { Item: i } })),
-            },
-          })
-          .promise()
-      }
+          return client.documentClient
+            .batchWrite({
+              RequestItems: {
+                [tableName]: items.map((i) => ({ PutRequest: { Item: i } })),
+              },
+            })
+            .promise()
+        })
+      )
     },
     get: (pk: string, sk: string) =>
       client.documentClient

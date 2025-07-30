@@ -2640,3 +2640,13 @@ describe("paginate", () => {
     })
   })
 })
+
+describe("sandbox", () => {
+  test("it seeds a lot of items", async () => {
+    await sandbox.seed(
+      ...Array.from({ length: 3000 }).map(
+        (_, i) => new A({ pk: "PK", sk: String(i).padStart(3, "0"), a: i })
+      )
+    )
+  })
+})
