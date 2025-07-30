@@ -8,7 +8,7 @@ import {
   ItemNotFoundError,
   ConditionalCheckFailedError,
   RaceConditionError,
-  BulkWriteTransactionError,
+  BulkWriteTransactionError
 } from "../errors"
 
 const client = new Client({ tableName: "table" })
@@ -16,7 +16,7 @@ const provider = getProvider(client)
 
 const SIMPLE_CODEC = t.type({
   foo: t.string,
-  bar: t.number,
+  bar: t.number
 })
 
 class Simple extends model("Simple", SIMPLE_CODEC, provider) {
@@ -335,7 +335,7 @@ describe("put", () => {
 
       await expect(
         MultiGSI.put(new MultiGSI({ foo: "yes", bar: 42 }), {
-          IgnoreExistence: true,
+          IgnoreExistence: true
         })
       ).resolves.toBeInstanceOf(MultiGSI)
     })
@@ -355,7 +355,7 @@ describe("get", () => {
 
       const result = await Simple.get({
         PK: item.keys().PK,
-        SK: item.keys().SK,
+        SK: item.keys().SK
       })
 
       expect(result.values()).toMatchInlineSnapshot(`
@@ -421,8 +421,8 @@ describe("delete", () => {
         _model: Simple,
         key: {
           PK: item.keys().PK,
-          SK: item.keys().SK,
-        },
+          SK: item.keys().SK
+        }
       })
 
       expect(result).toBeNull()
@@ -455,7 +455,7 @@ describe("delete", () => {
 
       const result = await Simple.delete({
         PK: item.keys().PK,
-        SK: item.keys().SK,
+        SK: item.keys().SK
       })
 
       expect(result).toBeNull()
@@ -830,7 +830,7 @@ describe("query", () => {
       await client.query(
         {
           KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
-          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" },
+          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" }
         },
         { a: A, b: B, union: Union }
       )
@@ -854,7 +854,7 @@ describe("query", () => {
       await client.query(
         {
           KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
-          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" }
         },
         { a: A, b: B, union: Union }
       )
@@ -890,7 +890,7 @@ describe("query", () => {
     const { a, b, union, _unknown, meta } = await client.query(
       {
         KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
-        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" }
       },
       { a: A, b: B, union: Union }
     )
@@ -898,9 +898,9 @@ describe("query", () => {
     expect({
       meta: meta,
       _unknown: _unknown,
-      a: a.map((item) => item.values()),
-      b: b.map((item) => item.values()),
-      union: union.map((item) => item.values()),
+      a: a.map(item => item.values()),
+      b: b.map(item => item.values()),
+      union: union.map(item => item.values())
     }).toMatchInlineSnapshot(`
       Object {
         "_unknown": Array [
@@ -963,7 +963,7 @@ describe("query", () => {
       {
         KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
         ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
-        Limit: 30,
+        Limit: 30
       },
       { a: A, b: B }
     )
@@ -978,7 +978,7 @@ describe("query", () => {
         KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
         ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
         Limit: 30,
-        ExclusiveStartKey: firstPage.meta.lastEvaluatedKey,
+        ExclusiveStartKey: firstPage.meta.lastEvaluatedKey
       },
       { a: A, b: B }
     )
@@ -1006,7 +1006,7 @@ describe("query", () => {
         ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
         FetchAllPages: true,
         // You wouldn't set a limit in a real-world use case here to optimize fetching all items.
-        Limit: 10,
+        Limit: 10
       },
       { a: A, b: B }
     )
@@ -1019,7 +1019,7 @@ describe("query", () => {
 })
 
 describe("bulk", () => {
-  describe("< 25 elements (true transaction)", () => {
+  describe("< 100 elements (true transaction)", () => {
     test("it succeeds", async () => {
       const softDeleteTarget = new B({ pk: "PK#3", sk: "SK#3", b: "bar" })
 
@@ -1043,16 +1043,16 @@ describe("bulk", () => {
         new B({
           pk: "PK#UPDATE",
           sk: "SK#UPDATE",
-          b: "bar",
+          b: "bar"
         }).operation("update", { b: "baz" }),
         new B({
           pk: "PK#COND",
           sk: "SK#COND",
-          b: "cond",
+          b: "cond"
         }).operation("condition", {
           ConditionExpression: "b = :cond",
-          ExpressionAttributeValues: { ":cond": "cond" },
-        }),
+          ExpressionAttributeValues: { ":cond": "cond" }
+        })
       ])
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
@@ -1172,7 +1172,7 @@ describe("bulk", () => {
             "updateRaw",
             { PK: "PK#nicetry", SK: "SK#nope" },
             { a: 234 }
-          ),
+          )
         ])
       ).rejects.toBeInstanceOf(BulkWriteTransactionError)
 
@@ -1180,7 +1180,7 @@ describe("bulk", () => {
     })
   })
 
-  describe("> 25 items (pseudo transaction)", () => {
+  describe("> 100 items (pseudo transaction)", () => {
     test("it succeeds", async () => {
       await sandbox.seed(
         new A({ pk: "PK#1", sk: "SK#1", a: 1 }),
@@ -1200,11 +1200,11 @@ describe("bulk", () => {
         new B({
           pk: "PK#UPDATE",
           sk: "SK#UPDATE",
-          b: "bar",
+          b: "bar"
         }).operation("update", { b: "baz" }),
-        ...Array.from({ length: 25 }).map((_, i) =>
+        ...Array.from({ length: 100 }).map((_, i) =>
           new A({ pk: `PK#A${i}`, sk: `SK#A${i}`, a: i }).operation("put")
-        ),
+        )
       ])
 
       //#region snapshot
@@ -1213,7 +1213,7 @@ describe("bulk", () => {
         - First value
         + Second value
 
-        @@ -2,28 +2,271 @@
+        @@ -2,28 +2,946 @@
             "PK#1__SK#1": Object {
               "PK": "PK#1",
               "SK": "SK#1",
@@ -1268,7 +1268,10 @@ describe("bulk", () => {
         +     "a": 13,
         +     "pk": "PK#A13",
         +     "sk": "SK#A13",
-        +   },
+            },
+        -   "PK#2__SK#2": Object {
+        -     "PK": "PK#2",
+        -     "SK": "SK#2",
         +   "PK#A14__SK#A14": Object {
         +     "PK": "PK#A14",
         +     "SK": "SK#A14",
@@ -1277,10 +1280,7 @@ describe("bulk", () => {
         +     "a": 14,
         +     "pk": "PK#A14",
         +     "sk": "SK#A14",
-            },
-        -   "PK#2__SK#2": Object {
-        -     "PK": "PK#2",
-        -     "SK": "SK#2",
+        +   },
         +   "PK#A15__SK#A15": Object {
         +     "PK": "PK#A15",
         +     "SK": "SK#A15",
@@ -1380,6 +1380,51 @@ describe("bulk", () => {
         +     "pk": "PK#A24",
         +     "sk": "SK#A24",
         +   },
+        +   "PK#A25__SK#A25": Object {
+        +     "PK": "PK#A25",
+        +     "SK": "SK#A25",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 25,
+        +     "pk": "PK#A25",
+        +     "sk": "SK#A25",
+        +   },
+        +   "PK#A26__SK#A26": Object {
+        +     "PK": "PK#A26",
+        +     "SK": "SK#A26",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 26,
+        +     "pk": "PK#A26",
+        +     "sk": "SK#A26",
+        +   },
+        +   "PK#A27__SK#A27": Object {
+        +     "PK": "PK#A27",
+        +     "SK": "SK#A27",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 27,
+        +     "pk": "PK#A27",
+        +     "sk": "SK#A27",
+        +   },
+        +   "PK#A28__SK#A28": Object {
+        +     "PK": "PK#A28",
+        +     "SK": "SK#A28",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 28,
+        +     "pk": "PK#A28",
+        +     "sk": "SK#A28",
+        +   },
+        +   "PK#A29__SK#A29": Object {
+        +     "PK": "PK#A29",
+        +     "SK": "SK#A29",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 29,
+        +     "pk": "PK#A29",
+        +     "sk": "SK#A29",
+        +   },
         +   "PK#A2__SK#A2": Object {
         +     "PK": "PK#A2",
         +     "SK": "SK#A2",
@@ -1391,6 +1436,96 @@ describe("bulk", () => {
         +     "pk": "PK#A2",
         +     "sk": "SK#A2",
         +   },
+        +   "PK#A30__SK#A30": Object {
+        +     "PK": "PK#A30",
+        +     "SK": "SK#A30",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 30,
+        +     "pk": "PK#A30",
+        +     "sk": "SK#A30",
+        +   },
+        +   "PK#A31__SK#A31": Object {
+        +     "PK": "PK#A31",
+        +     "SK": "SK#A31",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 31,
+        +     "pk": "PK#A31",
+        +     "sk": "SK#A31",
+        +   },
+        +   "PK#A32__SK#A32": Object {
+        +     "PK": "PK#A32",
+        +     "SK": "SK#A32",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 32,
+        +     "pk": "PK#A32",
+        +     "sk": "SK#A32",
+        +   },
+        +   "PK#A33__SK#A33": Object {
+        +     "PK": "PK#A33",
+        +     "SK": "SK#A33",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 33,
+        +     "pk": "PK#A33",
+        +     "sk": "SK#A33",
+        +   },
+        +   "PK#A34__SK#A34": Object {
+        +     "PK": "PK#A34",
+        +     "SK": "SK#A34",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 34,
+        +     "pk": "PK#A34",
+        +     "sk": "SK#A34",
+        +   },
+        +   "PK#A35__SK#A35": Object {
+        +     "PK": "PK#A35",
+        +     "SK": "SK#A35",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 35,
+        +     "pk": "PK#A35",
+        +     "sk": "SK#A35",
+        +   },
+        +   "PK#A36__SK#A36": Object {
+        +     "PK": "PK#A36",
+        +     "SK": "SK#A36",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 36,
+        +     "pk": "PK#A36",
+        +     "sk": "SK#A36",
+        +   },
+        +   "PK#A37__SK#A37": Object {
+        +     "PK": "PK#A37",
+        +     "SK": "SK#A37",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 37,
+        +     "pk": "PK#A37",
+        +     "sk": "SK#A37",
+        +   },
+        +   "PK#A38__SK#A38": Object {
+        +     "PK": "PK#A38",
+        +     "SK": "SK#A38",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 38,
+        +     "pk": "PK#A38",
+        +     "sk": "SK#A38",
+        +   },
+        +   "PK#A39__SK#A39": Object {
+        +     "PK": "PK#A39",
+        +     "SK": "SK#A39",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 39,
+        +     "pk": "PK#A39",
+        +     "sk": "SK#A39",
+        +   },
         +   "PK#A3__SK#A3": Object {
         +     "PK": "PK#A3",
         +     "SK": "SK#A3",
@@ -1399,6 +1534,96 @@ describe("bulk", () => {
         +     "a": 3,
         +     "pk": "PK#A3",
         +     "sk": "SK#A3",
+        +   },
+        +   "PK#A40__SK#A40": Object {
+        +     "PK": "PK#A40",
+        +     "SK": "SK#A40",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 40,
+        +     "pk": "PK#A40",
+        +     "sk": "SK#A40",
+        +   },
+        +   "PK#A41__SK#A41": Object {
+        +     "PK": "PK#A41",
+        +     "SK": "SK#A41",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 41,
+        +     "pk": "PK#A41",
+        +     "sk": "SK#A41",
+        +   },
+        +   "PK#A42__SK#A42": Object {
+        +     "PK": "PK#A42",
+        +     "SK": "SK#A42",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 42,
+        +     "pk": "PK#A42",
+        +     "sk": "SK#A42",
+        +   },
+        +   "PK#A43__SK#A43": Object {
+        +     "PK": "PK#A43",
+        +     "SK": "SK#A43",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 43,
+        +     "pk": "PK#A43",
+        +     "sk": "SK#A43",
+        +   },
+        +   "PK#A44__SK#A44": Object {
+        +     "PK": "PK#A44",
+        +     "SK": "SK#A44",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 44,
+        +     "pk": "PK#A44",
+        +     "sk": "SK#A44",
+        +   },
+        +   "PK#A45__SK#A45": Object {
+        +     "PK": "PK#A45",
+        +     "SK": "SK#A45",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 45,
+        +     "pk": "PK#A45",
+        +     "sk": "SK#A45",
+        +   },
+        +   "PK#A46__SK#A46": Object {
+        +     "PK": "PK#A46",
+        +     "SK": "SK#A46",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 46,
+        +     "pk": "PK#A46",
+        +     "sk": "SK#A46",
+        +   },
+        +   "PK#A47__SK#A47": Object {
+        +     "PK": "PK#A47",
+        +     "SK": "SK#A47",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 47,
+        +     "pk": "PK#A47",
+        +     "sk": "SK#A47",
+        +   },
+        +   "PK#A48__SK#A48": Object {
+        +     "PK": "PK#A48",
+        +     "SK": "SK#A48",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 48,
+        +     "pk": "PK#A48",
+        +     "sk": "SK#A48",
+        +   },
+        +   "PK#A49__SK#A49": Object {
+        +     "PK": "PK#A49",
+        +     "SK": "SK#A49",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 49,
+        +     "pk": "PK#A49",
+        +     "sk": "SK#A49",
         +   },
         +   "PK#A4__SK#A4": Object {
         +     "PK": "PK#A4",
@@ -1409,6 +1634,99 @@ describe("bulk", () => {
         +     "pk": "PK#A4",
         +     "sk": "SK#A4",
         +   },
+        +   "PK#A50__SK#A50": Object {
+        +     "PK": "PK#A50",
+        +     "SK": "SK#A50",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 50,
+        +     "pk": "PK#A50",
+        +     "sk": "SK#A50",
+        +   },
+        +   "PK#A51__SK#A51": Object {
+        +     "PK": "PK#A51",
+        +     "SK": "SK#A51",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 51,
+        +     "pk": "PK#A51",
+        +     "sk": "SK#A51",
+        +   },
+        +   "PK#A52__SK#A52": Object {
+        +     "PK": "PK#A52",
+        +     "SK": "SK#A52",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 52,
+        +     "pk": "PK#A52",
+        +     "sk": "SK#A52",
+            },
+        -   "PK#3__SK#3": Object {
+        -     "PK": "PK#3",
+        -     "SK": "SK#3",
+        +   "PK#A53__SK#A53": Object {
+        +     "PK": "PK#A53",
+        +     "SK": "SK#A53",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 53,
+        +     "pk": "PK#A53",
+        +     "sk": "SK#A53",
+        +   },
+        +   "PK#A54__SK#A54": Object {
+        +     "PK": "PK#A54",
+        +     "SK": "SK#A54",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 54,
+        +     "pk": "PK#A54",
+        +     "sk": "SK#A54",
+        +   },
+        +   "PK#A55__SK#A55": Object {
+        +     "PK": "PK#A55",
+        +     "SK": "SK#A55",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 55,
+        +     "pk": "PK#A55",
+        +     "sk": "SK#A55",
+        +   },
+        +   "PK#A56__SK#A56": Object {
+        +     "PK": "PK#A56",
+        +     "SK": "SK#A56",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 56,
+        +     "pk": "PK#A56",
+        +     "sk": "SK#A56",
+        +   },
+        +   "PK#A57__SK#A57": Object {
+        +     "PK": "PK#A57",
+        +     "SK": "SK#A57",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 57,
+        +     "pk": "PK#A57",
+        +     "sk": "SK#A57",
+        +   },
+        +   "PK#A58__SK#A58": Object {
+        +     "PK": "PK#A58",
+        +     "SK": "SK#A58",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 58,
+        +     "pk": "PK#A58",
+        +     "sk": "SK#A58",
+        +   },
+        +   "PK#A59__SK#A59": Object {
+        +     "PK": "PK#A59",
+        +     "SK": "SK#A59",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 59,
+        +     "pk": "PK#A59",
+        +     "sk": "SK#A59",
+        +   },
         +   "PK#A5__SK#A5": Object {
         +     "PK": "PK#A5",
         +     "SK": "SK#A5",
@@ -1417,6 +1735,96 @@ describe("bulk", () => {
         +     "a": 5,
         +     "pk": "PK#A5",
         +     "sk": "SK#A5",
+        +   },
+        +   "PK#A60__SK#A60": Object {
+        +     "PK": "PK#A60",
+        +     "SK": "SK#A60",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 60,
+        +     "pk": "PK#A60",
+        +     "sk": "SK#A60",
+        +   },
+        +   "PK#A61__SK#A61": Object {
+        +     "PK": "PK#A61",
+        +     "SK": "SK#A61",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 61,
+        +     "pk": "PK#A61",
+        +     "sk": "SK#A61",
+        +   },
+        +   "PK#A62__SK#A62": Object {
+        +     "PK": "PK#A62",
+        +     "SK": "SK#A62",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 62,
+        +     "pk": "PK#A62",
+        +     "sk": "SK#A62",
+        +   },
+        +   "PK#A63__SK#A63": Object {
+        +     "PK": "PK#A63",
+        +     "SK": "SK#A63",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 63,
+        +     "pk": "PK#A63",
+        +     "sk": "SK#A63",
+        +   },
+        +   "PK#A64__SK#A64": Object {
+        +     "PK": "PK#A64",
+        +     "SK": "SK#A64",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 64,
+        +     "pk": "PK#A64",
+        +     "sk": "SK#A64",
+        +   },
+        +   "PK#A65__SK#A65": Object {
+        +     "PK": "PK#A65",
+        +     "SK": "SK#A65",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 65,
+        +     "pk": "PK#A65",
+        +     "sk": "SK#A65",
+        +   },
+        +   "PK#A66__SK#A66": Object {
+        +     "PK": "PK#A66",
+        +     "SK": "SK#A66",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 66,
+        +     "pk": "PK#A66",
+        +     "sk": "SK#A66",
+        +   },
+        +   "PK#A67__SK#A67": Object {
+        +     "PK": "PK#A67",
+        +     "SK": "SK#A67",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 67,
+        +     "pk": "PK#A67",
+        +     "sk": "SK#A67",
+        +   },
+        +   "PK#A68__SK#A68": Object {
+        +     "PK": "PK#A68",
+        +     "SK": "SK#A68",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 68,
+        +     "pk": "PK#A68",
+        +     "sk": "SK#A68",
+        +   },
+        +   "PK#A69__SK#A69": Object {
+        +     "PK": "PK#A69",
+        +     "SK": "SK#A69",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 69,
+        +     "pk": "PK#A69",
+        +     "sk": "SK#A69",
         +   },
         +   "PK#A6__SK#A6": Object {
         +     "PK": "PK#A6",
@@ -1427,6 +1835,96 @@ describe("bulk", () => {
         +     "pk": "PK#A6",
         +     "sk": "SK#A6",
         +   },
+        +   "PK#A70__SK#A70": Object {
+        +     "PK": "PK#A70",
+        +     "SK": "SK#A70",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 70,
+        +     "pk": "PK#A70",
+        +     "sk": "SK#A70",
+        +   },
+        +   "PK#A71__SK#A71": Object {
+        +     "PK": "PK#A71",
+        +     "SK": "SK#A71",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 71,
+        +     "pk": "PK#A71",
+        +     "sk": "SK#A71",
+        +   },
+        +   "PK#A72__SK#A72": Object {
+        +     "PK": "PK#A72",
+        +     "SK": "SK#A72",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 72,
+        +     "pk": "PK#A72",
+        +     "sk": "SK#A72",
+        +   },
+        +   "PK#A73__SK#A73": Object {
+        +     "PK": "PK#A73",
+        +     "SK": "SK#A73",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 73,
+        +     "pk": "PK#A73",
+        +     "sk": "SK#A73",
+        +   },
+        +   "PK#A74__SK#A74": Object {
+        +     "PK": "PK#A74",
+        +     "SK": "SK#A74",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 74,
+        +     "pk": "PK#A74",
+        +     "sk": "SK#A74",
+        +   },
+        +   "PK#A75__SK#A75": Object {
+        +     "PK": "PK#A75",
+        +     "SK": "SK#A75",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 75,
+        +     "pk": "PK#A75",
+        +     "sk": "SK#A75",
+        +   },
+        +   "PK#A76__SK#A76": Object {
+        +     "PK": "PK#A76",
+        +     "SK": "SK#A76",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 76,
+        +     "pk": "PK#A76",
+        +     "sk": "SK#A76",
+        +   },
+        +   "PK#A77__SK#A77": Object {
+        +     "PK": "PK#A77",
+        +     "SK": "SK#A77",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 77,
+        +     "pk": "PK#A77",
+        +     "sk": "SK#A77",
+        +   },
+        +   "PK#A78__SK#A78": Object {
+        +     "PK": "PK#A78",
+        +     "SK": "SK#A78",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 78,
+        +     "pk": "PK#A78",
+        +     "sk": "SK#A78",
+        +   },
+        +   "PK#A79__SK#A79": Object {
+        +     "PK": "PK#A79",
+        +     "SK": "SK#A79",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 79,
+        +     "pk": "PK#A79",
+        +     "sk": "SK#A79",
+        +   },
         +   "PK#A7__SK#A7": Object {
         +     "PK": "PK#A7",
         +     "SK": "SK#A7",
@@ -1435,6 +1933,96 @@ describe("bulk", () => {
         +     "a": 7,
         +     "pk": "PK#A7",
         +     "sk": "SK#A7",
+        +   },
+        +   "PK#A80__SK#A80": Object {
+        +     "PK": "PK#A80",
+        +     "SK": "SK#A80",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 80,
+        +     "pk": "PK#A80",
+        +     "sk": "SK#A80",
+        +   },
+        +   "PK#A81__SK#A81": Object {
+        +     "PK": "PK#A81",
+        +     "SK": "SK#A81",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 81,
+        +     "pk": "PK#A81",
+        +     "sk": "SK#A81",
+        +   },
+        +   "PK#A82__SK#A82": Object {
+        +     "PK": "PK#A82",
+        +     "SK": "SK#A82",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 82,
+        +     "pk": "PK#A82",
+        +     "sk": "SK#A82",
+        +   },
+        +   "PK#A83__SK#A83": Object {
+        +     "PK": "PK#A83",
+        +     "SK": "SK#A83",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 83,
+        +     "pk": "PK#A83",
+        +     "sk": "SK#A83",
+        +   },
+        +   "PK#A84__SK#A84": Object {
+        +     "PK": "PK#A84",
+        +     "SK": "SK#A84",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 84,
+        +     "pk": "PK#A84",
+        +     "sk": "SK#A84",
+        +   },
+        +   "PK#A85__SK#A85": Object {
+        +     "PK": "PK#A85",
+        +     "SK": "SK#A85",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 85,
+        +     "pk": "PK#A85",
+        +     "sk": "SK#A85",
+        +   },
+        +   "PK#A86__SK#A86": Object {
+        +     "PK": "PK#A86",
+        +     "SK": "SK#A86",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 86,
+        +     "pk": "PK#A86",
+        +     "sk": "SK#A86",
+        +   },
+        +   "PK#A87__SK#A87": Object {
+        +     "PK": "PK#A87",
+        +     "SK": "SK#A87",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 87,
+        +     "pk": "PK#A87",
+        +     "sk": "SK#A87",
+        +   },
+        +   "PK#A88__SK#A88": Object {
+        +     "PK": "PK#A88",
+        +     "SK": "SK#A88",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 88,
+        +     "pk": "PK#A88",
+        +     "sk": "SK#A88",
+        +   },
+        +   "PK#A89__SK#A89": Object {
+        +     "PK": "PK#A89",
+        +     "SK": "SK#A89",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 89,
+        +     "pk": "PK#A89",
+        +     "sk": "SK#A89",
         +   },
         +   "PK#A8__SK#A8": Object {
         +     "PK": "PK#A8",
@@ -1445,23 +2033,113 @@ describe("bulk", () => {
         +     "pk": "PK#A8",
         +     "sk": "SK#A8",
         +   },
+        +   "PK#A90__SK#A90": Object {
+        +     "PK": "PK#A90",
+        +     "SK": "SK#A90",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 90,
+        +     "pk": "PK#A90",
+        +     "sk": "SK#A90",
+        +   },
+        +   "PK#A91__SK#A91": Object {
+        +     "PK": "PK#A91",
+        +     "SK": "SK#A91",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 91,
+        +     "pk": "PK#A91",
+        +     "sk": "SK#A91",
+        +   },
+        +   "PK#A92__SK#A92": Object {
+        +     "PK": "PK#A92",
+        +     "SK": "SK#A92",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 92,
+        +     "pk": "PK#A92",
+        +     "sk": "SK#A92",
+        +   },
+        +   "PK#A93__SK#A93": Object {
+        +     "PK": "PK#A93",
+        +     "SK": "SK#A93",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 93,
+        +     "pk": "PK#A93",
+        +     "sk": "SK#A93",
+        +   },
+        +   "PK#A94__SK#A94": Object {
+        +     "PK": "PK#A94",
+        +     "SK": "SK#A94",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 94,
+        +     "pk": "PK#A94",
+        +     "sk": "SK#A94",
+        +   },
+        +   "PK#A95__SK#A95": Object {
+        +     "PK": "PK#A95",
+        +     "SK": "SK#A95",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 95,
+        +     "pk": "PK#A95",
+        +     "sk": "SK#A95",
+        +   },
+        +   "PK#A96__SK#A96": Object {
+        +     "PK": "PK#A96",
+        +     "SK": "SK#A96",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 96,
+        +     "pk": "PK#A96",
+        +     "sk": "SK#A96",
+        +   },
+        +   "PK#A97__SK#A97": Object {
+        +     "PK": "PK#A97",
+        +     "SK": "SK#A97",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 97,
+        +     "pk": "PK#A97",
+        +     "sk": "SK#A97",
+        +   },
+        +   "PK#A98__SK#A98": Object {
+        +     "PK": "PK#A98",
+        +     "SK": "SK#A98",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 98,
+        +     "pk": "PK#A98",
+        +     "sk": "SK#A98",
+        +   },
+        +   "PK#A99__SK#A99": Object {
+        +     "PK": "PK#A99",
+        +     "SK": "SK#A99",
+        +     "_docVersion": 0,
+        +     "_tag": "A",
+        +     "a": 99,
+        +     "pk": "PK#A99",
+        +     "sk": "SK#A99",
+        +   },
         +   "PK#A9__SK#A9": Object {
         +     "PK": "PK#A9",
         +     "SK": "SK#A9",
-        +     "_docVersion": 0,
+              "_docVersion": 0,
         +     "_tag": "A",
         +     "a": 9,
         +     "pk": "PK#A9",
         +     "sk": "SK#A9",
-            },
-        -   "PK#3__SK#3": Object {
-        -     "PK": "PK#3",
-        -     "SK": "SK#3",
+        +   },
         +   "PK#UPDATE__SK#UPDATE": Object {
         +     "PK": "PK#UPDATE",
         +     "SK": "SK#UPDATE",
         +     "_docVersion": 1,
-        +     "_tag": "B",
+              "_tag": "B",
+        -     "b": "bar",
+        -     "pk": "PK#3",
+        -     "sk": "SK#3",
         +     "b": "baz",
         +     "pk": "PK#UPDATE",
         +     "sk": "SK#UPDATE",
@@ -1478,7 +2156,7 @@ describe("bulk", () => {
         +   "PK5__PK5": Object {
         +     "PK": "PK5",
         +     "SK": "PK5",
-              "_docVersion": 0,
+        +     "_docVersion": 0,
         +     "_tag": "A",
         +     "a": 5,
         +     "pk": "PK5",
@@ -1488,10 +2166,7 @@ describe("bulk", () => {
         +     "PK": "PK6",
         +     "SK": "SK6",
         +     "_docVersion": 0,
-              "_tag": "B",
-        -     "b": "bar",
-        -     "pk": "PK#3",
-        -     "sk": "SK#3",
+        +     "_tag": "B",
         +     "b": "baz",
         +     "pk": "PK6",
         +     "sk": "SK6",
@@ -1507,7 +2182,7 @@ describe("bulk", () => {
       await expect(
         client.bulk([
           // Succeeds
-          ...Array.from({ length: 40 }).map((_, i) =>
+          ...Array.from({ length: 110 }).map((_, i) =>
             new A({ pk: `PK#${i}`, sk: `SK#${i}`, a: i }).operation("put")
           ),
 
@@ -1516,7 +2191,7 @@ describe("bulk", () => {
             "condition",
             { PK: "nicetry", SK: "nope" },
             { ConditionExpression: "attribute_exists(PK)" }
-          ),
+          )
         ])
       ).rejects.toBeInstanceOf(BulkWriteTransactionError)
 
@@ -1550,7 +2225,7 @@ describe("batchGet", () => {
         two: A.operation("get", { PK: "PK#2", SK: "SK#2" }),
         three: A.operation("get", { PK: "PK#3", SK: "SK#3" }),
         four: A.operation("get", { PK: "PK#4", SK: "SK#4" }),
-        duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" }),
+        duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" })
       })
     ).rejects.toBeInstanceOf(ItemNotFoundError)
   })
@@ -1567,7 +2242,7 @@ describe("batchGet", () => {
         two: A.operation("get", { PK: "PK#2", SK: "SK#2" }),
         duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" }),
         error: A.operation("get", { PK: "PK#error", SK: "SK#error" }),
-        error2: A.operation("get", { PK: "PK#error2", SK: "SK#error2" }),
+        error2: A.operation("get", { PK: "PK#error2", SK: "SK#error2" })
       },
       { individualErrors: true }
     )
@@ -1591,7 +2266,7 @@ describe("batchGet", () => {
       two: A.operation("get", { PK: "PK#2", SK: "SK#2" }),
       three: A.operation("get", { PK: "PK#3", SK: "SK#3" }),
       four: A.operation("get", { PK: "PK#4", SK: "SK#4" }),
-      duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" }),
+      duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" })
     })
 
     expect(
@@ -1654,7 +2329,7 @@ describe("load", () => {
       const recovered = await client.load(
         A.operation("get", { PK: "PK#1", SK: "SK#1" }),
         {
-          recover: true,
+          recover: true
         }
       )
 
@@ -1665,7 +2340,7 @@ describe("load", () => {
     test("it throws if no item or soft deleted item exists", async () => {
       await expect(
         client.load(A.operation("get", { PK: "PK", SK: "SK" }), {
-          recover: true,
+          recover: true
         })
       ).rejects.toBeInstanceOf(ItemNotFoundError)
     })
@@ -1674,7 +2349,7 @@ describe("load", () => {
       await expect(
         client.load(A.operation("get", { PK: "PK", SK: "SK" }), {
           recover: true,
-          null: true,
+          null: true
         })
       ).resolves.toBeNull()
     })
@@ -1769,8 +2444,8 @@ describe("load", () => {
       )
 
       expect(results.length).toBe(234)
-      expect(results.filter((item) => item instanceof C).length).toBe(123)
-      expect(results.filter((item) => item instanceof D).length).toBe(111)
+      expect(results.filter(item => item instanceof C).length).toBe(123)
+      expect(results.filter(item => item instanceof D).length).toBe(111)
       expect(spy).toHaveBeenCalledTimes(3)
 
       spy.mockReset()
@@ -1845,8 +2520,8 @@ describe("loadMany", () => {
       )
 
       expect(results.length).toBe(234)
-      expect(results.filter((item) => item instanceof C).length).toBe(123)
-      expect(results.filter((item) => item instanceof D).length).toBe(111)
+      expect(results.filter(item => item instanceof C).length).toBe(123)
+      expect(results.filter(item => item instanceof D).length).toBe(111)
       expect(spy).toHaveBeenCalledTimes(3)
 
       spy.mockReset()
@@ -1871,7 +2546,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -1891,7 +2566,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -1911,7 +2586,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -1932,7 +2607,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -1952,7 +2627,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -1983,7 +2658,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2003,7 +2678,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -2023,7 +2698,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -2044,7 +2719,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -2064,7 +2739,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -2094,7 +2769,7 @@ describe("paginate", () => {
         { first: 10 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
@@ -2124,7 +2799,7 @@ describe("paginate", () => {
         { first: 60 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2142,7 +2817,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination default", async () => {
       client.paginationOptions = {
-        default: 40,
+        default: 40
       }
 
       const items = Array.from({ length: 50 }).map(
@@ -2157,7 +2832,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.edges.length).toBe(40)
@@ -2167,7 +2842,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination limit", async () => {
       client.paginationOptions = {
-        limit: 100,
+        limit: 100
       }
 
       const items = Array.from({ length: 120 }).map(
@@ -2182,7 +2857,7 @@ describe("paginate", () => {
         { first: 110 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.edges.length).toBe(100)
@@ -2205,7 +2880,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2224,7 +2899,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -2243,7 +2918,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -2263,7 +2938,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -2282,7 +2957,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -2311,7 +2986,7 @@ describe("paginate", () => {
         { first: 10 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
@@ -2340,7 +3015,7 @@ describe("paginate", () => {
         { first: 60 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2358,7 +3033,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination default", async () => {
       client.paginationOptions = {
-        default: 40,
+        default: 40
       }
 
       const items = Array.from({ length: 50 }).map(
@@ -2372,7 +3047,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.edges.length).toBe(40)
@@ -2382,7 +3057,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination limit", async () => {
       client.paginationOptions = {
-        limit: 100,
+        limit: 100
       }
 
       const items = Array.from({ length: 120 }).map(
@@ -2396,7 +3071,7 @@ describe("paginate", () => {
         { first: 110 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.edges.length).toBe(100)
@@ -2420,7 +3095,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2439,7 +3114,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -2458,7 +3133,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -2478,7 +3153,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -2497,7 +3172,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -2527,7 +3202,7 @@ describe("paginate", () => {
         { first: 10 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
@@ -2557,7 +3232,7 @@ describe("paginate", () => {
         { first: 60 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2575,7 +3250,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination default", async () => {
       client.paginationOptions = {
-        default: 40,
+        default: 40
       }
 
       const items = Array.from({ length: 50 }).map((_, i) =>
@@ -2583,12 +3258,12 @@ describe("paginate", () => {
           ? new C({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              c: String(i),
+              c: String(i)
             })
           : new D({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              d: String(i),
+              d: String(i)
             })
       )
 
@@ -2598,7 +3273,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.edges.length).toBe(40)
@@ -2608,7 +3283,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination limit", async () => {
       client.paginationOptions = {
-        limit: 100,
+        limit: 100
       }
 
       const items = Array.from({ length: 110 }).map((_, i) =>
@@ -2616,12 +3291,12 @@ describe("paginate", () => {
           ? new C({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              c: String(i),
+              c: String(i)
             })
           : new D({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              d: String(i),
+              d: String(i)
             })
       )
 
@@ -2631,7 +3306,7 @@ describe("paginate", () => {
         { first: 110 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" },
+          ExpressionAttributeValues: { ":pk": "PK" }
         }
       )
       expect(page.edges.length).toBe(100)

@@ -741,7 +741,7 @@ export class Client {
         ? E.left({ ...state, rollbackSuccessful: true })
         : E.right(state)
 
-    const [currentBatch, remaining] = A.splitAt(25)(operations)
+    const [currentBatch, remaining] = A.splitAt(100)(operations)
 
     try {
       const transactItems = currentBatch
