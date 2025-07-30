@@ -1,5 +1,12 @@
 # @model-ts/dynamodb
 
+## 3.0.2
+
+### Patch Changes
+
+- ab3d767: Increase transaction chunk size to 100 items
+- 354faac: Improve seeding speed
+
 ## 3.0.1
 
 ### Patch Changes
