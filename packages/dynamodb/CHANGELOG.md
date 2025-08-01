@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 3.0.3
+
+### Patch Changes
+
+- 6163ee5: Allow passing multiple local dynamodb instances
+
 ## 3.0.2
 
 ### Patch Changes
