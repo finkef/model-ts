@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 3.0.4
+
+### Patch Changes
+
+- 44ad3e2: Revert support for multiple local dynamodb instances due to marginal performance gains and increased complexity.
+
 ## 3.0.3
 
 ### Patch Changes
