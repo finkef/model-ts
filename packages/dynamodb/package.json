@@ -8,9 +8,9 @@
   "scripts": {
     "build": "tsc -b",
     "build:esm": "tsc -b tsconfig.esm.json",
-    "test": "TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
-    "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
-    "dynamodb:stop": "docker stop dynamodb"
+    "test": "TZ=UTC LOCAL_ENDPOINT='http://localhost:8000,http://localhost:8001' jest",
+    "dynamodb:start": "docker run -d --name dynamodb-1 --rm -p 8000:8000 amazon/dynamodb-local & docker run -d --name dynamodb-2 --rm -p 8001:8000 amazon/dynamodb-local",
+    "dynamodb:stop": "docker stop dynamodb-1 && docker stop dynamodb-2"
   },
   "keywords": [],
   "peerDependencies": {

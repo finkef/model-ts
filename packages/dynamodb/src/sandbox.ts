@@ -5,17 +5,29 @@ import diff from "snapshot-diff"
 import { Client } from "./client"
 import { GSI_NAMES } from "./gsi"
 
+/**
+ * Returns a random endpoint from the LOCAL_ENDPOINT environment variable.
+ */
+function getEndpoint() {
+  if (!process.env.LOCAL_ENDPOINT) throw new Error("LOCAL_ENDPOINT is not set")
+
+  const endpoints = process.env.LOCAL_ENDPOINT.split(",")
+  return endpoints[Math.floor(Math.random() * endpoints.length)]
+}
+
+const endpoint = getEndpoint()
+
 const ddb = new DynamoDB({
   accessKeyId: "xxx",
   secretAccessKey: "xxx",
-  endpoint: process.env.LOCAL_ENDPOINT,
+  endpoint,
   region: "local",
 })
 
 const docClient = new DynamoDB.DocumentClient({
   accessKeyId: "xxx",
   secretAccessKey: "xxx",
-  endpoint: process.env.LOCAL_ENDPOINT,
+  endpoint,
   region: "local",
 })
 
