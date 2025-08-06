@@ -8,7 +8,7 @@ import {
   ItemNotFoundError,
   ConditionalCheckFailedError,
   RaceConditionError,
-  BulkWriteTransactionError
+  BulkWriteTransactionError,
 } from "../errors"
 
 const client = new Client({ tableName: "table" })
@@ -16,7 +16,7 @@ const provider = getProvider(client)
 
 const SIMPLE_CODEC = t.type({
   foo: t.string,
-  bar: t.number
+  bar: t.number,
 })
 
 class Simple extends model("Simple", SIMPLE_CODEC, provider) {
@@ -335,7 +335,7 @@ describe("put", () => {
 
       await expect(
         MultiGSI.put(new MultiGSI({ foo: "yes", bar: 42 }), {
-          IgnoreExistence: true
+          IgnoreExistence: true,
         })
       ).resolves.toBeInstanceOf(MultiGSI)
     })
@@ -355,7 +355,7 @@ describe("get", () => {
 
       const result = await Simple.get({
         PK: item.keys().PK,
-        SK: item.keys().SK
+        SK: item.keys().SK,
       })
 
       expect(result.values()).toMatchInlineSnapshot(`
@@ -421,8 +421,8 @@ describe("delete", () => {
         _model: Simple,
         key: {
           PK: item.keys().PK,
-          SK: item.keys().SK
-        }
+          SK: item.keys().SK,
+        },
       })
 
       expect(result).toBeNull()
@@ -455,7 +455,7 @@ describe("delete", () => {
 
       const result = await Simple.delete({
         PK: item.keys().PK,
-        SK: item.keys().SK
+        SK: item.keys().SK,
       })
 
       expect(result).toBeNull()
@@ -825,16 +825,17 @@ describe("applyUpdate", () => {
 })
 
 describe("query", () => {
-  test("it returns empty results", async () => {
-    expect(
-      await client.query(
-        {
-          KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
-          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" }
-        },
-        { a: A, b: B, union: Union }
-      )
-    ).toMatchInlineSnapshot(`
+  describe("via client", () => {
+    test("it returns empty results", async () => {
+      expect(
+        await client.query(
+          {
+            KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+            ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" },
+          },
+          { a: A, b: B, union: Union }
+        )
+      ).toMatchInlineSnapshot(`
       Object {
         "_unknown": Array [],
         "a": Array [],
@@ -845,20 +846,20 @@ describe("query", () => {
         "union": Array [],
       }
     `)
-  })
+    })
 
-  test("it returns unknown results", async () => {
-    await sandbox.seed({ PK: "abc", SK: "SORT#1", doesnt: "match" })
+    test("it returns unknown results", async () => {
+      await sandbox.seed({ PK: "abc", SK: "SORT#1", doesnt: "match" })
 
-    expect(
-      await client.query(
-        {
-          KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
-          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" }
-        },
-        { a: A, b: B, union: Union }
-      )
-    ).toMatchInlineSnapshot(`
+      expect(
+        await client.query(
+          {
+            KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+            ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+          },
+          { a: A, b: B, union: Union }
+        )
+      ).toMatchInlineSnapshot(`
       Object {
         "_unknown": Array [
           Object {
@@ -875,33 +876,33 @@ describe("query", () => {
         "union": Array [],
       }
     `)
-  })
+    })
 
-  test("it returns results", async () => {
-    await sandbox.seed(
-      new A({ pk: "abc", sk: "SORT#1", a: 1 }),
-      new A({ pk: "abc", sk: "SORT#2", a: 2 }),
-      new B({ pk: "abc", sk: "SORT#3", b: "hi" }),
-      { PK: "abc", SK: "SORT#4", probably: "unknown" },
-      new C({ pk: "abc", sk: "SORT#5", c: "hi" }),
-      new D({ pk: "abc", sk: "SORT#6", d: "hi" })
-    )
+    test("it returns results", async () => {
+      await sandbox.seed(
+        new A({ pk: "abc", sk: "SORT#1", a: 1 }),
+        new A({ pk: "abc", sk: "SORT#2", a: 2 }),
+        new B({ pk: "abc", sk: "SORT#3", b: "hi" }),
+        { PK: "abc", SK: "SORT#4", probably: "unknown" },
+        new C({ pk: "abc", sk: "SORT#5", c: "hi" }),
+        new D({ pk: "abc", sk: "SORT#6", d: "hi" })
+      )
 
-    const { a, b, union, _unknown, meta } = await client.query(
-      {
-        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
-        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" }
-      },
-      { a: A, b: B, union: Union }
-    )
+      const { a, b, union, _unknown, meta } = await client.query(
+        {
+          KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+        },
+        { a: A, b: B, union: Union }
+      )
 
-    expect({
-      meta: meta,
-      _unknown: _unknown,
-      a: a.map(item => item.values()),
-      b: b.map(item => item.values()),
-      union: union.map(item => item.values())
-    }).toMatchInlineSnapshot(`
+      expect({
+        meta: meta,
+        _unknown: _unknown,
+        a: a.map((item) => item.values()),
+        b: b.map((item) => item.values()),
+        union: union.map((item) => item.values()),
+      }).toMatchInlineSnapshot(`
       Object {
         "_unknown": Array [
           Object {
@@ -946,75 +947,278 @@ describe("query", () => {
         ],
       }
     `)
+    })
+
+    test("it paginates", async () => {
+      await sandbox.seed(
+        ...Array.from({ length: 20 }).map(
+          (_, i) =>
+            new A({ pk: "abc", sk: `SORT#${String(i).padStart(2, "0")}`, a: i })
+        ),
+        ...Array.from({ length: 20 }).map(
+          (_, i) => new B({ pk: "abc", sk: `SORT#${i + 20}`, b: "bar" })
+        )
+      )
+
+      const firstPage = await client.query(
+        {
+          KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+          Limit: 30,
+        },
+        { a: A, b: B }
+      )
+
+      expect(firstPage.a.length).toBe(20)
+      expect(firstPage.b.length).toBe(10)
+      expect(firstPage._unknown.length).toBe(0)
+      expect(firstPage.meta.lastEvaluatedKey).not.toBeUndefined()
+
+      const secondPage = await client.query(
+        {
+          KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+          Limit: 30,
+          ExclusiveStartKey: firstPage.meta.lastEvaluatedKey,
+        },
+        { a: A, b: B }
+      )
+
+      expect(secondPage.a.length).toBe(0)
+      expect(secondPage.b.length).toBe(10)
+      expect(secondPage._unknown.length).toBe(0)
+      expect(secondPage.meta.lastEvaluatedKey).toBeUndefined()
+    })
+
+    test("it fetches all pages automatically", async () => {
+      await sandbox.seed(
+        ...Array.from({ length: 20 }).map(
+          (_, i) =>
+            new A({ pk: "abc", sk: `SORT#${String(i).padStart(2, "0")}`, a: i })
+        ),
+        ...Array.from({ length: 20 }).map(
+          (_, i) => new B({ pk: "abc", sk: `SORT#${i + 20}`, b: "bar" })
+        )
+      )
+
+      const { a, b, meta, _unknown } = await client.query(
+        {
+          KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+          ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+          FetchAllPages: true,
+          // You wouldn't set a limit in a real-world use case here to optimize fetching all items.
+          Limit: 10,
+        },
+        { a: A, b: B }
+      )
+
+      expect(a.length).toBe(20)
+      expect(b.length).toBe(20)
+      expect(_unknown.length).toBe(0)
+      expect(meta.lastEvaluatedKey).toBeUndefined()
+    })
   })
 
-  test("it paginates", async () => {
-    await sandbox.seed(
-      ...Array.from({ length: 20 }).map(
-        (_, i) =>
-          new A({ pk: "abc", sk: `SORT#${String(i).padStart(2, "0")}`, a: i })
-      ),
-      ...Array.from({ length: 20 }).map(
-        (_, i) => new B({ pk: "abc", sk: `SORT#${i + 20}`, b: "bar" })
-      )
-    )
+  describe("via model", () => {
+    test("it returns empty results for specific model", async () => {
+      const result = await A.query({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" },
+      })
 
-    const firstPage = await client.query(
-      {
+      expect(result.length).toBe(0)
+      expect(result.meta).toEqual({ lastEvaluatedKey: undefined })
+    })
+
+    test("it returns only matching model items", async () => {
+      await sandbox.seed(
+        new A({ pk: "abc", sk: "SORT#1", a: 1 }),
+        new A({ pk: "abc", sk: "SORT#2", a: 2 }),
+        new B({ pk: "abc", sk: "SORT#3", b: "hi" }),
+        { PK: "abc", SK: "SORT#4", probably: "unknown" },
+        new C({ pk: "abc", sk: "SORT#5", c: "hi" })
+      )
+
+      const result = await A.query({
         KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
         ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
-        Limit: 30
-      },
-      { a: A, b: B }
-    )
+      })
 
-    expect(firstPage.a.length).toBe(20)
-    expect(firstPage.b.length).toBe(10)
-    expect(firstPage._unknown.length).toBe(0)
-    expect(firstPage.meta.lastEvaluatedKey).not.toBeUndefined()
+      expect(result.length).toBe(2)
+      expect(result.map((item) => item.values())).toMatchInlineSnapshot(`
+        Array [
+          Object {
+            "a": 1,
+            "pk": "abc",
+            "sk": "SORT#1",
+          },
+          Object {
+            "a": 2,
+            "pk": "abc",
+            "sk": "SORT#2",
+          },
+        ]
+      `)
+      expect(result.meta).toEqual({ lastEvaluatedKey: undefined })
+    })
 
-    const secondPage = await client.query(
-      {
+    test("it respects query parameters", async () => {
+      await sandbox.seed(
+        new A({ pk: "abc", sk: "SORT#1", a: 1 }),
+        new A({ pk: "abc", sk: "SORT#2", a: 2 }),
+        new A({ pk: "abc", sk: "SORT#3", a: 3 }),
+        new A({ pk: "abc", sk: "SORT#4", a: 4 })
+      )
+
+      const result = await A.query({
         KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
         ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
-        Limit: 30,
-        ExclusiveStartKey: firstPage.meta.lastEvaluatedKey
-      },
-      { a: A, b: B }
-    )
+        Limit: 2,
+      })
 
-    expect(secondPage.a.length).toBe(0)
-    expect(secondPage.b.length).toBe(10)
-    expect(secondPage._unknown.length).toBe(0)
-    expect(secondPage.meta.lastEvaluatedKey).toBeUndefined()
-  })
+      expect(result.length).toBe(2)
+      expect(result[0].a).toBe(1)
+      expect(result[1].a).toBe(2)
+      expect(result.meta.lastEvaluatedKey).toBeDefined()
+    })
 
-  test("it fetches all pages automatically", async () => {
-    await sandbox.seed(
-      ...Array.from({ length: 20 }).map(
-        (_, i) =>
-          new A({ pk: "abc", sk: `SORT#${String(i).padStart(2, "0")}`, a: i })
-      ),
-      ...Array.from({ length: 20 }).map(
-        (_, i) => new B({ pk: "abc", sk: `SORT#${i + 20}`, b: "bar" })
+    test("it fetches all pages when FetchAllPages is true", async () => {
+      await sandbox.seed(
+        ...Array.from({ length: 15 }).map(
+          (_, i) =>
+            new A({ pk: "abc", sk: `SORT#${String(i).padStart(2, "0")}`, a: i })
+        ),
+        // Add some B items that should be ignored
+        new B({ pk: "abc", sk: "SORT#20", b: "ignored" }),
+        new B({ pk: "abc", sk: "SORT#21", b: "ignored" })
       )
-    )
 
-    const { a, b, meta, _unknown } = await client.query(
-      {
+      const result = await A.query({
         KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
         ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
         FetchAllPages: true,
-        // You wouldn't set a limit in a real-world use case here to optimize fetching all items.
-        Limit: 10
-      },
-      { a: A, b: B }
-    )
+        Limit: 5, // Force pagination
+      })
 
-    expect(a.length).toBe(20)
-    expect(b.length).toBe(20)
-    expect(_unknown.length).toBe(0)
-    expect(meta.lastEvaluatedKey).toBeUndefined()
+      expect(result.length).toBe(15) // Only A items
+      expect(result.map((item) => item.a)).toEqual(
+        Array.from({ length: 15 }, (_, i) => i)
+      )
+      expect(result.meta.lastEvaluatedKey).toBeUndefined()
+    })
+
+    test("it works with different query conditions", async () => {
+      await sandbox.seed(
+        new A({ pk: "user1", sk: "post#1", a: 1 }),
+        new A({ pk: "user1", sk: "post#2", a: 2 }),
+        new A({ pk: "user1", sk: "comment#1", a: 3 }),
+        new A({ pk: "user2", sk: "post#1", a: 4 })
+      )
+
+      // Query for posts only
+      const posts = await A.query({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "user1", ":sk": "post#" },
+      })
+
+      expect(posts.length).toBe(2)
+      expect(posts.map((item) => item.a).sort()).toEqual([1, 2])
+
+      // Query for all user1 items
+      const allUser1 = await A.query({
+        KeyConditionExpression: `PK = :pk`,
+        ExpressionAttributeValues: { ":pk": "user1" },
+      })
+
+      expect(allUser1.length).toBe(3)
+      expect(allUser1.map((item) => item.a).sort()).toEqual([1, 2, 3])
+    })
+
+    test("it works with FilterExpression", async () => {
+      await sandbox.seed(
+        new A({ pk: "test", sk: "item#1", a: 1 }),
+        new A({ pk: "test", sk: "item#2", a: 2 }),
+        new A({ pk: "test", sk: "item#3", a: 3 }),
+        new A({ pk: "test", sk: "item#4", a: 4 })
+      )
+
+      const result = await A.query({
+        KeyConditionExpression: `PK = :pk`,
+        FilterExpression: `a > :min`,
+        ExpressionAttributeValues: { ":pk": "test", ":min": 2 },
+      })
+
+      expect(result.length).toBe(2)
+      expect(result.map((item) => item.a).sort()).toEqual([3, 4])
+    })
+  })
+
+  describe("via union", () => {
+    test("it returns empty results for union", async () => {
+      const result = await Union.query({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" },
+      })
+
+      expect(result.length).toBe(0)
+      expect(result.meta).toEqual({ lastEvaluatedKey: undefined })
+    })
+
+    test("it returns only union model items", async () => {
+      await sandbox.seed(
+        new A({ pk: "abc", sk: "SORT#1", a: 1 }),
+        new B({ pk: "abc", sk: "SORT#2", b: "hi" }),
+        new C({ pk: "abc", sk: "SORT#3", c: "c1" }),
+        new D({ pk: "abc", sk: "SORT#4", d: "d1" }),
+        { PK: "abc", SK: "SORT#5", unknown: "data" }
+      )
+
+      const result = await Union.query({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+      })
+
+      expect(result.length).toBe(2) // Only C and D items (union members)
+      expect(result[0]).toBeInstanceOf(C)
+      expect(result[1]).toBeInstanceOf(D)
+      expect(result.meta).toEqual({ lastEvaluatedKey: undefined })
+    })
+
+    test("it fetches all pages for union when FetchAllPages is true", async () => {
+      await sandbox.seed(
+        ...Array.from({ length: 10 }).map(
+          (_, i) =>
+            new C({
+              pk: "abc",
+              sk: `SORT#${String(i).padStart(2, "0")}`,
+              c: `c${i}`,
+            })
+        ),
+        ...Array.from({ length: 10 }).map(
+          (_, i) =>
+            new D({
+              pk: "abc",
+              sk: `SORT#${String(i + 10).padStart(2, "0")}`,
+              d: `d${i}`,
+            })
+        ),
+        // Add some non-union items that should be ignored
+        new A({ pk: "abc", sk: "SORT#30", a: 1 }),
+        new B({ pk: "abc", sk: "SORT#31", b: "ignored" })
+      )
+
+      const result = await Union.query({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+        FetchAllPages: true,
+        Limit: 5, // Force pagination
+      })
+
+      expect(result.length).toBe(20) // Only union items (C and D)
+      expect(result.filter((item: C | D) => item instanceof C).length).toBe(10)
+      expect(result.filter((item: C | D) => item instanceof D).length).toBe(10)
+      expect(result.meta.lastEvaluatedKey).toBeUndefined()
+    })
   })
 })
 
@@ -1043,16 +1247,16 @@ describe("bulk", () => {
         new B({
           pk: "PK#UPDATE",
           sk: "SK#UPDATE",
-          b: "bar"
+          b: "bar",
         }).operation("update", { b: "baz" }),
         new B({
           pk: "PK#COND",
           sk: "SK#COND",
-          b: "cond"
+          b: "cond",
         }).operation("condition", {
           ConditionExpression: "b = :cond",
-          ExpressionAttributeValues: { ":cond": "cond" }
-        })
+          ExpressionAttributeValues: { ":cond": "cond" },
+        }),
       ])
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
@@ -1172,7 +1376,7 @@ describe("bulk", () => {
             "updateRaw",
             { PK: "PK#nicetry", SK: "SK#nope" },
             { a: 234 }
-          )
+          ),
         ])
       ).rejects.toBeInstanceOf(BulkWriteTransactionError)
 
@@ -1200,11 +1404,11 @@ describe("bulk", () => {
         new B({
           pk: "PK#UPDATE",
           sk: "SK#UPDATE",
-          b: "bar"
+          b: "bar",
         }).operation("update", { b: "baz" }),
         ...Array.from({ length: 100 }).map((_, i) =>
           new A({ pk: `PK#A${i}`, sk: `SK#A${i}`, a: i }).operation("put")
-        )
+        ),
       ])
 
       //#region snapshot
@@ -2191,7 +2395,7 @@ describe("bulk", () => {
             "condition",
             { PK: "nicetry", SK: "nope" },
             { ConditionExpression: "attribute_exists(PK)" }
-          )
+          ),
         ])
       ).rejects.toBeInstanceOf(BulkWriteTransactionError)
 
@@ -2225,7 +2429,7 @@ describe("batchGet", () => {
         two: A.operation("get", { PK: "PK#2", SK: "SK#2" }),
         three: A.operation("get", { PK: "PK#3", SK: "SK#3" }),
         four: A.operation("get", { PK: "PK#4", SK: "SK#4" }),
-        duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" })
+        duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" }),
       })
     ).rejects.toBeInstanceOf(ItemNotFoundError)
   })
@@ -2242,7 +2446,7 @@ describe("batchGet", () => {
         two: A.operation("get", { PK: "PK#2", SK: "SK#2" }),
         duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" }),
         error: A.operation("get", { PK: "PK#error", SK: "SK#error" }),
-        error2: A.operation("get", { PK: "PK#error2", SK: "SK#error2" })
+        error2: A.operation("get", { PK: "PK#error2", SK: "SK#error2" }),
       },
       { individualErrors: true }
     )
@@ -2266,7 +2470,7 @@ describe("batchGet", () => {
       two: A.operation("get", { PK: "PK#2", SK: "SK#2" }),
       three: A.operation("get", { PK: "PK#3", SK: "SK#3" }),
       four: A.operation("get", { PK: "PK#4", SK: "SK#4" }),
-      duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" })
+      duplicate: A.operation("get", { PK: "PK#1", SK: "SK#1" }),
     })
 
     expect(
@@ -2329,7 +2533,7 @@ describe("load", () => {
       const recovered = await client.load(
         A.operation("get", { PK: "PK#1", SK: "SK#1" }),
         {
-          recover: true
+          recover: true,
         }
       )
 
@@ -2340,7 +2544,7 @@ describe("load", () => {
     test("it throws if no item or soft deleted item exists", async () => {
       await expect(
         client.load(A.operation("get", { PK: "PK", SK: "SK" }), {
-          recover: true
+          recover: true,
         })
       ).rejects.toBeInstanceOf(ItemNotFoundError)
     })
@@ -2349,7 +2553,7 @@ describe("load", () => {
       await expect(
         client.load(A.operation("get", { PK: "PK", SK: "SK" }), {
           recover: true,
-          null: true
+          null: true,
         })
       ).resolves.toBeNull()
     })
@@ -2444,8 +2648,8 @@ describe("load", () => {
       )
 
       expect(results.length).toBe(234)
-      expect(results.filter(item => item instanceof C).length).toBe(123)
-      expect(results.filter(item => item instanceof D).length).toBe(111)
+      expect(results.filter((item) => item instanceof C).length).toBe(123)
+      expect(results.filter((item) => item instanceof D).length).toBe(111)
       expect(spy).toHaveBeenCalledTimes(3)
 
       spy.mockReset()
@@ -2520,8 +2724,8 @@ describe("loadMany", () => {
       )
 
       expect(results.length).toBe(234)
-      expect(results.filter(item => item instanceof C).length).toBe(123)
-      expect(results.filter(item => item instanceof D).length).toBe(111)
+      expect(results.filter((item) => item instanceof C).length).toBe(123)
+      expect(results.filter((item) => item instanceof D).length).toBe(111)
       expect(spy).toHaveBeenCalledTimes(3)
 
       spy.mockReset()
@@ -2546,7 +2750,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2566,7 +2770,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -2586,7 +2790,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -2607,7 +2811,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -2627,7 +2831,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -2658,7 +2862,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2678,7 +2882,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -2698,7 +2902,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -2719,7 +2923,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -2739,7 +2943,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -2769,7 +2973,7 @@ describe("paginate", () => {
         { first: 10 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
@@ -2799,7 +3003,7 @@ describe("paginate", () => {
         { first: 60 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2817,7 +3021,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination default", async () => {
       client.paginationOptions = {
-        default: 40
+        default: 40,
       }
 
       const items = Array.from({ length: 50 }).map(
@@ -2832,7 +3036,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.edges.length).toBe(40)
@@ -2842,7 +3046,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination limit", async () => {
       client.paginationOptions = {
-        limit: 100
+        limit: 100,
       }
 
       const items = Array.from({ length: 120 }).map(
@@ -2857,7 +3061,7 @@ describe("paginate", () => {
         { first: 110 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.edges.length).toBe(100)
@@ -2880,7 +3084,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -2899,7 +3103,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -2918,7 +3122,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -2938,7 +3142,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -2957,7 +3161,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -2986,7 +3190,7 @@ describe("paginate", () => {
         { first: 10 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
@@ -3015,7 +3219,7 @@ describe("paginate", () => {
         { first: 60 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -3033,7 +3237,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination default", async () => {
       client.paginationOptions = {
-        default: 40
+        default: 40,
       }
 
       const items = Array.from({ length: 50 }).map(
@@ -3047,7 +3251,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.edges.length).toBe(40)
@@ -3057,7 +3261,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination limit", async () => {
       client.paginationOptions = {
-        limit: 100
+        limit: 100,
       }
 
       const items = Array.from({ length: 120 }).map(
@@ -3071,7 +3275,7 @@ describe("paginate", () => {
         { first: 110 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.edges.length).toBe(100)
@@ -3095,7 +3299,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -3114,7 +3318,7 @@ describe("paginate", () => {
         { after: page1.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
@@ -3133,7 +3337,7 @@ describe("paginate", () => {
         { after: page2.pageInfo.endCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
@@ -3153,7 +3357,7 @@ describe("paginate", () => {
         { before: page3.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
@@ -3172,7 +3376,7 @@ describe("paginate", () => {
         { before: backwardsPage2.pageInfo.startCursor },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
@@ -3202,7 +3406,7 @@ describe("paginate", () => {
         { first: 10 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
@@ -3232,7 +3436,7 @@ describe("paginate", () => {
         { first: 60 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
@@ -3250,7 +3454,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination default", async () => {
       client.paginationOptions = {
-        default: 40
+        default: 40,
       }
 
       const items = Array.from({ length: 50 }).map((_, i) =>
@@ -3258,12 +3462,12 @@ describe("paginate", () => {
           ? new C({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              c: String(i)
+              c: String(i),
             })
           : new D({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              d: String(i)
+              d: String(i),
             })
       )
 
@@ -3273,7 +3477,7 @@ describe("paginate", () => {
         {},
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.edges.length).toBe(40)
@@ -3283,7 +3487,7 @@ describe("paginate", () => {
 
     test("it respects custom pagination limit", async () => {
       client.paginationOptions = {
-        limit: 100
+        limit: 100,
       }
 
       const items = Array.from({ length: 110 }).map((_, i) =>
@@ -3291,12 +3495,12 @@ describe("paginate", () => {
           ? new C({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              c: String(i)
+              c: String(i),
             })
           : new D({
               pk: "PK",
               sk: String(i).padStart(3, "0"),
-              d: String(i)
+              d: String(i),
             })
       )
 
@@ -3306,7 +3510,7 @@ describe("paginate", () => {
         { first: 110 },
         {
           KeyConditionExpression: "PK = :pk",
-          ExpressionAttributeValues: { ":pk": "PK" }
+          ExpressionAttributeValues: { ":pk": "PK" },
         }
       )
       expect(page.edges.length).toBe(100)

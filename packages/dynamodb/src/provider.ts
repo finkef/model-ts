@@ -1,4 +1,4 @@
-import { Client, Key, PaginationParams } from "./client"
+import { Client, Key, PaginationParams, QueryParams } from "./client"
 import {
   DynamoDBModelInstance,
   DynamoDBModelConstructor,
@@ -375,8 +375,20 @@ export const getProvider = (client: Client) => {
 
   return {
     classProps: {
+      /**
+       * The DynamoDB document client.
+       */
       dynamodb: client,
+
+      /**
+       * Creates operation objects for batch processing and transactions.
+       * Supports get, put, update, updateRaw, delete, softDelete, and condition operations.
+       */
       operation,
+
+      /**
+       * @internal
+       */
       __dynamoDBDecode<M extends DynamoDBModelConstructor<any>>(
         this: M,
         value: unknown
@@ -391,6 +403,10 @@ export const getProvider = (client: Client) => {
           return decoded
         }
       },
+
+      /**
+       * @internal
+       */
       __dynamoDBEncode<
         T extends DynamoDBModelInstance,
         M extends DynamoDBModelConstructor<T>
@@ -403,6 +419,12 @@ export const getProvider = (client: Client) => {
         })
       },
 
+      /**
+       * Retrieves a single item from DynamoDB by its primary key.
+       * Prefer `load()` for built-in batching.
+       *
+       * @throws ItemNotFoundError if the item doesn't exist.
+       */
       get<M extends DynamoDBModelConstructor<any>>(
         this: M,
         key: Key,
@@ -416,6 +438,12 @@ export const getProvider = (client: Client) => {
         })
       },
 
+      /**
+       * Retrieves a single item from DynamoDB by its primary key.
+       * Uses built-in batching for usage in e.g. `Promise.all()`.
+       *
+       * @throws ItemNotFoundError if the item doesn't exist and `null` is not true.
+       */
       load<
         M extends DynamoDBModelConstructor<any>,
         Null extends boolean = false,
@@ -439,6 +467,10 @@ export const getProvider = (client: Client) => {
         )
       },
 
+      /**
+       * Loads multiple items from DynamoDB by their primary keys.
+       * Returns an array of items or errors.
+       */
       loadMany<M extends DynamoDBModelConstructor<any>>(
         this: M,
         keys: Key[],
@@ -454,6 +486,9 @@ export const getProvider = (client: Client) => {
         )
       },
 
+      /**
+       * Returns a page of query results using cursor-based pagination.
+       */
       paginate<M extends DynamoDBModelConstructor<any>>(
         this: M,
         args: PaginationInput,
@@ -462,6 +497,23 @@ export const getProvider = (client: Client) => {
         return client.paginate(this, args, params)
       },
 
+      /**
+       * Performs a DynamoDB query operation and returns matching items.
+       * Use `FetchAllPages: true` to automatically fetch all pages of results.
+       */
+      async query<M extends DynamoDBModelConstructor<any>>(
+        this: M,
+        params: QueryParams
+      ) {
+        const { items, meta } = await client.query(params, { items: this })
+        return Object.assign(items, { meta })
+      },
+
+      /**
+       * Stores an item in DynamoDB.
+       *
+       * @throws KeyExistsError if the item already exists and `IgnoreExistence` is not true.
+       */
       put<M extends DynamoDBModelConstructor<any>>(
         this: M,
         item: TypeOf<M>,
@@ -478,6 +530,10 @@ export const getProvider = (client: Client) => {
         })
       },
 
+      /**
+       * Performs a raw DynamoDB update operation using update expressions.
+       * Provides low-level access to DynamoDB's native update functionality.
+       */
       updateRaw<M extends DynamoDBModelConstructor<any>>(
         this: M,
         key: Key,
@@ -496,6 +552,10 @@ export const getProvider = (client: Client) => {
         })
       },
 
+      /**
+       * Deletes an item from DynamoDB by its primary key.
+       * The item will be permanently removed from the table.
+       */
       delete<M extends DynamoDBModelConstructor<any>>(this: M, key: Key) {
         return client.delete<M>({
           _model: this,
@@ -504,6 +564,10 @@ export const getProvider = (client: Client) => {
         })
       },
 
+      /**
+       * Performs a soft delete by moving the item to a deleted state.
+       * The original item is deleted and a new item with a $$DELETED$$ prefix is created.
+       */
       softDelete<M extends DynamoDBModelConstructor<any>>(
         this: M,
         item: TypeOf<M>
@@ -512,7 +576,15 @@ export const getProvider = (client: Client) => {
       },
     },
     instanceProps: {
+      /**
+       * The DynamoDB document client instance.
+       */
       dynamodb: client,
+
+      /**
+       * Returns all key attributes for this instance, including primary keys and GSI keys.
+       * Used for cursor generation and key-based operations.
+       */
       keys<T extends DynamoDBModelInstance>(
         this: T
       ): { PK: string; SK: string } & { [key in GSIPK]?: string } &
@@ -526,9 +598,19 @@ export const getProvider = (client: Client) => {
           })).reduce((acc, cur) => Object.assign(acc, cur), {}),
         }
       },
+
+      /**
+       * Generates an (optionally encrypted) cursor for this instance.
+       * Cursors are used for pagination and must be treated as opaque tokens.
+       */
       cursor<T extends DynamoDBModelInstance>(this: T) {
         return encodeDDBCursor(this.keys(), client.cursorEncryptionKey)
       },
+
+      /**
+       * Stores this instance in DynamoDB.
+       * @throws KeyExistsError if the item already exists and `IgnoreExistence` is not true.
+       */
       put<T extends DynamoDBModelInstance>(
         this: T,
         params?: Omit<
@@ -543,6 +625,12 @@ export const getProvider = (client: Client) => {
           ...params,
         })
       },
+
+      /**
+       * Updates this instance with new attribute values and persists the changes to DynamoDB.
+       * Handles version conflicts and automatically manages key changes if primary keys are updated.
+       * @throws RaceConditionError if the instance is out of sync with the stored value.
+       */
       async update<T extends DynamoDBModelInstance>(
         this: T,
         attributes: Partial<ModelOf<T>["_codec"]["_A"]>
@@ -556,8 +644,8 @@ export const getProvider = (client: Client) => {
           // Update in place
           try {
             return await client.put(op)
-          } catch (error) {
-            if (error.code === "ConditionalCheckFailedException")
+          } catch (error: any) {
+            if (error?.code === "ConditionalCheckFailedException")
               throw new RaceConditionError(
                 "The instance you are attempting to update is out of sync with the stored value."
               )
@@ -577,6 +665,11 @@ export const getProvider = (client: Client) => {
           }
         }
       },
+
+      /**
+       * Applies updates to this instance and returns the updated instance along with the operations to persist.
+       * Does not automatically persist the changes - use the returned operations with bulk() or individual operations.
+       */
       applyUpdate<T extends DynamoDBModelInstance>(
         this: T,
         attributes: Partial<ModelOf<T>["_codec"]["_A"]>
@@ -590,6 +683,11 @@ export const getProvider = (client: Client) => {
 
         return [updatedItem, op]
       },
+
+      /**
+       * Deletes this instance from DynamoDB.
+       * The item will be permanently removed from the table.
+       */
       delete<T extends DynamoDBModelInstance>(this: T): Promise<null> {
         const { PK, SK } = this.keys()
 
@@ -599,14 +697,31 @@ export const getProvider = (client: Client) => {
           key: { PK, SK },
         })
       },
+
+      /**
+       * Performs a soft delete on this instance.
+       * The original item is deleted and a new item with a $$DELETED$$ prefix is created.
+       */
       softDelete<T extends DynamoDBModelInstance>(this: T) {
         return client.softDelete<T>(this)
       },
+
+      /**
+       * Creates operation objects for this instance for batch processing and transactions.
+       * Supports put, update, updateRaw, delete, softDelete, and condition operations.
+       */
       operation: instanceOperation,
     },
 
     unionProps: {
+      /**
+       * The DynamoDB document client instance.
+       */
       dynamodb: client,
+
+      /**
+       * @internal
+       */
       __dynamoDBDecode<M extends DynamoDBUnion>(this: M, value: unknown) {
         const decoded = this.from(value)
 
@@ -618,6 +733,13 @@ export const getProvider = (client: Client) => {
           return decoded
         }
       },
+
+      /**
+       * Retrieves a single item from DynamoDB by its primary key.
+       * Prefer `load()` for built-in batching.
+       *
+       * @throws ItemNotFoundError if the item doesn't exist.
+       */
       async get<M extends DynamoDBUnion>(
         this: M,
         key: Key,
@@ -631,6 +753,12 @@ export const getProvider = (client: Client) => {
         })
       },
 
+      /**
+       * Retrieves a single item from DynamoDB by its primary key.
+       * Uses built-in batching for usage in e.g. `Promise.all()`.
+       *
+       * @throws ItemNotFoundError if the item doesn't exist and `null` is not true.
+       */
       load<
         M extends DynamoDBUnion,
         Null extends boolean = false,
@@ -654,6 +782,10 @@ export const getProvider = (client: Client) => {
         )
       },
 
+      /**
+       * Loads multiple items from DynamoDB by their primary keys.
+       * Returns an array of items or errors.
+       */
       loadMany<M extends DynamoDBUnion>(
         this: M,
         keys: Key[],
@@ -669,12 +801,24 @@ export const getProvider = (client: Client) => {
         )
       },
 
+      /**
+       * Returns a page of query results using cursor-based pagination.
+       */
       paginate<M extends DynamoDBUnion>(
         this: M,
         args: PaginationInput,
         params: PaginationParams
       ) {
         return client.paginate(this, args, params)
+      },
+
+      /**
+       * Performs a DynamoDB query operation and returns matching items.
+       * Use `FetchAllPages: true` to automatically fetch all pages of results.
+       */
+      async query<M extends DynamoDBUnion>(this: M, params: QueryParams) {
+        const { items, meta } = await client.query(params, { items: this })
+        return Object.assign(items, { meta })
       },
     },
   }
