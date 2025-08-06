@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 3.1.0
+
+### Minor Changes
+
+- 4692d16: Add <model>.query() method
+
 ## 3.0.4
 
 ### Patch Changes
