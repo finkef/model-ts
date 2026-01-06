@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 4.0.0
+
+### Major Changes
+
+- e49df55: Use stable, compact diff snapshots
+
 ## 3.1.0
 
 ### Minor Changes
