@@ -1,7 +1,7 @@
 import crypto from "crypto"
 import { chunksOf } from "fp-ts/lib/Array"
 import DynamoDB from "aws-sdk/clients/dynamodb"
-import diff from "snapshot-diff"
+import { formatSnapshotDiff } from "./diff"
 import { Client } from "./client"
 import { GSI_NAMES } from "./gsi"
 
@@ -153,7 +153,7 @@ export const createSandbox = async (client: Client): Promise<Sandbox> => {
     diff: async (before) => {
       const snapshot = await getTableContents(tableName)
 
-      return diff(before, snapshot)
+      return formatSnapshotDiff(before, snapshot)
     },
   }
 }
