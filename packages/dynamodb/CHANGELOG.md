@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 4.1.0
+
+### Minor Changes
+
+- 3cf37a0: Add sandbox rollback option
+
 ## 4.0.0
 
 ### Major Changes
