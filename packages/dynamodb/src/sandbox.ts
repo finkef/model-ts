@@ -4,6 +4,7 @@ import DynamoDB from "aws-sdk/clients/dynamodb"
 import { formatSnapshotDiff } from "./diff"
 import { Client } from "./client"
 import { GSI_NAMES } from "./gsi"
+import { createInMemoryDocumentClient } from "./in-memory"
 
 const ddb = new DynamoDB({
   accessKeyId: "xxx",
@@ -281,6 +282,61 @@ export interface Sandbox {
 }
 
 export const createSandbox = async (client: Client): Promise<Sandbox> => {
+  if (process.env.EXPERIMENTAL_DYNAMODB_IN_MEMORY === "1") {
+    const tableName = crypto.randomBytes(20).toString("hex")
+    const inMemoryClient =
+      createInMemoryDocumentClient() as any as DynamoDB.DocumentClient & {
+        __inMemorySnapshot: (name: string) => { [key: string]: any }
+        __inMemoryResetTable: (name: string) => void
+      }
+
+    const tracked = createTrackedDocClient(inMemoryClient, tableName)
+
+    client.setDocumentClient(tracked.proxy)
+    client.setTableName(tableName)
+
+    return {
+      destroy: async () => {
+        inMemoryClient.__inMemoryResetTable(tableName)
+      },
+      snapshot: async () => inMemoryClient.__inMemorySnapshot(tableName),
+      seed: async (...args: Array<{ [key: string]: any }>) => {
+        const chunks = chunksOf(25)(args)
+
+        await Promise.all(
+          chunks.map(async (chunk) => {
+            const items = chunk.map((i) =>
+              typeof i?._model?.__dynamoDBEncode === "function"
+                ? i._model.__dynamoDBEncode(i)
+                : typeof i.encode === "function"
+                ? i.encode()
+                : i
+            )
+
+            return client.documentClient
+              .batchWrite({
+                RequestItems: {
+                  [tableName]: items.map((i) => ({ PutRequest: { Item: i } })),
+                },
+              })
+              .promise()
+          })
+        )
+      },
+      get: (pk: string, sk: string) =>
+        client.documentClient
+          .get({ TableName: tableName, Key: { PK: pk, SK: sk } })
+          .promise()
+          .then(({ Item }) => Item ?? null),
+      diff: async (before) => {
+        const snapshot = inMemoryClient.__inMemorySnapshot(tableName)
+        return formatSnapshotDiff(before, snapshot)
+      },
+      startTracking: tracked.startTracking,
+      rollback: tracked.rollback,
+    }
+  }
+
   const tableName = await createTable()
 
   const tracked = createTrackedDocClient(docClient, tableName)

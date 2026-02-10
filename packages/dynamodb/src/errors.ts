@@ -45,6 +45,29 @@ export class PaginationError extends Error {
   name = "PaginationError"
 }
 
+export class NotSupportedError extends Error {
+  name = "NotSupportedError"
+  code = "NotSupportedError"
+  method: string
+  featurePath: string
+  reason: string
+
+  constructor({
+    method,
+    featurePath,
+    reason,
+  }: {
+    method: string
+    featurePath: string
+    reason: string
+  }) {
+    super(reason)
+    this.method = method
+    this.featurePath = featurePath
+    this.reason = reason
+  }
+}
+
 export type DynamoDBError =
   | KeyExistsError
   | ItemNotFoundError
@@ -52,3 +75,4 @@ export type DynamoDBError =
   | BulkWriteTransactionError
   | BulkWriteRollbackError
   | PaginationError
+  | NotSupportedError

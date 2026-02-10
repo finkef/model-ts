@@ -44,6 +44,7 @@ import {
   PaginationResult,
 } from "./pagination"
 import { GSI, GSI_NAMES, GSIPK, GSISK } from "./gsi"
+import { createInMemoryDocumentClient } from "./in-memory"
 
 export type QueryParams = Omit<
   DocumentClient.QueryInput,
@@ -110,7 +111,18 @@ export class Client {
     this.tableName = props?.tableName
     this.cursorEncryptionKey = props?.cursorEncryptionKey
     this.paginationOptions = props?.paginationOptions
-    this.documentClient = new DocumentClient(props)
+
+    const inMemoryRequested = process.env.EXPERIMENTAL_DYNAMODB_IN_MEMORY === "1"
+    if (inMemoryRequested && process.env.NODE_ENV !== "test") {
+      throw new Error(
+        `EXPERIMENTAL_DYNAMODB_IN_MEMORY=1 is only allowed when NODE_ENV is "test" (received "${process.env.NODE_ENV ?? "undefined"}").`
+      )
+    }
+
+    this.documentClient =
+      inMemoryRequested
+        ? (createInMemoryDocumentClient() as any as DocumentClient)
+        : new DocumentClient(props)
     this.dataLoader = new DataLoader<
       GetOperation<Decodable>,
       DynamoDBModelInstance,
@@ -160,6 +172,7 @@ export class Client {
     M extends DynamoDBModelConstructor<T>
   >({
     _model,
+    _operation,
     _deleted,
     item,
     IgnoreExistence,
@@ -200,6 +213,7 @@ export class Client {
 
   async get<M extends Decodable>({
     _model,
+    _operation,
     key,
     ...params
   }: GetOperation<M>): Promise<DecodableInstance<M>> {
@@ -272,7 +286,7 @@ export class Client {
   async updateRaw<M extends DynamoDBModelConstructor<any>>(
     operation: UpdateRawOperation<M>
   ): Promise<InstanceType<M>> {
-    const { _model, key, attributes, ...params } = operation
+    const { _model, _operation, key, attributes, ...params } = operation
 
     const {
       UpdateExpression,
@@ -831,8 +845,7 @@ export class Client {
   ): DocumentClient.TransactWriteItem => {
     switch (operation._operation) {
       case "put": {
-        const { _model, _deleted, item, IgnoreExistence, ...params } = operation
-        debugger
+        const { _model, _operation, _deleted, item, IgnoreExistence, ...params } = operation
         const encoded = (_model as M & DynamoDBInternals<M>).__dynamoDBEncode(
           item
         )
