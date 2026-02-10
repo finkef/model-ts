@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 4.2.0
+
+### Minor Changes
+
+- 221e389: Add experimental in-memory DynamoDB sandbox
+
 ## 4.1.0
 
 ### Minor Changes
