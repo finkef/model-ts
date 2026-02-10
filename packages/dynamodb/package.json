@@ -1,6 +1,6 @@
 {
   "name": "@model-ts/dynamodb",
-  "version": "4.1.0",
+  "version": "4.2.0",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
   "author": "Fabian Finke <finkef@icloud.com>",
