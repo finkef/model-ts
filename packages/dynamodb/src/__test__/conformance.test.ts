@@ -108,15 +108,37 @@ const normalizeSnapshot = (snapshot: { [key: string]: any }) =>
   )
 
 const sanitizeErrorMessage = (message: string): string =>
-  message
-    .replace(/[0-9a-f]{40}/gi, "<table>")
-    .replace(/\s+/g, " ")
-    .trim()
-    .replace(/\.$/, "")
-    .replace(/\([^)]*\)/g, (match) => {
-      if (match.includes("<table>")) return "(<table>)"
-      return match
-    })
+  canonicalizeValidationMessage(
+    message
+      .replace(/[0-9a-f]{40}/gi, "<table>")
+      .replace(/\s+/g, " ")
+      .trim()
+      .replace(/\.$/, "")
+      .replace(/\([^)]*\)/g, (match) => {
+        if (match.includes("<table>")) return "(<table>)"
+        return match
+      })
+  )
+
+const canonicalizeValidationMessage = (message: string): string => {
+  if (
+    message ===
+      "Consistent read cannot be true when querying a GSI" ||
+    message ===
+      "Consistent reads are not supported on global secondary indexes"
+  ) {
+    return "Consistent reads are not supported on global secondary indexes"
+  }
+
+  if (
+    message === "The provided starting key is invalid" ||
+    message === "Exclusive Start Key must have same size as table's key schema"
+  ) {
+    return "The provided starting key is invalid"
+  }
+
+  return message
+}
 
 const normalizeError = (error: any) => {
   const code =
