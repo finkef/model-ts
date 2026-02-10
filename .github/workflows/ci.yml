@@ -41,3 +41,7 @@ jobs:
       - name: Test
         run: yarn test
         working-directory: packages/dynamodb
+
+      - name: Test (memory)
+        run: yarn test:memory
+        working-directory: packages/dynamodb

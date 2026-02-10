@@ -9,6 +9,7 @@
     "build": "tsc -b",
     "build:esm": "tsc -b tsconfig.esm.json",
     "test": "TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
+    "test:memory": "EXPERIMENTAL_DYNAMODB_IN_MEMORY=1 TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
     "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
     "dynamodb:stop": "docker stop dynamodb"
   },
