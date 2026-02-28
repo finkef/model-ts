@@ -208,8 +208,8 @@ describe("in-memory spec", () => {
             id: "300",
             group: "expr",
             value: 3,
-            tenancy: {
-              mailboxes: [{ inboxId: "inbox-1" }],
+            nested: {
+              items: [{ code: "code-1" }],
             },
           },
         })
@@ -219,10 +219,10 @@ describe("in-memory spec", () => {
         .update({
           TableName: client.tableName,
           Key: { PK: "PK#expr", SK: "SK#300" },
-          ConditionExpression: "tenancy.mailboxes[0].inboxId = :inboxId",
+          ConditionExpression: "nested.items[0].code = :code",
           UpdateExpression: "SET #value = :next",
           ExpressionAttributeNames: { "#value": "value" },
-          ExpressionAttributeValues: { ":inboxId": "inbox-1", ":next": 4 },
+          ExpressionAttributeValues: { ":code": "code-1", ":next": 4 },
           ReturnValues: "ALL_NEW",
         })
         .promise()
@@ -233,20 +233,65 @@ describe("in-memory spec", () => {
         .update({
           TableName: client.tableName,
           Key: { PK: "PK#expr", SK: "SK#300" },
-          ConditionExpression: "#tenancy.#mailboxes[0].#inboxId = :inboxId",
+          ConditionExpression: "#nested.#items[0].#code = :code",
           UpdateExpression: "SET #value = :next",
           ExpressionAttributeNames: {
             "#value": "value",
-            "#tenancy": "tenancy",
-            "#mailboxes": "mailboxes",
-            "#inboxId": "inboxId",
+            "#nested": "nested",
+            "#items": "items",
+            "#code": "code",
           },
-          ExpressionAttributeValues: { ":inboxId": "inbox-1", ":next": 5 },
+          ExpressionAttributeValues: { ":code": "code-1", ":next": 5 },
           ReturnValues: "ALL_NEW",
         })
         .promise()
 
       expect(updatedWithNames.Attributes?.value).toBe(5)
+    })
+  })
+
+  test("supports document paths with list indexes in update expressions", async () => {
+    await withInMemory(async ({ client }) => {
+      await client.documentClient
+        .put({
+          TableName: client.tableName,
+          Item: {
+            PK: "PK#expr",
+            SK: "SK#301",
+            id: "301",
+            group: "expr",
+            value: 3,
+            nested: {
+              items: [{ key: "k1" }],
+            },
+          },
+        })
+        .promise()
+
+      const withInbox = await client.documentClient
+        .update({
+          TableName: client.tableName,
+          Key: { PK: "PK#expr", SK: "SK#301" },
+          ConditionExpression:
+            "attribute_not_exists(nested.items[0].state) and nested.items[0].key = :key",
+          UpdateExpression: "SET nested.items[0].state = :state",
+          ExpressionAttributeValues: { ":key": "k1", ":state": "active" },
+          ReturnValues: "ALL_NEW",
+        })
+        .promise()
+
+      expect(withInbox.Attributes?.nested?.items?.[0]?.state).toBe("active")
+
+      const removed = await client.documentClient
+        .update({
+          TableName: client.tableName,
+          Key: { PK: "PK#expr", SK: "SK#301" },
+          UpdateExpression: "REMOVE nested.items[0].state",
+          ReturnValues: "ALL_NEW",
+        })
+        .promise()
+
+      expect(removed.Attributes?.nested?.items?.[0]?.state).toBeUndefined()
     })
   })
 

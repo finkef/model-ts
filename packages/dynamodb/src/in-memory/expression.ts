@@ -29,8 +29,8 @@ export interface ParsedKeyCondition {
 }
 
 export interface ParsedUpdateExpression {
-  set: Array<{ attribute: string; value: any }>
-  remove: string[]
+  set: Array<{ attribute: string; path: DocumentPathPart[]; value: any }>
+  remove: Array<{ attribute: string; path: DocumentPathPart[] }>
 }
 
 const KEY_COND_BEGINS_WITH = /^(.+?)\s*=\s*(.+?)\s+and\s+begins_with\((.+?),\s*(.+?)\)$/i
@@ -217,14 +217,14 @@ export const parseUpdateExpression = (
             })
           }
 
-          const attribute = resolveAttributeToken(split.left, context)
+          const { attribute, path } = resolveUpdatePathToken(split.left, context)
           const value = resolveUpdateSetValueToken(
             split.right,
             context.item,
             context
           )
 
-          return { attribute, value }
+          return { attribute, path, value }
         })
     : []
 
@@ -232,7 +232,7 @@ export const parseUpdateExpression = (
     ? splitTopLevelByDelimiter(removeClause, ",")
         .map((segment) => segment.trim())
         .filter(Boolean)
-        .map((token) => resolveAttributeToken(token, context))
+        .map((token) => resolveUpdatePathToken(token, context))
     : []
 
   return { set, remove }
@@ -390,9 +390,36 @@ const DOCUMENT_PATH_TOKEN =
 const ATTRIBUTE_SEGMENT = /^[A-Za-z_][A-Za-z0-9_-]*/
 const PLACEHOLDER_SEGMENT = /^#[A-Za-z_][A-Za-z0-9_]*/
 
-type DocumentPathPart =
+export type DocumentPathPart =
   | { type: "attribute"; value: string }
   | { type: "index"; value: number }
+
+function resolveUpdatePathToken(
+  token: string,
+  context: ExpressionContext
+): { attribute: string; path: DocumentPathPart[] } {
+  const path = parseDocumentPath(token, context)
+  return {
+    attribute: stringifyDocumentPath(path),
+    path,
+  }
+}
+
+function stringifyDocumentPath(path: DocumentPathPart[]): string {
+  let output = ""
+
+  for (const part of path) {
+    if (part.type === "attribute") {
+      if (output.length > 0) output += "."
+      output += part.value
+      continue
+    }
+
+    output += `[${part.value}]`
+  }
+
+  return output
+}
 
 function resolveAttributeToken(token: string, context: ExpressionContext): string {
   const trimmed = token.trim()

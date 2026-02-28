@@ -1,7 +1,9 @@
 import { NotSupportedError } from "../errors"
 import {
+  DocumentPathPart,
   evaluateConditionExpression,
   parseKeyConditionExpression,
+  ParsedUpdateExpression,
   parseUpdateExpression,
 } from "./expression"
 import {
@@ -130,26 +132,7 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
       )
 
       const next = cloneItem(base)
-
-      for (const assignment of parsed.set) {
-        if ((assignment.attribute === "PK" || assignment.attribute === "SK") && assignment.value !== next[assignment.attribute]) {
-          throw this.validationError(
-            `One or more parameter values were invalid: Cannot update attribute ${assignment.attribute}. This attribute is part of the key`
-          )
-        }
-
-        next[assignment.attribute] = assignment.value
-      }
-
-      for (const attribute of parsed.remove) {
-        if (attribute === "PK" || attribute === "SK") {
-          throw this.validationError(
-            `One or more parameter values were invalid: Cannot update attribute ${attribute}. This attribute is part of the key`
-          )
-        }
-
-        delete next[attribute]
-      }
+      this.applyParsedUpdateExpression(next, parsed)
 
       this.assertPrimaryKey(next, "update")
       table.put(next)
@@ -592,26 +575,7 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
             )
 
             const next = cloneItem(base)
-
-            for (const assignment of parsed.set) {
-              if ((assignment.attribute === "PK" || assignment.attribute === "SK") && assignment.value !== next[assignment.attribute]) {
-                throw this.validationError(
-                  `One or more parameter values were invalid: Cannot update attribute ${assignment.attribute}. This attribute is part of the key`
-                )
-              }
-
-              next[assignment.attribute] = assignment.value
-            }
-
-            for (const attribute of parsed.remove) {
-              if (attribute === "PK" || attribute === "SK") {
-                throw this.validationError(
-                  `One or more parameter values were invalid: Cannot update attribute ${attribute}. This attribute is part of the key`
-                )
-              }
-
-              delete next[attribute]
-            }
+            this.applyParsedUpdateExpression(next, parsed)
 
             this.assertPrimaryKey(next, "transactWrite")
 
@@ -795,6 +759,148 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
         "One or more parameter values were invalid: Type mismatch for key"
       )
     }
+  }
+
+  private applyParsedUpdateExpression(item: any, parsed: ParsedUpdateExpression) {
+    for (const assignment of parsed.set) {
+      const keyAttribute = this.getTopLevelKeyAttribute(assignment.path)
+      if (
+        keyAttribute &&
+        (assignment.path.length !== 1 || assignment.value !== item[keyAttribute])
+      ) {
+        throw this.validationError(
+          `One or more parameter values were invalid: Cannot update attribute ${keyAttribute}. This attribute is part of the key`
+        )
+      }
+
+      this.setValueAtDocumentPath(item, assignment.path, assignment.value)
+    }
+
+    for (const removal of parsed.remove) {
+      const keyAttribute = this.getTopLevelKeyAttribute(removal.path)
+      if (keyAttribute) {
+        throw this.validationError(
+          `One or more parameter values were invalid: Cannot update attribute ${keyAttribute}. This attribute is part of the key`
+        )
+      }
+
+      this.removeValueAtDocumentPath(item, removal.path)
+    }
+  }
+
+  private getTopLevelKeyAttribute(path: DocumentPathPart[]): "PK" | "SK" | null {
+    const head = path[0]
+    if (!head || head.type !== "attribute") return null
+    if (head.value === "PK" || head.value === "SK") return head.value
+    return null
+  }
+
+  private setValueAtDocumentPath(
+    item: any,
+    path: DocumentPathPart[],
+    value: any
+  ) {
+    const parent = this.resolveDocumentPathParent(item, path)
+    const leaf = path[path.length - 1]
+
+    if (leaf.type === "attribute") {
+      if (!parent || typeof parent !== "object" || Array.isArray(parent)) {
+        throw this.invalidUpdatePathValidationError()
+      }
+
+      parent[leaf.value] = value
+      return
+    }
+
+    if (!Array.isArray(parent) || leaf.value > parent.length) {
+      throw this.invalidUpdatePathValidationError()
+    }
+
+    parent[leaf.value] = value
+  }
+
+  private removeValueAtDocumentPath(item: any, path: DocumentPathPart[]) {
+    const parent = this.tryResolveDocumentPathParent(item, path)
+    if (typeof parent === "undefined") return
+
+    const leaf = path[path.length - 1]
+
+    if (leaf.type === "attribute") {
+      if (!parent || typeof parent !== "object" || Array.isArray(parent)) return
+      delete parent[leaf.value]
+      return
+    }
+
+    if (!Array.isArray(parent)) return
+    if (leaf.value >= parent.length) return
+    parent.splice(leaf.value, 1)
+  }
+
+  private resolveDocumentPathParent(item: any, path: DocumentPathPart[]): any {
+    let current = item
+
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const part = path[index]
+
+      if (part.type === "attribute") {
+        if (!current || typeof current !== "object" || Array.isArray(current)) {
+          throw this.invalidUpdatePathValidationError()
+        }
+
+        if (!(part.value in current)) {
+          throw this.invalidUpdatePathValidationError()
+        }
+
+        current = current[part.value]
+        continue
+      }
+
+      if (!Array.isArray(current) || part.value >= current.length) {
+        throw this.invalidUpdatePathValidationError()
+      }
+
+      current = current[part.value]
+    }
+
+    return current
+  }
+
+  private tryResolveDocumentPathParent(
+    item: any,
+    path: DocumentPathPart[]
+  ): any | undefined {
+    let current = item
+
+    for (let index = 0; index < path.length - 1; index += 1) {
+      const part = path[index]
+
+      if (part.type === "attribute") {
+        if (!current || typeof current !== "object" || Array.isArray(current)) {
+          return undefined
+        }
+
+        if (!(part.value in current)) {
+          return undefined
+        }
+
+        current = current[part.value]
+        continue
+      }
+
+      if (!Array.isArray(current) || part.value >= current.length) {
+        return undefined
+      }
+
+      current = current[part.value]
+    }
+
+    return current
+  }
+
+  private invalidUpdatePathValidationError(): Error & { code: string } {
+    return this.validationError(
+      "The document path provided in the update expression is invalid for update"
+    )
   }
 
   private assertCondition(method: string, params: AnyParams, item?: any) {
