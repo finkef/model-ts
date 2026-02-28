@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 4.2.1
+
+### Patch Changes
+
+- ee9693a: Implement list access in expressions for in-memory dynamodb
+
 ## 4.2.0
 
 ### Minor Changes
