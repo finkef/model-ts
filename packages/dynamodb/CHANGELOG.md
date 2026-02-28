@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 4.2.2
+
+### Patch Changes
+
+- 88c4914: Handle list indexes in update expressions
+
 ## 4.2.1
 
 ### Patch Changes
