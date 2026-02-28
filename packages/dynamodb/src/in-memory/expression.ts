@@ -385,6 +385,14 @@ const PLACEHOLDER_NAME = /^#[A-Za-z_][A-Za-z0-9_]*$/
 const NUMBER_LITERAL = /^-?\d+(?:\.\d+)?$/
 const STRING_LITERAL = /^".*"$|^'.*'$/
 const ATTRIBUTE_NAME = /^[A-Za-z_][A-Za-z0-9_.-]*$/
+const DOCUMENT_PATH_TOKEN =
+  /^(?:#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_-]*)(?:\[\d+\])*(?:\.(?:#[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_-]*)(?:\[\d+\])*)*$/
+const ATTRIBUTE_SEGMENT = /^[A-Za-z_][A-Za-z0-9_-]*/
+const PLACEHOLDER_SEGMENT = /^#[A-Za-z_][A-Za-z0-9_]*/
+
+type DocumentPathPart =
+  | { type: "attribute"; value: string }
+  | { type: "index"; value: number }
 
 function resolveAttributeToken(token: string, context: ExpressionContext): string {
   const trimmed = token.trim()
@@ -441,8 +449,7 @@ function resolveValueToken(
   }
 
   if (PLACEHOLDER_NAME.test(trimmed)) {
-    const attributeName = resolveAttributeToken(trimmed, context)
-    return item && attributeName in item ? item[attributeName] : MISSING
+    return resolveAttributeValue(trimmed, item, context)
   }
 
   if (STRING_LITERAL.test(trimmed)) {
@@ -465,8 +472,8 @@ function resolveValueToken(
   if (trimmed === "false") return false
   if (trimmed === "null") return null
 
-  if (ATTRIBUTE_NAME.test(trimmed)) {
-    return item && trimmed in item ? item[trimmed] : MISSING
+  if (DOCUMENT_PATH_TOKEN.test(trimmed) || ATTRIBUTE_NAME.test(trimmed)) {
+    return resolveAttributeValue(trimmed, item, context)
   }
 
   throw new NotSupportedError({
@@ -481,12 +488,105 @@ function resolveAttributeValue(
   item: InMemoryItem | undefined,
   context: ExpressionContext
 ): ResolvedValue {
-  const attributeName = resolveAttributeToken(token, context)
-
+  const path = parseDocumentPath(token, context)
   if (!item) return MISSING
-  if (!(attributeName in item)) return MISSING
 
-  return item[attributeName]
+  let current: any = item
+
+  for (const part of path) {
+    if (part.type === "attribute") {
+      if (!current || typeof current !== "object") return MISSING
+      if (!(part.value in current)) return MISSING
+      current = current[part.value]
+      continue
+    }
+
+    if (!Array.isArray(current)) return MISSING
+    if (!(part.value in current)) return MISSING
+    current = current[part.value]
+  }
+
+  return current
+}
+
+function parseDocumentPath(
+  token: string,
+  context: ExpressionContext
+): DocumentPathPart[] {
+  const source = token.trim()
+  if (!source) {
+    throwUnsupportedAttributeToken(token, context)
+  }
+
+  const parts: DocumentPathPart[] = []
+  let cursor = 0
+
+  while (cursor < source.length) {
+    const remaining = source.slice(cursor)
+    const placeholderMatch = remaining.match(PLACEHOLDER_SEGMENT)
+    const segmentMatch = remaining.match(ATTRIBUTE_SEGMENT)
+    const segmentToken = placeholderMatch?.[0] ?? segmentMatch?.[0]
+
+    if (!segmentToken) {
+      throwUnsupportedAttributeToken(token, context)
+    }
+
+    if (segmentToken.startsWith("#")) {
+      const resolved = context.expressionAttributeNames?.[segmentToken]
+      if (!resolved) {
+        throw new NotSupportedError({
+          method: context.method,
+          featurePath: `ExpressionAttributeNames.${segmentToken}`,
+          reason: "Missing expression attribute name placeholder.",
+        })
+      }
+      parts.push({ type: "attribute", value: resolved })
+    } else {
+      parts.push({ type: "attribute", value: segmentToken })
+    }
+
+    cursor += segmentToken.length
+
+    while (source[cursor] === "[") {
+      const start = cursor + 1
+      let end = start
+      while (end < source.length && /\d/.test(source[end])) end += 1
+
+      if (start === end || source[end] !== "]") {
+        throwUnsupportedAttributeToken(token, context)
+      }
+
+      parts.push({
+        type: "index",
+        value: Number(source.slice(start, end)),
+      })
+      cursor = end + 1
+    }
+
+    if (cursor >= source.length) break
+
+    if (source[cursor] !== ".") {
+      throwUnsupportedAttributeToken(token, context)
+    }
+
+    cursor += 1
+    if (cursor >= source.length) {
+      throwUnsupportedAttributeToken(token, context)
+    }
+  }
+
+  return parts
+}
+
+function throwUnsupportedAttributeToken(
+  token: string,
+  context: ExpressionContext
+): never {
+  throw new NotSupportedError({
+    method: context.method,
+    featurePath: "ExpressionAttributeNames",
+    reason: `Unsupported attribute token: ${token.trim()}`,
+  })
 }
 
 function splitTopLevelByKeyword(

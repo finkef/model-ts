@@ -197,6 +197,59 @@ describe("in-memory spec", () => {
     })
   })
 
+  test("supports document paths with list indexes in condition expressions", async () => {
+    await withInMemory(async ({ client }) => {
+      await client.documentClient
+        .put({
+          TableName: client.tableName,
+          Item: {
+            PK: "PK#expr",
+            SK: "SK#300",
+            id: "300",
+            group: "expr",
+            value: 3,
+            tenancy: {
+              mailboxes: [{ inboxId: "inbox-1" }],
+            },
+          },
+        })
+        .promise()
+
+      const updated = await client.documentClient
+        .update({
+          TableName: client.tableName,
+          Key: { PK: "PK#expr", SK: "SK#300" },
+          ConditionExpression: "tenancy.mailboxes[0].inboxId = :inboxId",
+          UpdateExpression: "SET #value = :next",
+          ExpressionAttributeNames: { "#value": "value" },
+          ExpressionAttributeValues: { ":inboxId": "inbox-1", ":next": 4 },
+          ReturnValues: "ALL_NEW",
+        })
+        .promise()
+
+      expect(updated.Attributes?.value).toBe(4)
+
+      const updatedWithNames = await client.documentClient
+        .update({
+          TableName: client.tableName,
+          Key: { PK: "PK#expr", SK: "SK#300" },
+          ConditionExpression: "#tenancy.#mailboxes[0].#inboxId = :inboxId",
+          UpdateExpression: "SET #value = :next",
+          ExpressionAttributeNames: {
+            "#value": "value",
+            "#tenancy": "tenancy",
+            "#mailboxes": "mailboxes",
+            "#inboxId": "inboxId",
+          },
+          ExpressionAttributeValues: { ":inboxId": "inbox-1", ":next": 5 },
+          ReturnValues: "ALL_NEW",
+        })
+        .promise()
+
+      expect(updatedWithNames.Attributes?.value).toBe(5)
+    })
+  })
+
   test("is deterministic for repeated seeded runs", async () => {
     const execute = async () =>
       withInMemory(async ({ client, sandbox, Item }) => {
