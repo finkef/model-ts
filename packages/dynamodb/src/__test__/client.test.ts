@@ -1020,6 +1020,35 @@ describe("query", () => {
       expect(result.meta.lastEvaluatedKey).toBeUndefined()
     })
 
+    test("it iterates matching model items in chunks", async () => {
+      await sandbox.seed(
+        ...Array.from({ length: 7 }).flatMap((_, i) => [
+          new A({
+            pk: "abc",
+            sk: `SORT#${String(i * 2).padStart(2, "0")}`,
+            a: i
+          }),
+          new B({
+            pk: "abc",
+            sk: `SORT#${String(i * 2 + 1).padStart(2, "0")}`,
+            b: "ignored"
+          })
+        ])
+      )
+
+      const chunks: number[][] = []
+
+      for await (const items of A.iterator({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+        ChunkSize: 3
+      })) {
+        chunks.push(items.map(item => item.a))
+      }
+
+      expect(chunks).toEqual([[0, 1, 2], [3, 4, 5], [6]])
+    })
+
     test("it works with different query conditions", async () => {
       await sandbox.seed(
         new A({ pk: "user1", sk: "post#1", a: 1 }),
@@ -1131,6 +1160,27 @@ describe("query", () => {
       expect(result.filter((item: C | D) => item instanceof C).length).toBe(10)
       expect(result.filter((item: C | D) => item instanceof D).length).toBe(10)
       expect(result.meta.lastEvaluatedKey).toBeUndefined()
+    })
+
+    test("it iterates union items in chunks", async () => {
+      await sandbox.seed(
+        new C({ pk: "abc", sk: "SORT#1", c: "c1" }),
+        new D({ pk: "abc", sk: "SORT#2", d: "d1" }),
+        new A({ pk: "abc", sk: "SORT#3", a: 1 }),
+        new C({ pk: "abc", sk: "SORT#4", c: "c2" })
+      )
+
+      const chunks: string[][] = []
+
+      for await (const items of Union.iterator({
+        KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
+        ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" },
+        ChunkSize: 2
+      })) {
+        chunks.push(items.map(item => (item instanceof C ? item.c : item.d)))
+      }
+
+      expect(chunks).toEqual([["c1", "d1"], ["c2"]])
     })
   })
 })

@@ -54,6 +54,10 @@ export type QueryParams = Omit<
     FetchAllPages?: boolean
   }
 
+export type QueryIteratorParams = Omit<QueryParams, "FetchAllPages" | "Limit"> & {
+  ChunkSize: number
+}
+
 export type QueryResponse<T extends { [name: string]: any }> = {
   [K in keyof T]: DecodableInstance<T[K]>[]
 } & {
@@ -541,6 +545,46 @@ export class Client {
     Items.forEach(matcher)
 
     return { ...grouped, _unknown: unknown, meta: { lastEvaluatedKey } }
+  }
+
+  async *iterator<M extends Decodable>(
+    {
+      ChunkSize,
+      ExclusiveStartKey,
+      ...params
+    }: QueryIteratorParams,
+    model: M
+  ): AsyncGenerator<DecodableInstance<M>[], void, unknown> {
+    if (!Number.isInteger(ChunkSize) || ChunkSize <= 0) {
+      throw new Error("ChunkSize must be a positive integer.")
+    }
+
+    let lastEvaluatedKey = ExclusiveStartKey
+    let chunk: DecodableInstance<M>[] = []
+
+    do {
+      const result = await this.query(
+        {
+          ...params,
+          Limit: ChunkSize,
+          ExclusiveStartKey: lastEvaluatedKey,
+        },
+        { items: model }
+      )
+
+      for (const item of result.items) {
+        chunk.push(item)
+
+        if (chunk.length === ChunkSize) {
+          yield chunk
+          chunk = []
+        }
+      }
+
+      lastEvaluatedKey = result.meta.lastEvaluatedKey
+    } while (lastEvaluatedKey)
+
+    if (chunk.length > 0) yield chunk
   }
 
   async paginate<M extends Decodable>(

@@ -1,4 +1,10 @@
-import { Client, Key, PaginationParams, QueryParams } from "./client"
+import {
+  Client,
+  Key,
+  PaginationParams,
+  QueryIteratorParams,
+  QueryParams,
+} from "./client"
 import {
   DynamoDBModelInstance,
   DynamoDBModelConstructor,
@@ -510,6 +516,16 @@ export const getProvider = (client: Client) => {
       },
 
       /**
+       * Performs a DynamoDB query operation and yields matching items in chunks.
+       */
+      iterator<M extends DynamoDBModelConstructor<any>>(
+        this: M,
+        params: QueryIteratorParams
+      ) {
+        return client.iterator(params, this)
+      },
+
+      /**
        * Stores an item in DynamoDB.
        *
        * @throws KeyExistsError if the item already exists and `IgnoreExistence` is not true.
@@ -819,6 +835,13 @@ export const getProvider = (client: Client) => {
       async query<M extends DynamoDBUnion>(this: M, params: QueryParams) {
         const { items, meta } = await client.query(params, { items: this })
         return Object.assign(items, { meta })
+      },
+
+      /**
+       * Performs a DynamoDB query operation and yields matching items in chunks.
+       */
+      iterator<M extends DynamoDBUnion>(this: M, params: QueryIteratorParams) {
+        return client.iterator(params, this)
       },
     },
   }
