@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 4.3.0
+
+### Minor Changes
+
+- cbe817c: Add Model.iterator()
+
 ## 4.2.2
 
 ### Patch Changes
