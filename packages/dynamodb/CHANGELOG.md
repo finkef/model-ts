@@ -1,6 +1,6 @@
 # @model-ts/dynamodb
 
-## 5.0.0
+## 4.3.1
 
 ### Patch Changes
 
