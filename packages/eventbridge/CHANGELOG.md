@@ -1,5 +1,13 @@
 # @model-ts/eventbridge
 
+## 2.0.1
+
+### Patch Changes
+
+- 4653939: Move io-ts and fp-ts from peer dependencies to package dependencies and expose io-ts plus selected io-ts-types helpers through `t` from @model-ts/core. Adds `t.withValidation` for simple predicate-based validation.
+- Updated dependencies [4653939]
+  - @model-ts/core@0.4.0
+
 ## 2.0.0
 
 ### Patch Changes
