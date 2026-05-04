@@ -12,7 +12,7 @@
   },
   "keywords": [],
   "peerDependencies": {
-    "@model-ts/core": ">=0.3.0 <1",
+    "@model-ts/core": "^0.3.0 || ^0.4.0",
     "aws-sdk": "^2.691.0"
   },
   "devDependencies": {
