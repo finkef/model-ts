@@ -16,15 +16,12 @@
   "keywords": [],
   "peerDependencies": {
     "@model-ts/core": "^0.3.0",
-    "aws-sdk": "^2.691.0",
-    "fp-ts": "~2.6.5",
-    "io-ts": "^2.2.4"
+    "aws-sdk": "^2.691.0"
   },
   "devDependencies": {
     "@model-ts/core": "*",
     "@types/jest": "^26.0.24",
     "aws-sdk": "^2.691.0",
-    "fp-ts": "~2.6.5",
     "io-ts": "^2.2.4",
     "jest": "^27.0.4",
     "mockdate": "^3.0.5",
@@ -35,6 +32,7 @@
   },
   "dependencies": {
     "dataloader": "^2.0.0",
+    "fp-ts": "~2.6.5",
     "io-ts-reporters": "^1.2.2",
     "retry-ts": "^0.1.2",
     "snapshot-diff": "^0.8.1"

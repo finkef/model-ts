@@ -1,3 +1,4 @@
+export * as t from "./t"
 export * from "./model"
 export * from "./union"
 export * from "./nested"

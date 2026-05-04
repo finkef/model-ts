@@ -86,21 +86,19 @@ One of the most powerful tools of model-ts is the concept of providers. Provider
 ## Installation
 
 ```sh
-npm install io-ts fp-ts @model-ts/core
+npm install @model-ts/core
 # or
-yarn add io-ts fp-ts @model-ts/core
+yarn add @model-ts/core
 ```
 
 ## Usage
 
 ```ts
-import { model } from "@model-ts/core"
-import * as t from "io-ts"
-import { DateFromISOString } from "io-ts-types/lib/DateFromISOString"
+import { model, t } from "@model-ts/core"
 
 const codec = t.type({
   foo: t.string,
-  bar: DateFromISOString
+  bar: t.DateFromISOString
 })
 
 class MyModel extends model("MyModel", codec) {
