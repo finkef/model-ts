@@ -1,5 +1,11 @@
 # @model-ts/core
 
+## 0.4.2
+
+### Patch Changes
+
+- d1ade55: Re-export named io-ts-types codec interface types alongside curated codec values.
+
 ## 0.4.1
 
 ### Patch Changes
