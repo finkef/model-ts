@@ -1,5 +1,11 @@
 # @model-ts/core
 
+## 0.4.1
+
+### Patch Changes
+
+- 340b188: Export io-ts-types from module subpaths instead of package barrel
+
 ## 0.4.0
 
 ### Minor Changes
