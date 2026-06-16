@@ -1,6 +1,6 @@
 # @model-ts/dynamodb
 
-> model-ts Provider for AWS DynamoDB.
+> model-ts Provider for AWS DynamoDB using AWS SDK for JavaScript v3.
 
 - [Installation](#installation)
 - [Usage](#usage)
@@ -24,7 +24,8 @@ npm install io-ts fp-ts @model-ts/core @model-ts/dynamodb
 yarn add io-ts fp-ts @model-ts/core @model-ts/dynamodb
 ```
 
-Also make sure that you have `aws-sdk` installed.
+This package uses AWS SDK for JavaScript v3. Make sure that you have
+`@aws-sdk/client-dynamodb` and `@aws-sdk/lib-dynamodb` installed.
 
 ## Usage
 

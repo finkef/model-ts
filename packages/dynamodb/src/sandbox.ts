@@ -1,6 +1,6 @@
 import crypto from "crypto"
 import { chunksOf } from "fp-ts/lib/Array"
-import DynamoDB from "aws-sdk/clients/dynamodb"
+import DynamoDB, { DocumentClient } from "./aws-sdk-v3-compat"
 import { formatSnapshotDiff } from "./diff"
 import { Client } from "./client"
 import { GSI_NAMES } from "./gsi"
@@ -13,7 +13,7 @@ const ddb = new DynamoDB({
   region: "local",
 })
 
-const docClient = new DynamoDB.DocumentClient({
+const docClient = new DocumentClient({
   accessKeyId: "xxx",
   secretAccessKey: "xxx",
   endpoint: process.env.LOCAL_ENDPOINT,
@@ -27,45 +27,44 @@ export const createTable = async () => {
     .createTable({
       TableName: tableName,
       AttributeDefinitions: [
-        { AttributeName: "PK", AttributeType: "S" },
-        { AttributeName: "SK", AttributeType: "S" },
+        { AttributeName: "PK", AttributeType: "S" as const },
+        { AttributeName: "SK", AttributeType: "S" as const },
         ...GSI_NAMES.flatMap((GSI) => [
-          { AttributeName: `${GSI}PK`, AttributeType: "S" },
-          { AttributeName: `${GSI}SK`, AttributeType: "S" },
+          { AttributeName: `${GSI}PK`, AttributeType: "S" as const },
+          { AttributeName: `${GSI}SK`, AttributeType: "S" as const },
         ]),
       ],
       KeySchema: [
-        { AttributeName: "PK", KeyType: "HASH" },
-        { AttributeName: "SK", KeyType: "RANGE" },
+        { AttributeName: "PK", KeyType: "HASH" as const },
+        { AttributeName: "SK", KeyType: "RANGE" as const },
       ],
       GlobalSecondaryIndexes: [
         {
           IndexName: "GSI1",
           KeySchema: [
-            { AttributeName: "SK", KeyType: "HASH" },
-            { AttributeName: "PK", KeyType: "RANGE" },
+            { AttributeName: "SK", KeyType: "HASH" as const },
+            { AttributeName: "PK", KeyType: "RANGE" as const },
           ],
           Projection: {
-            ProjectionType: "ALL",
+            ProjectionType: "ALL" as const,
           },
         },
         ...GSI_NAMES.map((GSI) => ({
           IndexName: GSI,
           KeySchema: [
-            { AttributeName: `${GSI}PK`, KeyType: "HASH" },
-            { AttributeName: `${GSI}SK`, KeyType: "RANGE" },
+            { AttributeName: `${GSI}PK`, KeyType: "HASH" as const },
+            { AttributeName: `${GSI}SK`, KeyType: "RANGE" as const },
           ],
           Projection: {
-            ProjectionType: "ALL",
+            ProjectionType: "ALL" as const,
           },
         })),
       ],
-      BillingMode: "PAY_PER_REQUEST",
+      BillingMode: "PAY_PER_REQUEST" as const,
     })
     .promise()
     .catch((e: any) => {
-      console.log("Failed to create table, exiting.", e)
-      process.exit(1)
+      throw e
     })
 
   return tableName
@@ -77,8 +76,7 @@ export const destroyTable = async (tableName: string) => {
     .promise()
     .then(() => {})
     .catch((e) => {
-      console.log("Failed to destroy table, exiting.", e)
-      process.exit(1)
+      throw e
     })
 }
 
@@ -125,7 +123,7 @@ const WRITE_METHODS = new Set([
 ])
 
 function createTrackedDocClient(
-  original: DynamoDB.DocumentClient,
+  original: DocumentClient,
   tableName: string
 ) {
   let isTracking = false
@@ -222,7 +220,7 @@ function createTrackedDocClient(
   })
 
   return {
-    proxy: proxy as DynamoDB.DocumentClient,
+    proxy: proxy as DocumentClient,
     startTracking: () => {
       isTracking = true
       trackedKeys.clear()
@@ -285,7 +283,7 @@ export const createSandbox = async (client: Client): Promise<Sandbox> => {
   if (process.env.EXPERIMENTAL_DYNAMODB_IN_MEMORY === "1") {
     const tableName = crypto.randomBytes(20).toString("hex")
     const inMemoryClient =
-      createInMemoryDocumentClient() as any as DynamoDB.DocumentClient & {
+      createInMemoryDocumentClient() as any as DocumentClient & {
         __inMemorySnapshot: (name: string) => { [key: string]: any }
         __inMemoryResetTable: (name: string) => void
       }

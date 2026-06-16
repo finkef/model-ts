@@ -1,7 +1,7 @@
 import { Client } from "../client"
 import { createSandbox, Sandbox } from "../sandbox"
 import { IN_MEMORY_SPEC } from "../in-memory/spec"
-import DynamoDB from "aws-sdk/clients/dynamodb"
+import DynamoDB from "../aws-sdk-v3-compat"
 
 type Engine = "local" | "memory"
 

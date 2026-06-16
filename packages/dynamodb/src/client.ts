@@ -1,6 +1,9 @@
-import { DocumentClient, ClientApiVersions } from "aws-sdk/clients/dynamodb"
-import { ServiceConfigurationOptions } from "aws-sdk/lib/service"
-import { AWSError } from "aws-sdk/lib/error"
+import {
+  AWSError,
+  ClientApiVersions,
+  DocumentClient,
+  ServiceConfigurationOptions,
+} from "./aws-sdk-v3-compat"
 import { pipe, absurd } from "fp-ts/lib/function"
 import * as A from "fp-ts/lib/Array"
 import * as E from "fp-ts/lib/Either"

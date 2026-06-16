@@ -1,4 +1,4 @@
-import { DocumentClient } from "aws-sdk/clients/dynamodb"
+import { DocumentClient } from "./aws-sdk-v3-compat"
 import { TypeOf } from "@model-ts/core"
 import {
   DynamoDBModelInstance,

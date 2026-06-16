@@ -1,5 +1,5 @@
 import { ModelInstance, Provider } from "@model-ts/core"
-import EventBridge from "aws-sdk/clients/eventbridge"
+import { PutEventsCommandOutput } from "@aws-sdk/client-eventbridge"
 import { Client } from "./client"
 
 export interface EventBridgeProvider extends Provider {
@@ -11,7 +11,7 @@ export interface EventBridgeProvider extends Provider {
       }
     >(
       this: T
-    ) => Promise<EventBridge.PutEventsResponse["Entries"]>
+    ) => Promise<PutEventsCommandOutput["Entries"]>
   }
 }
 
