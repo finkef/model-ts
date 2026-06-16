@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 5.0.0
+
+### Major Changes
+
+- a4f8401: Move to AWS SDK v3
+
 ## 4.3.1
 
 ### Patch Changes
