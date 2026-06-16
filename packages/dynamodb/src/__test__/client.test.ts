@@ -146,14 +146,14 @@ describe("put", () => {
       await new Simple({ foo: "hi", bar: 42 }).put()
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [PK#hi / SK#42]
-+   PK: "PK#hi"
-+   SK: "SK#42"
-+   _docVersion: 0
-+   _tag: "Simple"
-+   bar: 42
-+   foo: "hi"
-`)
+        + [PK#hi / SK#42]
+        +   PK: "PK#hi"
+        +   SK: "SK#42"
+        +   _docVersion: 0
+        +   _tag: "Simple"
+        +   bar: 42
+        +   foo: "hi"
+      `)
     })
 
     test("it inserts a model with single gsi", async () => {
@@ -162,16 +162,16 @@ describe("put", () => {
       await new SingleGSI({ foo: "yes", bar: 42 }).put()
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [PK#yes / SK#42]
-+   PK: "PK#yes"
-+   SK: "SK#42"
-+   GSI2PK: "GSI2PK#yesyes"
-+   GSI2SK: "GSI2SK#FIXED"
-+   _docVersion: 0
-+   _tag: "SingleGSI"
-+   bar: 42
-+   foo: "yes"
-`)
+        + [PK#yes / SK#42]
+        +   PK: "PK#yes"
+        +   SK: "SK#42"
+        +   GSI2PK: "GSI2PK#yesyes"
+        +   GSI2SK: "GSI2SK#FIXED"
+        +   _docVersion: 0
+        +   _tag: "SingleGSI"
+        +   bar: 42
+        +   foo: "yes"
+      `)
     })
 
     test("it inserts a model with multiple gsi", async () => {
@@ -180,22 +180,22 @@ describe("put", () => {
       await new MultiGSI({ foo: "yes", bar: 42 }).put()
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [PK#yes / SK#42]
-+   PK: "PK#yes"
-+   SK: "SK#42"
-+   GSI2PK: "GSI2PK#yesyes"
-+   GSI2SK: "GSI2SK#FIXED"
-+   GSI3PK: "GSI3PK#FIXED"
-+   GSI3SK: "GSI3SK#4242"
-+   GSI4PK: "GSI4PK#FIXED"
-+   GSI4SK: "GSI4SK#4242"
-+   GSI5PK: "GSI5PK#FIXED"
-+   GSI5SK: "GSI5SK#4242"
-+   _docVersion: 0
-+   _tag: "MultiGSI"
-+   bar: 42
-+   foo: "yes"
-`)
+        + [PK#yes / SK#42]
+        +   PK: "PK#yes"
+        +   SK: "SK#42"
+        +   GSI2PK: "GSI2PK#yesyes"
+        +   GSI2SK: "GSI2SK#FIXED"
+        +   GSI3PK: "GSI3PK#FIXED"
+        +   GSI3SK: "GSI3SK#4242"
+        +   GSI4PK: "GSI4PK#FIXED"
+        +   GSI4SK: "GSI4SK#4242"
+        +   GSI5PK: "GSI5PK#FIXED"
+        +   GSI5SK: "GSI5SK#4242"
+        +   _docVersion: 0
+        +   _tag: "MultiGSI"
+        +   bar: 42
+        +   foo: "yes"
+      `)
     })
 
     test("it throws KeyExistsError if item exists", async () => {
@@ -222,14 +222,14 @@ describe("put", () => {
       await Simple.put(new Simple({ foo: "hi", bar: 42 }))
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [PK#hi / SK#42]
-+   PK: "PK#hi"
-+   SK: "SK#42"
-+   _docVersion: 0
-+   _tag: "Simple"
-+   bar: 42
-+   foo: "hi"
-`)
+        + [PK#hi / SK#42]
+        +   PK: "PK#hi"
+        +   SK: "SK#42"
+        +   _docVersion: 0
+        +   _tag: "Simple"
+        +   bar: 42
+        +   foo: "hi"
+      `)
     })
 
     test("it inserts a model with single gsi", async () => {
@@ -238,16 +238,16 @@ describe("put", () => {
       await SingleGSI.put(new SingleGSI({ foo: "yes", bar: 42 }))
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [PK#yes / SK#42]
-+   PK: "PK#yes"
-+   SK: "SK#42"
-+   GSI2PK: "GSI2PK#yesyes"
-+   GSI2SK: "GSI2SK#FIXED"
-+   _docVersion: 0
-+   _tag: "SingleGSI"
-+   bar: 42
-+   foo: "yes"
-`)
+        + [PK#yes / SK#42]
+        +   PK: "PK#yes"
+        +   SK: "SK#42"
+        +   GSI2PK: "GSI2PK#yesyes"
+        +   GSI2SK: "GSI2SK#FIXED"
+        +   _docVersion: 0
+        +   _tag: "SingleGSI"
+        +   bar: 42
+        +   foo: "yes"
+      `)
     })
 
     test("it inserts a model with multiple gsi", async () => {
@@ -256,22 +256,22 @@ describe("put", () => {
       await MultiGSI.put(new MultiGSI({ foo: "yes", bar: 42 }))
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [PK#yes / SK#42]
-+   PK: "PK#yes"
-+   SK: "SK#42"
-+   GSI2PK: "GSI2PK#yesyes"
-+   GSI2SK: "GSI2SK#FIXED"
-+   GSI3PK: "GSI3PK#FIXED"
-+   GSI3SK: "GSI3SK#4242"
-+   GSI4PK: "GSI4PK#FIXED"
-+   GSI4SK: "GSI4SK#4242"
-+   GSI5PK: "GSI5PK#FIXED"
-+   GSI5SK: "GSI5SK#4242"
-+   _docVersion: 0
-+   _tag: "MultiGSI"
-+   bar: 42
-+   foo: "yes"
-`)
+        + [PK#yes / SK#42]
+        +   PK: "PK#yes"
+        +   SK: "SK#42"
+        +   GSI2PK: "GSI2PK#yesyes"
+        +   GSI2SK: "GSI2SK#FIXED"
+        +   GSI3PK: "GSI3PK#FIXED"
+        +   GSI3SK: "GSI3SK#4242"
+        +   GSI4PK: "GSI4PK#FIXED"
+        +   GSI4SK: "GSI4SK#4242"
+        +   GSI5PK: "GSI5PK#FIXED"
+        +   GSI5SK: "GSI5SK#4242"
+        +   _docVersion: 0
+        +   _tag: "MultiGSI"
+        +   bar: 42
+        +   foo: "yes"
+      `)
     })
 
     test("it throws KeyExistsError if item exists", async () => {
@@ -311,11 +311,11 @@ describe("get", () => {
       })
 
       expect(result.values()).toMatchInlineSnapshot(`
-              Object {
-                "bar": 432,
-                "foo": "hi",
-              }
-          `)
+        {
+          "bar": 432,
+          "foo": "hi",
+        }
+      `)
 
       expect(result.encode()).toEqual(item.encode())
     })
@@ -343,7 +343,7 @@ describe("get", () => {
 
       expect(result).toBeInstanceOf(C)
       expect(result.values()).toMatchInlineSnapshot(`
-        Object {
+        {
           "c": "0",
           "pk": "PK#0",
           "sk": "SK#0",
@@ -380,14 +380,14 @@ describe("delete", () => {
       expect(result).toBeNull()
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-- [PK#hi / SK#432]
--   PK: "PK#hi"
--   SK: "SK#432"
--   _docVersion: 0
--   _tag: "Simple"
--   bar: 432
--   foo: "hi"
-`)
+        - [PK#hi / SK#432]
+        -   PK: "PK#hi"
+        -   SK: "SK#432"
+        -   _docVersion: 0
+        -   _tag: "Simple"
+        -   bar: 432
+        -   foo: "hi"
+      `)
     })
   })
 
@@ -405,14 +405,14 @@ describe("delete", () => {
       expect(result).toBeNull()
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-- [PK#hi / SK#432]
--   PK: "PK#hi"
--   SK: "SK#432"
--   _docVersion: 0
--   _tag: "Simple"
--   bar: 432
--   foo: "hi"
-`)
+        - [PK#hi / SK#432]
+        -   PK: "PK#hi"
+        -   SK: "SK#432"
+        -   _docVersion: 0
+        -   _tag: "Simple"
+        -   bar: 432
+        -   foo: "hi"
+      `)
     })
   })
 
@@ -427,14 +427,14 @@ describe("delete", () => {
       expect(result).toBeNull()
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-- [PK#hi / SK#432]
--   PK: "PK#hi"
--   SK: "SK#432"
--   _docVersion: 0
--   _tag: "Simple"
--   bar: 432
--   foo: "hi"
-`)
+        - [PK#hi / SK#432]
+        -   PK: "PK#hi"
+        -   SK: "SK#432"
+        -   _docVersion: 0
+        -   _tag: "Simple"
+        -   bar: 432
+        -   foo: "hi"
+      `)
     })
   })
 })
@@ -451,69 +451,69 @@ describe("softDelete", () => {
       const withGSIResult = await client.softDelete(withGSI)
 
       expect(simpleResult.values()).toMatchInlineSnapshot(`
-        Object {
+        {
           "bar": 432,
           "foo": "hi",
         }
       `)
       expect(withGSIResult.values()).toMatchInlineSnapshot(`
-        Object {
+        {
           "bar": 42,
           "foo": "hello",
         }
       `)
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [$$DELETED$$PK#hello / $$DELETED$$SK#42]
-+   PK: "$$DELETED$$PK#hello"
-+   SK: "$$DELETED$$SK#42"
-+   GSI2PK: "$$DELETED$$GSI2PK#hellohello"
-+   GSI2SK: "$$DELETED$$GSI2SK#FIXED"
-+   GSI3PK: "$$DELETED$$GSI3PK#FIXED"
-+   GSI3SK: "$$DELETED$$GSI3SK#4242"
-+   GSI4PK: "$$DELETED$$GSI4PK#FIXED"
-+   GSI4SK: "$$DELETED$$GSI4SK#4242"
-+   GSI5PK: "$$DELETED$$GSI5PK#FIXED"
-+   GSI5SK: "$$DELETED$$GSI5SK#4242"
-+   _deletedAt: "2021-05-01T08:00:00.000Z"
-+   _docVersion: 0
-+   _tag: "MultiGSI"
-+   bar: 42
-+   foo: "hello"
+        + [$$DELETED$$PK#hello / $$DELETED$$SK#42]
+        +   PK: "$$DELETED$$PK#hello"
+        +   SK: "$$DELETED$$SK#42"
+        +   GSI2PK: "$$DELETED$$GSI2PK#hellohello"
+        +   GSI2SK: "$$DELETED$$GSI2SK#FIXED"
+        +   GSI3PK: "$$DELETED$$GSI3PK#FIXED"
+        +   GSI3SK: "$$DELETED$$GSI3SK#4242"
+        +   GSI4PK: "$$DELETED$$GSI4PK#FIXED"
+        +   GSI4SK: "$$DELETED$$GSI4SK#4242"
+        +   GSI5PK: "$$DELETED$$GSI5PK#FIXED"
+        +   GSI5SK: "$$DELETED$$GSI5SK#4242"
+        +   _deletedAt: "2021-05-01T08:00:00.000Z"
+        +   _docVersion: 0
+        +   _tag: "MultiGSI"
+        +   bar: 42
+        +   foo: "hello"
 
-+ [$$DELETED$$PK#hi / $$DELETED$$SK#432]
-+   PK: "$$DELETED$$PK#hi"
-+   SK: "$$DELETED$$SK#432"
-+   _deletedAt: "2021-05-01T08:00:00.000Z"
-+   _docVersion: 0
-+   _tag: "Simple"
-+   bar: 432
-+   foo: "hi"
+        + [$$DELETED$$PK#hi / $$DELETED$$SK#432]
+        +   PK: "$$DELETED$$PK#hi"
+        +   SK: "$$DELETED$$SK#432"
+        +   _deletedAt: "2021-05-01T08:00:00.000Z"
+        +   _docVersion: 0
+        +   _tag: "Simple"
+        +   bar: 432
+        +   foo: "hi"
 
-- [PK#hello / SK#42]
--   PK: "PK#hello"
--   SK: "SK#42"
--   GSI2PK: "GSI2PK#hellohello"
--   GSI2SK: "GSI2SK#FIXED"
--   GSI3PK: "GSI3PK#FIXED"
--   GSI3SK: "GSI3SK#4242"
--   GSI4PK: "GSI4PK#FIXED"
--   GSI4SK: "GSI4SK#4242"
--   GSI5PK: "GSI5PK#FIXED"
--   GSI5SK: "GSI5SK#4242"
--   _docVersion: 0
--   _tag: "MultiGSI"
--   bar: 42
--   foo: "hello"
+        - [PK#hello / SK#42]
+        -   PK: "PK#hello"
+        -   SK: "SK#42"
+        -   GSI2PK: "GSI2PK#hellohello"
+        -   GSI2SK: "GSI2SK#FIXED"
+        -   GSI3PK: "GSI3PK#FIXED"
+        -   GSI3SK: "GSI3SK#4242"
+        -   GSI4PK: "GSI4PK#FIXED"
+        -   GSI4SK: "GSI4SK#4242"
+        -   GSI5PK: "GSI5PK#FIXED"
+        -   GSI5SK: "GSI5SK#4242"
+        -   _docVersion: 0
+        -   _tag: "MultiGSI"
+        -   bar: 42
+        -   foo: "hello"
 
-- [PK#hi / SK#432]
--   PK: "PK#hi"
--   SK: "SK#432"
--   _docVersion: 0
--   _tag: "Simple"
--   bar: 432
--   foo: "hi"
-`)
+        - [PK#hi / SK#432]
+        -   PK: "PK#hi"
+        -   SK: "SK#432"
+        -   _docVersion: 0
+        -   _tag: "Simple"
+        -   bar: 432
+        -   foo: "hi"
+      `)
     })
   })
 
@@ -526,30 +526,30 @@ describe("softDelete", () => {
       const result = await Simple.softDelete(item)
 
       expect(result.values()).toMatchInlineSnapshot(`
-        Object {
+        {
           "bar": 432,
           "foo": "hi",
         }
       `)
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [$$DELETED$$PK#hi / $$DELETED$$SK#432]
-+   PK: "$$DELETED$$PK#hi"
-+   SK: "$$DELETED$$SK#432"
-+   _deletedAt: "2021-05-01T08:00:00.000Z"
-+   _docVersion: 0
-+   _tag: "Simple"
-+   bar: 432
-+   foo: "hi"
+        + [$$DELETED$$PK#hi / $$DELETED$$SK#432]
+        +   PK: "$$DELETED$$PK#hi"
+        +   SK: "$$DELETED$$SK#432"
+        +   _deletedAt: "2021-05-01T08:00:00.000Z"
+        +   _docVersion: 0
+        +   _tag: "Simple"
+        +   bar: 432
+        +   foo: "hi"
 
-- [PK#hi / SK#432]
--   PK: "PK#hi"
--   SK: "SK#432"
--   _docVersion: 0
--   _tag: "Simple"
--   bar: 432
--   foo: "hi"
-`)
+        - [PK#hi / SK#432]
+        -   PK: "PK#hi"
+        -   SK: "SK#432"
+        -   _docVersion: 0
+        -   _tag: "Simple"
+        -   bar: 432
+        -   foo: "hi"
+      `)
     })
   })
 
@@ -562,30 +562,30 @@ describe("softDelete", () => {
       const result = await item.softDelete()
 
       expect(result.values()).toMatchInlineSnapshot(`
-        Object {
+        {
           "bar": 432,
           "foo": "hi",
         }
       `)
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [$$DELETED$$PK#hi / $$DELETED$$SK#432]
-+   PK: "$$DELETED$$PK#hi"
-+   SK: "$$DELETED$$SK#432"
-+   _deletedAt: "2021-05-01T08:00:00.000Z"
-+   _docVersion: 0
-+   _tag: "Simple"
-+   bar: 432
-+   foo: "hi"
+        + [$$DELETED$$PK#hi / $$DELETED$$SK#432]
+        +   PK: "$$DELETED$$PK#hi"
+        +   SK: "$$DELETED$$SK#432"
+        +   _deletedAt: "2021-05-01T08:00:00.000Z"
+        +   _docVersion: 0
+        +   _tag: "Simple"
+        +   bar: 432
+        +   foo: "hi"
 
-- [PK#hi / SK#432]
--   PK: "PK#hi"
--   SK: "SK#432"
--   _docVersion: 0
--   _tag: "Simple"
--   bar: 432
--   foo: "hi"
-`)
+        - [PK#hi / SK#432]
+        -   PK: "PK#hi"
+        -   SK: "SK#432"
+        -   _docVersion: 0
+        -   _tag: "Simple"
+        -   bar: 432
+        -   foo: "hi"
+      `)
     })
   })
 })
@@ -619,8 +619,8 @@ describe("updateRaw", () => {
     // that it is not reflected in the DB!
     expect(result.PK).toEqual(`PK#new foo`)
     expect(await sandbox.snapshot()).toMatchInlineSnapshot(`
-      Object {
-        "PK#old__SK#43": Object {
+      {
+        "PK#old__SK#43": {
           "PK": "PK#old",
           "SK": "SK#43",
           "_docVersion": 0,
@@ -655,8 +655,8 @@ describe("update", () => {
       await item.update({ foo: "ciao" })
 
       expect(await sandbox.snapshot()).toMatchInlineSnapshot(`
-        Object {
-          "FIXEDPK__FIXEDSK": Object {
+        {
+          "FIXEDPK__FIXEDSK": {
             "PK": "FIXEDPK",
             "SK": "FIXEDSK",
             "_docVersion": 1,
@@ -684,23 +684,23 @@ describe("update", () => {
 
       expect((await item.update({ foo: "ciao" })).values())
         .toMatchInlineSnapshot(`
-        Object {
+        {
           "bar": 1,
           "foo": "ciao",
         }
       `)
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-[FIXEDPK / FIXEDSK]
-    PK: "FIXEDPK"
-    SK: "FIXEDSK"
--   _docVersion: 0
-+   _docVersion: 1
-    _tag: "InPlace"
-    bar: 1
--   foo: "hello"
-+   foo: "ciao"
-`)
+        [FIXEDPK / FIXEDSK]
+            PK: "FIXEDPK"
+            SK: "FIXEDSK"
+        -   _docVersion: 0
+        +   _docVersion: 1
+            _tag: "InPlace"
+            bar: 1
+        -   foo: "hello"
+        +   foo: "ciao"
+      `)
     })
   })
 })
@@ -713,7 +713,7 @@ describe("applyUpdate", () => {
 
     const [updatedItem, updateOp] = item.applyUpdate({ a: 2 })
     expect(updatedItem.values()).toMatchInlineSnapshot(`
-      Object {
+      {
         "a": 2,
         "pk": "PK",
         "sk": "SK",
@@ -723,17 +723,17 @@ describe("applyUpdate", () => {
     await client.bulk([updateOp])
 
     expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-[PK / SK]
-    PK: "PK"
-    SK: "SK"
--   _docVersion: 0
-+   _docVersion: 1
-    _tag: "A"
--   a: 1
-+   a: 2
-    pk: "PK"
-    sk: "SK"
-`)
+      [PK / SK]
+          PK: "PK"
+          SK: "SK"
+      -   _docVersion: 0
+      +   _docVersion: 1
+          _tag: "A"
+      -   a: 1
+      +   a: 2
+          pk: "PK"
+          sk: "SK"
+    `)
   })
 })
 
@@ -746,19 +746,20 @@ describe("query", () => {
             KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
             ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT" }
           },
+
           { a: A, b: B, union: Union }
         )
       ).toMatchInlineSnapshot(`
-              Object {
-                "_unknown": Array [],
-                "a": Array [],
-                "b": Array [],
-                "meta": Object {
-                  "lastEvaluatedKey": undefined,
-                },
-                "union": Array [],
-              }
-          `)
+        {
+          "_unknown": [],
+          "a": [],
+          "b": [],
+          "meta": {
+            "lastEvaluatedKey": undefined,
+          },
+          "union": [],
+        }
+      `)
     })
 
     test("it returns unknown results", async () => {
@@ -770,25 +771,26 @@ describe("query", () => {
             KeyConditionExpression: `PK = :pk and begins_with(SK, :sk)`,
             ExpressionAttributeValues: { ":pk": "abc", ":sk": "SORT#" }
           },
+
           { a: A, b: B, union: Union }
         )
       ).toMatchInlineSnapshot(`
-              Object {
-                "_unknown": Array [
-                  Object {
-                    "PK": "abc",
-                    "SK": "SORT#1",
-                    "doesnt": "match",
-                  },
-                ],
-                "a": Array [],
-                "b": Array [],
-                "meta": Object {
-                  "lastEvaluatedKey": undefined,
-                },
-                "union": Array [],
-              }
-          `)
+        {
+          "_unknown": [
+            {
+              "PK": "abc",
+              "SK": "SORT#1",
+              "doesnt": "match",
+            },
+          ],
+          "a": [],
+          "b": [],
+          "meta": {
+            "lastEvaluatedKey": undefined,
+          },
+          "union": [],
+        }
+      `)
     })
 
     test("it returns results", async () => {
@@ -816,50 +818,50 @@ describe("query", () => {
         b: b.map(item => item.values()),
         union: union.map(item => item.values())
       }).toMatchInlineSnapshot(`
-              Object {
-                "_unknown": Array [
-                  Object {
-                    "PK": "abc",
-                    "SK": "SORT#4",
-                    "probably": "unknown",
-                  },
-                ],
-                "a": Array [
-                  Object {
-                    "a": 1,
-                    "pk": "abc",
-                    "sk": "SORT#1",
-                  },
-                  Object {
-                    "a": 2,
-                    "pk": "abc",
-                    "sk": "SORT#2",
-                  },
-                ],
-                "b": Array [
-                  Object {
-                    "b": "hi",
-                    "pk": "abc",
-                    "sk": "SORT#3",
-                  },
-                ],
-                "meta": Object {
-                  "lastEvaluatedKey": undefined,
-                },
-                "union": Array [
-                  Object {
-                    "c": "hi",
-                    "pk": "abc",
-                    "sk": "SORT#5",
-                  },
-                  Object {
-                    "d": "hi",
-                    "pk": "abc",
-                    "sk": "SORT#6",
-                  },
-                ],
-              }
-          `)
+        {
+          "_unknown": [
+            {
+              "PK": "abc",
+              "SK": "SORT#4",
+              "probably": "unknown",
+            },
+          ],
+          "a": [
+            {
+              "a": 1,
+              "pk": "abc",
+              "sk": "SORT#1",
+            },
+            {
+              "a": 2,
+              "pk": "abc",
+              "sk": "SORT#2",
+            },
+          ],
+          "b": [
+            {
+              "b": "hi",
+              "pk": "abc",
+              "sk": "SORT#3",
+            },
+          ],
+          "meta": {
+            "lastEvaluatedKey": undefined,
+          },
+          "union": [
+            {
+              "c": "hi",
+              "pk": "abc",
+              "sk": "SORT#5",
+            },
+            {
+              "d": "hi",
+              "pk": "abc",
+              "sk": "SORT#6",
+            },
+          ],
+        }
+      `)
     })
 
     test("it paginates", async () => {
@@ -959,13 +961,13 @@ describe("query", () => {
 
       expect(result.length).toBe(2)
       expect(result.map(item => item.values())).toMatchInlineSnapshot(`
-        Array [
-          Object {
+        [
+          {
             "a": 1,
             "pk": "abc",
             "sk": "SORT#1",
           },
-          Object {
+          {
             "a": 2,
             "pk": "abc",
             "sk": "SORT#2",
@@ -1223,82 +1225,82 @@ describe("bulk", () => {
       ])
 
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-+ [$$DELETED$$PK#3 / $$DELETED$$SK#3]
-+   PK: "$$DELETED$$PK#3"
-+   SK: "$$DELETED$$SK#3"
-+   _deletedAt: "2021-05-01T08:00:00.000Z"
-+   _docVersion: 0
-+   _tag: "B"
-+   b: "bar"
-+   pk: "PK#3"
-+   sk: "SK#3"
+        + [$$DELETED$$PK#3 / $$DELETED$$SK#3]
+        +   PK: "$$DELETED$$PK#3"
+        +   SK: "$$DELETED$$SK#3"
+        +   _deletedAt: "2021-05-01T08:00:00.000Z"
+        +   _docVersion: 0
+        +   _tag: "B"
+        +   b: "bar"
+        +   pk: "PK#3"
+        +   sk: "SK#3"
 
-[PK#1 / SK#1]
-    PK: "PK#1"
-    SK: "SK#1"
-    _docVersion: 0
-    _tag: "A"
--   a: 1
-+   a: -1
-    pk: "PK#1"
-    sk: "SK#1"
+        [PK#1 / SK#1]
+            PK: "PK#1"
+            SK: "SK#1"
+            _docVersion: 0
+            _tag: "A"
+        -   a: 1
+        +   a: -1
+            pk: "PK#1"
+            sk: "SK#1"
 
-- [PK#2 / SK#2]
--   PK: "PK#2"
--   SK: "SK#2"
--   _docVersion: 0
--   _tag: "A"
--   a: 2
--   pk: "PK#2"
--   sk: "SK#2"
+        - [PK#2 / SK#2]
+        -   PK: "PK#2"
+        -   SK: "SK#2"
+        -   _docVersion: 0
+        -   _tag: "A"
+        -   a: 2
+        -   pk: "PK#2"
+        -   sk: "SK#2"
 
-- [PK#3 / SK#3]
--   PK: "PK#3"
--   SK: "SK#3"
--   _docVersion: 0
--   _tag: "B"
--   b: "bar"
--   pk: "PK#3"
--   sk: "SK#3"
+        - [PK#3 / SK#3]
+        -   PK: "PK#3"
+        -   SK: "SK#3"
+        -   _docVersion: 0
+        -   _tag: "B"
+        -   b: "bar"
+        -   pk: "PK#3"
+        -   sk: "SK#3"
 
-[PK#UPDATE / SK#UPDATE]
-    PK: "PK#UPDATE"
-    SK: "SK#UPDATE"
--   _docVersion: 0
-+   _docVersion: 1
-    _tag: "B"
--   b: "bar"
-+   b: "baz"
-    pk: "PK#UPDATE"
-    sk: "SK#UPDATE"
+        [PK#UPDATE / SK#UPDATE]
+            PK: "PK#UPDATE"
+            SK: "SK#UPDATE"
+        -   _docVersion: 0
+        +   _docVersion: 1
+            _tag: "B"
+        -   b: "bar"
+        +   b: "baz"
+            pk: "PK#UPDATE"
+            sk: "SK#UPDATE"
 
-+ [PK4 / PK4]
-+   PK: "PK4"
-+   SK: "PK4"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 4
-+   pk: "PK4"
-+   sk: "PK4"
+        + [PK4 / PK4]
+        +   PK: "PK4"
+        +   SK: "PK4"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 4
+        +   pk: "PK4"
+        +   sk: "PK4"
 
-+ [PK5 / PK5]
-+   PK: "PK5"
-+   SK: "PK5"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 5
-+   pk: "PK5"
-+   sk: "PK5"
+        + [PK5 / PK5]
+        +   PK: "PK5"
+        +   SK: "PK5"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 5
+        +   pk: "PK5"
+        +   sk: "PK5"
 
-+ [PK6 / SK6]
-+   PK: "PK6"
-+   SK: "SK6"
-+   _docVersion: 0
-+   _tag: "B"
-+   b: "baz"
-+   pk: "PK6"
-+   sk: "SK6"
-`)
+        + [PK6 / SK6]
+        +   PK: "PK6"
+        +   SK: "SK6"
+        +   _docVersion: 0
+        +   _tag: "B"
+        +   b: "baz"
+        +   pk: "PK6"
+        +   sk: "SK6"
+      `)
     })
 
     test("it fails", async () => {
@@ -1361,970 +1363,970 @@ describe("bulk", () => {
 
       //#region snapshot
       expect(await sandbox.diff(before)).toMatchInlineSnapshot(`
-[PK#1 / SK#1]
-    PK: "PK#1"
-    SK: "SK#1"
-    _docVersion: 0
-    _tag: "A"
--   a: 1
-+   a: -1
-    pk: "PK#1"
-    sk: "SK#1"
-
-- [PK#2 / SK#2]
--   PK: "PK#2"
--   SK: "SK#2"
--   _docVersion: 0
--   _tag: "A"
--   a: 2
--   pk: "PK#2"
--   sk: "SK#2"
-
-- [PK#3 / SK#3]
--   PK: "PK#3"
--   SK: "SK#3"
--   _docVersion: 0
--   _tag: "B"
--   b: "bar"
--   pk: "PK#3"
--   sk: "SK#3"
-
-+ [PK#A0 / SK#A0]
-+   PK: "PK#A0"
-+   SK: "SK#A0"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 0
-+   pk: "PK#A0"
-+   sk: "SK#A0"
-
-+ [PK#A1 / SK#A1]
-+   PK: "PK#A1"
-+   SK: "SK#A1"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 1
-+   pk: "PK#A1"
-+   sk: "SK#A1"
-
-+ [PK#A10 / SK#A10]
-+   PK: "PK#A10"
-+   SK: "SK#A10"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 10
-+   pk: "PK#A10"
-+   sk: "SK#A10"
-
-+ [PK#A11 / SK#A11]
-+   PK: "PK#A11"
-+   SK: "SK#A11"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 11
-+   pk: "PK#A11"
-+   sk: "SK#A11"
-
-+ [PK#A12 / SK#A12]
-+   PK: "PK#A12"
-+   SK: "SK#A12"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 12
-+   pk: "PK#A12"
-+   sk: "SK#A12"
-
-+ [PK#A13 / SK#A13]
-+   PK: "PK#A13"
-+   SK: "SK#A13"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 13
-+   pk: "PK#A13"
-+   sk: "SK#A13"
-
-+ [PK#A14 / SK#A14]
-+   PK: "PK#A14"
-+   SK: "SK#A14"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 14
-+   pk: "PK#A14"
-+   sk: "SK#A14"
-
-+ [PK#A15 / SK#A15]
-+   PK: "PK#A15"
-+   SK: "SK#A15"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 15
-+   pk: "PK#A15"
-+   sk: "SK#A15"
-
-+ [PK#A16 / SK#A16]
-+   PK: "PK#A16"
-+   SK: "SK#A16"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 16
-+   pk: "PK#A16"
-+   sk: "SK#A16"
-
-+ [PK#A17 / SK#A17]
-+   PK: "PK#A17"
-+   SK: "SK#A17"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 17
-+   pk: "PK#A17"
-+   sk: "SK#A17"
-
-+ [PK#A18 / SK#A18]
-+   PK: "PK#A18"
-+   SK: "SK#A18"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 18
-+   pk: "PK#A18"
-+   sk: "SK#A18"
-
-+ [PK#A19 / SK#A19]
-+   PK: "PK#A19"
-+   SK: "SK#A19"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 19
-+   pk: "PK#A19"
-+   sk: "SK#A19"
-
-+ [PK#A2 / SK#A2]
-+   PK: "PK#A2"
-+   SK: "SK#A2"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 2
-+   pk: "PK#A2"
-+   sk: "SK#A2"
-
-+ [PK#A20 / SK#A20]
-+   PK: "PK#A20"
-+   SK: "SK#A20"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 20
-+   pk: "PK#A20"
-+   sk: "SK#A20"
-
-+ [PK#A21 / SK#A21]
-+   PK: "PK#A21"
-+   SK: "SK#A21"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 21
-+   pk: "PK#A21"
-+   sk: "SK#A21"
-
-+ [PK#A22 / SK#A22]
-+   PK: "PK#A22"
-+   SK: "SK#A22"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 22
-+   pk: "PK#A22"
-+   sk: "SK#A22"
-
-+ [PK#A23 / SK#A23]
-+   PK: "PK#A23"
-+   SK: "SK#A23"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 23
-+   pk: "PK#A23"
-+   sk: "SK#A23"
-
-+ [PK#A24 / SK#A24]
-+   PK: "PK#A24"
-+   SK: "SK#A24"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 24
-+   pk: "PK#A24"
-+   sk: "SK#A24"
-
-+ [PK#A25 / SK#A25]
-+   PK: "PK#A25"
-+   SK: "SK#A25"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 25
-+   pk: "PK#A25"
-+   sk: "SK#A25"
-
-+ [PK#A26 / SK#A26]
-+   PK: "PK#A26"
-+   SK: "SK#A26"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 26
-+   pk: "PK#A26"
-+   sk: "SK#A26"
-
-+ [PK#A27 / SK#A27]
-+   PK: "PK#A27"
-+   SK: "SK#A27"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 27
-+   pk: "PK#A27"
-+   sk: "SK#A27"
-
-+ [PK#A28 / SK#A28]
-+   PK: "PK#A28"
-+   SK: "SK#A28"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 28
-+   pk: "PK#A28"
-+   sk: "SK#A28"
-
-+ [PK#A29 / SK#A29]
-+   PK: "PK#A29"
-+   SK: "SK#A29"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 29
-+   pk: "PK#A29"
-+   sk: "SK#A29"
-
-+ [PK#A3 / SK#A3]
-+   PK: "PK#A3"
-+   SK: "SK#A3"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 3
-+   pk: "PK#A3"
-+   sk: "SK#A3"
-
-+ [PK#A30 / SK#A30]
-+   PK: "PK#A30"
-+   SK: "SK#A30"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 30
-+   pk: "PK#A30"
-+   sk: "SK#A30"
-
-+ [PK#A31 / SK#A31]
-+   PK: "PK#A31"
-+   SK: "SK#A31"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 31
-+   pk: "PK#A31"
-+   sk: "SK#A31"
-
-+ [PK#A32 / SK#A32]
-+   PK: "PK#A32"
-+   SK: "SK#A32"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 32
-+   pk: "PK#A32"
-+   sk: "SK#A32"
-
-+ [PK#A33 / SK#A33]
-+   PK: "PK#A33"
-+   SK: "SK#A33"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 33
-+   pk: "PK#A33"
-+   sk: "SK#A33"
-
-+ [PK#A34 / SK#A34]
-+   PK: "PK#A34"
-+   SK: "SK#A34"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 34
-+   pk: "PK#A34"
-+   sk: "SK#A34"
-
-+ [PK#A35 / SK#A35]
-+   PK: "PK#A35"
-+   SK: "SK#A35"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 35
-+   pk: "PK#A35"
-+   sk: "SK#A35"
-
-+ [PK#A36 / SK#A36]
-+   PK: "PK#A36"
-+   SK: "SK#A36"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 36
-+   pk: "PK#A36"
-+   sk: "SK#A36"
-
-+ [PK#A37 / SK#A37]
-+   PK: "PK#A37"
-+   SK: "SK#A37"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 37
-+   pk: "PK#A37"
-+   sk: "SK#A37"
-
-+ [PK#A38 / SK#A38]
-+   PK: "PK#A38"
-+   SK: "SK#A38"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 38
-+   pk: "PK#A38"
-+   sk: "SK#A38"
-
-+ [PK#A39 / SK#A39]
-+   PK: "PK#A39"
-+   SK: "SK#A39"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 39
-+   pk: "PK#A39"
-+   sk: "SK#A39"
-
-+ [PK#A4 / SK#A4]
-+   PK: "PK#A4"
-+   SK: "SK#A4"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 4
-+   pk: "PK#A4"
-+   sk: "SK#A4"
-
-+ [PK#A40 / SK#A40]
-+   PK: "PK#A40"
-+   SK: "SK#A40"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 40
-+   pk: "PK#A40"
-+   sk: "SK#A40"
-
-+ [PK#A41 / SK#A41]
-+   PK: "PK#A41"
-+   SK: "SK#A41"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 41
-+   pk: "PK#A41"
-+   sk: "SK#A41"
-
-+ [PK#A42 / SK#A42]
-+   PK: "PK#A42"
-+   SK: "SK#A42"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 42
-+   pk: "PK#A42"
-+   sk: "SK#A42"
-
-+ [PK#A43 / SK#A43]
-+   PK: "PK#A43"
-+   SK: "SK#A43"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 43
-+   pk: "PK#A43"
-+   sk: "SK#A43"
-
-+ [PK#A44 / SK#A44]
-+   PK: "PK#A44"
-+   SK: "SK#A44"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 44
-+   pk: "PK#A44"
-+   sk: "SK#A44"
-
-+ [PK#A45 / SK#A45]
-+   PK: "PK#A45"
-+   SK: "SK#A45"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 45
-+   pk: "PK#A45"
-+   sk: "SK#A45"
-
-+ [PK#A46 / SK#A46]
-+   PK: "PK#A46"
-+   SK: "SK#A46"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 46
-+   pk: "PK#A46"
-+   sk: "SK#A46"
-
-+ [PK#A47 / SK#A47]
-+   PK: "PK#A47"
-+   SK: "SK#A47"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 47
-+   pk: "PK#A47"
-+   sk: "SK#A47"
-
-+ [PK#A48 / SK#A48]
-+   PK: "PK#A48"
-+   SK: "SK#A48"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 48
-+   pk: "PK#A48"
-+   sk: "SK#A48"
-
-+ [PK#A49 / SK#A49]
-+   PK: "PK#A49"
-+   SK: "SK#A49"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 49
-+   pk: "PK#A49"
-+   sk: "SK#A49"
-
-+ [PK#A5 / SK#A5]
-+   PK: "PK#A5"
-+   SK: "SK#A5"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 5
-+   pk: "PK#A5"
-+   sk: "SK#A5"
-
-+ [PK#A50 / SK#A50]
-+   PK: "PK#A50"
-+   SK: "SK#A50"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 50
-+   pk: "PK#A50"
-+   sk: "SK#A50"
-
-+ [PK#A51 / SK#A51]
-+   PK: "PK#A51"
-+   SK: "SK#A51"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 51
-+   pk: "PK#A51"
-+   sk: "SK#A51"
-
-+ [PK#A52 / SK#A52]
-+   PK: "PK#A52"
-+   SK: "SK#A52"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 52
-+   pk: "PK#A52"
-+   sk: "SK#A52"
-
-+ [PK#A53 / SK#A53]
-+   PK: "PK#A53"
-+   SK: "SK#A53"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 53
-+   pk: "PK#A53"
-+   sk: "SK#A53"
-
-+ [PK#A54 / SK#A54]
-+   PK: "PK#A54"
-+   SK: "SK#A54"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 54
-+   pk: "PK#A54"
-+   sk: "SK#A54"
-
-+ [PK#A55 / SK#A55]
-+   PK: "PK#A55"
-+   SK: "SK#A55"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 55
-+   pk: "PK#A55"
-+   sk: "SK#A55"
-
-+ [PK#A56 / SK#A56]
-+   PK: "PK#A56"
-+   SK: "SK#A56"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 56
-+   pk: "PK#A56"
-+   sk: "SK#A56"
-
-+ [PK#A57 / SK#A57]
-+   PK: "PK#A57"
-+   SK: "SK#A57"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 57
-+   pk: "PK#A57"
-+   sk: "SK#A57"
-
-+ [PK#A58 / SK#A58]
-+   PK: "PK#A58"
-+   SK: "SK#A58"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 58
-+   pk: "PK#A58"
-+   sk: "SK#A58"
-
-+ [PK#A59 / SK#A59]
-+   PK: "PK#A59"
-+   SK: "SK#A59"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 59
-+   pk: "PK#A59"
-+   sk: "SK#A59"
-
-+ [PK#A6 / SK#A6]
-+   PK: "PK#A6"
-+   SK: "SK#A6"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 6
-+   pk: "PK#A6"
-+   sk: "SK#A6"
-
-+ [PK#A60 / SK#A60]
-+   PK: "PK#A60"
-+   SK: "SK#A60"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 60
-+   pk: "PK#A60"
-+   sk: "SK#A60"
-
-+ [PK#A61 / SK#A61]
-+   PK: "PK#A61"
-+   SK: "SK#A61"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 61
-+   pk: "PK#A61"
-+   sk: "SK#A61"
-
-+ [PK#A62 / SK#A62]
-+   PK: "PK#A62"
-+   SK: "SK#A62"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 62
-+   pk: "PK#A62"
-+   sk: "SK#A62"
-
-+ [PK#A63 / SK#A63]
-+   PK: "PK#A63"
-+   SK: "SK#A63"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 63
-+   pk: "PK#A63"
-+   sk: "SK#A63"
-
-+ [PK#A64 / SK#A64]
-+   PK: "PK#A64"
-+   SK: "SK#A64"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 64
-+   pk: "PK#A64"
-+   sk: "SK#A64"
-
-+ [PK#A65 / SK#A65]
-+   PK: "PK#A65"
-+   SK: "SK#A65"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 65
-+   pk: "PK#A65"
-+   sk: "SK#A65"
-
-+ [PK#A66 / SK#A66]
-+   PK: "PK#A66"
-+   SK: "SK#A66"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 66
-+   pk: "PK#A66"
-+   sk: "SK#A66"
-
-+ [PK#A67 / SK#A67]
-+   PK: "PK#A67"
-+   SK: "SK#A67"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 67
-+   pk: "PK#A67"
-+   sk: "SK#A67"
-
-+ [PK#A68 / SK#A68]
-+   PK: "PK#A68"
-+   SK: "SK#A68"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 68
-+   pk: "PK#A68"
-+   sk: "SK#A68"
-
-+ [PK#A69 / SK#A69]
-+   PK: "PK#A69"
-+   SK: "SK#A69"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 69
-+   pk: "PK#A69"
-+   sk: "SK#A69"
-
-+ [PK#A7 / SK#A7]
-+   PK: "PK#A7"
-+   SK: "SK#A7"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 7
-+   pk: "PK#A7"
-+   sk: "SK#A7"
-
-+ [PK#A70 / SK#A70]
-+   PK: "PK#A70"
-+   SK: "SK#A70"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 70
-+   pk: "PK#A70"
-+   sk: "SK#A70"
-
-+ [PK#A71 / SK#A71]
-+   PK: "PK#A71"
-+   SK: "SK#A71"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 71
-+   pk: "PK#A71"
-+   sk: "SK#A71"
-
-+ [PK#A72 / SK#A72]
-+   PK: "PK#A72"
-+   SK: "SK#A72"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 72
-+   pk: "PK#A72"
-+   sk: "SK#A72"
-
-+ [PK#A73 / SK#A73]
-+   PK: "PK#A73"
-+   SK: "SK#A73"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 73
-+   pk: "PK#A73"
-+   sk: "SK#A73"
-
-+ [PK#A74 / SK#A74]
-+   PK: "PK#A74"
-+   SK: "SK#A74"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 74
-+   pk: "PK#A74"
-+   sk: "SK#A74"
-
-+ [PK#A75 / SK#A75]
-+   PK: "PK#A75"
-+   SK: "SK#A75"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 75
-+   pk: "PK#A75"
-+   sk: "SK#A75"
-
-+ [PK#A76 / SK#A76]
-+   PK: "PK#A76"
-+   SK: "SK#A76"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 76
-+   pk: "PK#A76"
-+   sk: "SK#A76"
-
-+ [PK#A77 / SK#A77]
-+   PK: "PK#A77"
-+   SK: "SK#A77"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 77
-+   pk: "PK#A77"
-+   sk: "SK#A77"
-
-+ [PK#A78 / SK#A78]
-+   PK: "PK#A78"
-+   SK: "SK#A78"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 78
-+   pk: "PK#A78"
-+   sk: "SK#A78"
-
-+ [PK#A79 / SK#A79]
-+   PK: "PK#A79"
-+   SK: "SK#A79"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 79
-+   pk: "PK#A79"
-+   sk: "SK#A79"
-
-+ [PK#A8 / SK#A8]
-+   PK: "PK#A8"
-+   SK: "SK#A8"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 8
-+   pk: "PK#A8"
-+   sk: "SK#A8"
-
-+ [PK#A80 / SK#A80]
-+   PK: "PK#A80"
-+   SK: "SK#A80"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 80
-+   pk: "PK#A80"
-+   sk: "SK#A80"
-
-+ [PK#A81 / SK#A81]
-+   PK: "PK#A81"
-+   SK: "SK#A81"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 81
-+   pk: "PK#A81"
-+   sk: "SK#A81"
-
-+ [PK#A82 / SK#A82]
-+   PK: "PK#A82"
-+   SK: "SK#A82"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 82
-+   pk: "PK#A82"
-+   sk: "SK#A82"
-
-+ [PK#A83 / SK#A83]
-+   PK: "PK#A83"
-+   SK: "SK#A83"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 83
-+   pk: "PK#A83"
-+   sk: "SK#A83"
-
-+ [PK#A84 / SK#A84]
-+   PK: "PK#A84"
-+   SK: "SK#A84"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 84
-+   pk: "PK#A84"
-+   sk: "SK#A84"
-
-+ [PK#A85 / SK#A85]
-+   PK: "PK#A85"
-+   SK: "SK#A85"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 85
-+   pk: "PK#A85"
-+   sk: "SK#A85"
-
-+ [PK#A86 / SK#A86]
-+   PK: "PK#A86"
-+   SK: "SK#A86"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 86
-+   pk: "PK#A86"
-+   sk: "SK#A86"
-
-+ [PK#A87 / SK#A87]
-+   PK: "PK#A87"
-+   SK: "SK#A87"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 87
-+   pk: "PK#A87"
-+   sk: "SK#A87"
-
-+ [PK#A88 / SK#A88]
-+   PK: "PK#A88"
-+   SK: "SK#A88"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 88
-+   pk: "PK#A88"
-+   sk: "SK#A88"
-
-+ [PK#A89 / SK#A89]
-+   PK: "PK#A89"
-+   SK: "SK#A89"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 89
-+   pk: "PK#A89"
-+   sk: "SK#A89"
-
-+ [PK#A9 / SK#A9]
-+   PK: "PK#A9"
-+   SK: "SK#A9"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 9
-+   pk: "PK#A9"
-+   sk: "SK#A9"
-
-+ [PK#A90 / SK#A90]
-+   PK: "PK#A90"
-+   SK: "SK#A90"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 90
-+   pk: "PK#A90"
-+   sk: "SK#A90"
-
-+ [PK#A91 / SK#A91]
-+   PK: "PK#A91"
-+   SK: "SK#A91"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 91
-+   pk: "PK#A91"
-+   sk: "SK#A91"
-
-+ [PK#A92 / SK#A92]
-+   PK: "PK#A92"
-+   SK: "SK#A92"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 92
-+   pk: "PK#A92"
-+   sk: "SK#A92"
-
-+ [PK#A93 / SK#A93]
-+   PK: "PK#A93"
-+   SK: "SK#A93"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 93
-+   pk: "PK#A93"
-+   sk: "SK#A93"
-
-+ [PK#A94 / SK#A94]
-+   PK: "PK#A94"
-+   SK: "SK#A94"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 94
-+   pk: "PK#A94"
-+   sk: "SK#A94"
-
-+ [PK#A95 / SK#A95]
-+   PK: "PK#A95"
-+   SK: "SK#A95"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 95
-+   pk: "PK#A95"
-+   sk: "SK#A95"
-
-+ [PK#A96 / SK#A96]
-+   PK: "PK#A96"
-+   SK: "SK#A96"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 96
-+   pk: "PK#A96"
-+   sk: "SK#A96"
-
-+ [PK#A97 / SK#A97]
-+   PK: "PK#A97"
-+   SK: "SK#A97"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 97
-+   pk: "PK#A97"
-+   sk: "SK#A97"
-
-+ [PK#A98 / SK#A98]
-+   PK: "PK#A98"
-+   SK: "SK#A98"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 98
-+   pk: "PK#A98"
-+   sk: "SK#A98"
-
-+ [PK#A99 / SK#A99]
-+   PK: "PK#A99"
-+   SK: "SK#A99"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 99
-+   pk: "PK#A99"
-+   sk: "SK#A99"
-
-+ [PK#UPDATE / SK#UPDATE]
-+   PK: "PK#UPDATE"
-+   SK: "SK#UPDATE"
-+   _docVersion: 1
-+   _tag: "B"
-+   b: "baz"
-+   pk: "PK#UPDATE"
-+   sk: "SK#UPDATE"
-
-+ [PK4 / PK4]
-+   PK: "PK4"
-+   SK: "PK4"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 4
-+   pk: "PK4"
-+   sk: "PK4"
-
-+ [PK5 / PK5]
-+   PK: "PK5"
-+   SK: "PK5"
-+   _docVersion: 0
-+   _tag: "A"
-+   a: 5
-+   pk: "PK5"
-+   sk: "PK5"
-
-+ [PK6 / SK6]
-+   PK: "PK6"
-+   SK: "SK6"
-+   _docVersion: 0
-+   _tag: "B"
-+   b: "baz"
-+   pk: "PK6"
-+   sk: "SK6"
-`)
+        [PK#1 / SK#1]
+            PK: "PK#1"
+            SK: "SK#1"
+            _docVersion: 0
+            _tag: "A"
+        -   a: 1
+        +   a: -1
+            pk: "PK#1"
+            sk: "SK#1"
+
+        - [PK#2 / SK#2]
+        -   PK: "PK#2"
+        -   SK: "SK#2"
+        -   _docVersion: 0
+        -   _tag: "A"
+        -   a: 2
+        -   pk: "PK#2"
+        -   sk: "SK#2"
+
+        - [PK#3 / SK#3]
+        -   PK: "PK#3"
+        -   SK: "SK#3"
+        -   _docVersion: 0
+        -   _tag: "B"
+        -   b: "bar"
+        -   pk: "PK#3"
+        -   sk: "SK#3"
+
+        + [PK#A0 / SK#A0]
+        +   PK: "PK#A0"
+        +   SK: "SK#A0"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 0
+        +   pk: "PK#A0"
+        +   sk: "SK#A0"
+
+        + [PK#A1 / SK#A1]
+        +   PK: "PK#A1"
+        +   SK: "SK#A1"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 1
+        +   pk: "PK#A1"
+        +   sk: "SK#A1"
+
+        + [PK#A10 / SK#A10]
+        +   PK: "PK#A10"
+        +   SK: "SK#A10"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 10
+        +   pk: "PK#A10"
+        +   sk: "SK#A10"
+
+        + [PK#A11 / SK#A11]
+        +   PK: "PK#A11"
+        +   SK: "SK#A11"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 11
+        +   pk: "PK#A11"
+        +   sk: "SK#A11"
+
+        + [PK#A12 / SK#A12]
+        +   PK: "PK#A12"
+        +   SK: "SK#A12"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 12
+        +   pk: "PK#A12"
+        +   sk: "SK#A12"
+
+        + [PK#A13 / SK#A13]
+        +   PK: "PK#A13"
+        +   SK: "SK#A13"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 13
+        +   pk: "PK#A13"
+        +   sk: "SK#A13"
+
+        + [PK#A14 / SK#A14]
+        +   PK: "PK#A14"
+        +   SK: "SK#A14"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 14
+        +   pk: "PK#A14"
+        +   sk: "SK#A14"
+
+        + [PK#A15 / SK#A15]
+        +   PK: "PK#A15"
+        +   SK: "SK#A15"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 15
+        +   pk: "PK#A15"
+        +   sk: "SK#A15"
+
+        + [PK#A16 / SK#A16]
+        +   PK: "PK#A16"
+        +   SK: "SK#A16"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 16
+        +   pk: "PK#A16"
+        +   sk: "SK#A16"
+
+        + [PK#A17 / SK#A17]
+        +   PK: "PK#A17"
+        +   SK: "SK#A17"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 17
+        +   pk: "PK#A17"
+        +   sk: "SK#A17"
+
+        + [PK#A18 / SK#A18]
+        +   PK: "PK#A18"
+        +   SK: "SK#A18"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 18
+        +   pk: "PK#A18"
+        +   sk: "SK#A18"
+
+        + [PK#A19 / SK#A19]
+        +   PK: "PK#A19"
+        +   SK: "SK#A19"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 19
+        +   pk: "PK#A19"
+        +   sk: "SK#A19"
+
+        + [PK#A2 / SK#A2]
+        +   PK: "PK#A2"
+        +   SK: "SK#A2"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 2
+        +   pk: "PK#A2"
+        +   sk: "SK#A2"
+
+        + [PK#A20 / SK#A20]
+        +   PK: "PK#A20"
+        +   SK: "SK#A20"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 20
+        +   pk: "PK#A20"
+        +   sk: "SK#A20"
+
+        + [PK#A21 / SK#A21]
+        +   PK: "PK#A21"
+        +   SK: "SK#A21"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 21
+        +   pk: "PK#A21"
+        +   sk: "SK#A21"
+
+        + [PK#A22 / SK#A22]
+        +   PK: "PK#A22"
+        +   SK: "SK#A22"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 22
+        +   pk: "PK#A22"
+        +   sk: "SK#A22"
+
+        + [PK#A23 / SK#A23]
+        +   PK: "PK#A23"
+        +   SK: "SK#A23"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 23
+        +   pk: "PK#A23"
+        +   sk: "SK#A23"
+
+        + [PK#A24 / SK#A24]
+        +   PK: "PK#A24"
+        +   SK: "SK#A24"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 24
+        +   pk: "PK#A24"
+        +   sk: "SK#A24"
+
+        + [PK#A25 / SK#A25]
+        +   PK: "PK#A25"
+        +   SK: "SK#A25"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 25
+        +   pk: "PK#A25"
+        +   sk: "SK#A25"
+
+        + [PK#A26 / SK#A26]
+        +   PK: "PK#A26"
+        +   SK: "SK#A26"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 26
+        +   pk: "PK#A26"
+        +   sk: "SK#A26"
+
+        + [PK#A27 / SK#A27]
+        +   PK: "PK#A27"
+        +   SK: "SK#A27"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 27
+        +   pk: "PK#A27"
+        +   sk: "SK#A27"
+
+        + [PK#A28 / SK#A28]
+        +   PK: "PK#A28"
+        +   SK: "SK#A28"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 28
+        +   pk: "PK#A28"
+        +   sk: "SK#A28"
+
+        + [PK#A29 / SK#A29]
+        +   PK: "PK#A29"
+        +   SK: "SK#A29"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 29
+        +   pk: "PK#A29"
+        +   sk: "SK#A29"
+
+        + [PK#A3 / SK#A3]
+        +   PK: "PK#A3"
+        +   SK: "SK#A3"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 3
+        +   pk: "PK#A3"
+        +   sk: "SK#A3"
+
+        + [PK#A30 / SK#A30]
+        +   PK: "PK#A30"
+        +   SK: "SK#A30"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 30
+        +   pk: "PK#A30"
+        +   sk: "SK#A30"
+
+        + [PK#A31 / SK#A31]
+        +   PK: "PK#A31"
+        +   SK: "SK#A31"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 31
+        +   pk: "PK#A31"
+        +   sk: "SK#A31"
+
+        + [PK#A32 / SK#A32]
+        +   PK: "PK#A32"
+        +   SK: "SK#A32"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 32
+        +   pk: "PK#A32"
+        +   sk: "SK#A32"
+
+        + [PK#A33 / SK#A33]
+        +   PK: "PK#A33"
+        +   SK: "SK#A33"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 33
+        +   pk: "PK#A33"
+        +   sk: "SK#A33"
+
+        + [PK#A34 / SK#A34]
+        +   PK: "PK#A34"
+        +   SK: "SK#A34"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 34
+        +   pk: "PK#A34"
+        +   sk: "SK#A34"
+
+        + [PK#A35 / SK#A35]
+        +   PK: "PK#A35"
+        +   SK: "SK#A35"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 35
+        +   pk: "PK#A35"
+        +   sk: "SK#A35"
+
+        + [PK#A36 / SK#A36]
+        +   PK: "PK#A36"
+        +   SK: "SK#A36"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 36
+        +   pk: "PK#A36"
+        +   sk: "SK#A36"
+
+        + [PK#A37 / SK#A37]
+        +   PK: "PK#A37"
+        +   SK: "SK#A37"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 37
+        +   pk: "PK#A37"
+        +   sk: "SK#A37"
+
+        + [PK#A38 / SK#A38]
+        +   PK: "PK#A38"
+        +   SK: "SK#A38"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 38
+        +   pk: "PK#A38"
+        +   sk: "SK#A38"
+
+        + [PK#A39 / SK#A39]
+        +   PK: "PK#A39"
+        +   SK: "SK#A39"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 39
+        +   pk: "PK#A39"
+        +   sk: "SK#A39"
+
+        + [PK#A4 / SK#A4]
+        +   PK: "PK#A4"
+        +   SK: "SK#A4"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 4
+        +   pk: "PK#A4"
+        +   sk: "SK#A4"
+
+        + [PK#A40 / SK#A40]
+        +   PK: "PK#A40"
+        +   SK: "SK#A40"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 40
+        +   pk: "PK#A40"
+        +   sk: "SK#A40"
+
+        + [PK#A41 / SK#A41]
+        +   PK: "PK#A41"
+        +   SK: "SK#A41"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 41
+        +   pk: "PK#A41"
+        +   sk: "SK#A41"
+
+        + [PK#A42 / SK#A42]
+        +   PK: "PK#A42"
+        +   SK: "SK#A42"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 42
+        +   pk: "PK#A42"
+        +   sk: "SK#A42"
+
+        + [PK#A43 / SK#A43]
+        +   PK: "PK#A43"
+        +   SK: "SK#A43"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 43
+        +   pk: "PK#A43"
+        +   sk: "SK#A43"
+
+        + [PK#A44 / SK#A44]
+        +   PK: "PK#A44"
+        +   SK: "SK#A44"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 44
+        +   pk: "PK#A44"
+        +   sk: "SK#A44"
+
+        + [PK#A45 / SK#A45]
+        +   PK: "PK#A45"
+        +   SK: "SK#A45"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 45
+        +   pk: "PK#A45"
+        +   sk: "SK#A45"
+
+        + [PK#A46 / SK#A46]
+        +   PK: "PK#A46"
+        +   SK: "SK#A46"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 46
+        +   pk: "PK#A46"
+        +   sk: "SK#A46"
+
+        + [PK#A47 / SK#A47]
+        +   PK: "PK#A47"
+        +   SK: "SK#A47"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 47
+        +   pk: "PK#A47"
+        +   sk: "SK#A47"
+
+        + [PK#A48 / SK#A48]
+        +   PK: "PK#A48"
+        +   SK: "SK#A48"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 48
+        +   pk: "PK#A48"
+        +   sk: "SK#A48"
+
+        + [PK#A49 / SK#A49]
+        +   PK: "PK#A49"
+        +   SK: "SK#A49"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 49
+        +   pk: "PK#A49"
+        +   sk: "SK#A49"
+
+        + [PK#A5 / SK#A5]
+        +   PK: "PK#A5"
+        +   SK: "SK#A5"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 5
+        +   pk: "PK#A5"
+        +   sk: "SK#A5"
+
+        + [PK#A50 / SK#A50]
+        +   PK: "PK#A50"
+        +   SK: "SK#A50"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 50
+        +   pk: "PK#A50"
+        +   sk: "SK#A50"
+
+        + [PK#A51 / SK#A51]
+        +   PK: "PK#A51"
+        +   SK: "SK#A51"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 51
+        +   pk: "PK#A51"
+        +   sk: "SK#A51"
+
+        + [PK#A52 / SK#A52]
+        +   PK: "PK#A52"
+        +   SK: "SK#A52"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 52
+        +   pk: "PK#A52"
+        +   sk: "SK#A52"
+
+        + [PK#A53 / SK#A53]
+        +   PK: "PK#A53"
+        +   SK: "SK#A53"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 53
+        +   pk: "PK#A53"
+        +   sk: "SK#A53"
+
+        + [PK#A54 / SK#A54]
+        +   PK: "PK#A54"
+        +   SK: "SK#A54"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 54
+        +   pk: "PK#A54"
+        +   sk: "SK#A54"
+
+        + [PK#A55 / SK#A55]
+        +   PK: "PK#A55"
+        +   SK: "SK#A55"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 55
+        +   pk: "PK#A55"
+        +   sk: "SK#A55"
+
+        + [PK#A56 / SK#A56]
+        +   PK: "PK#A56"
+        +   SK: "SK#A56"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 56
+        +   pk: "PK#A56"
+        +   sk: "SK#A56"
+
+        + [PK#A57 / SK#A57]
+        +   PK: "PK#A57"
+        +   SK: "SK#A57"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 57
+        +   pk: "PK#A57"
+        +   sk: "SK#A57"
+
+        + [PK#A58 / SK#A58]
+        +   PK: "PK#A58"
+        +   SK: "SK#A58"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 58
+        +   pk: "PK#A58"
+        +   sk: "SK#A58"
+
+        + [PK#A59 / SK#A59]
+        +   PK: "PK#A59"
+        +   SK: "SK#A59"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 59
+        +   pk: "PK#A59"
+        +   sk: "SK#A59"
+
+        + [PK#A6 / SK#A6]
+        +   PK: "PK#A6"
+        +   SK: "SK#A6"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 6
+        +   pk: "PK#A6"
+        +   sk: "SK#A6"
+
+        + [PK#A60 / SK#A60]
+        +   PK: "PK#A60"
+        +   SK: "SK#A60"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 60
+        +   pk: "PK#A60"
+        +   sk: "SK#A60"
+
+        + [PK#A61 / SK#A61]
+        +   PK: "PK#A61"
+        +   SK: "SK#A61"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 61
+        +   pk: "PK#A61"
+        +   sk: "SK#A61"
+
+        + [PK#A62 / SK#A62]
+        +   PK: "PK#A62"
+        +   SK: "SK#A62"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 62
+        +   pk: "PK#A62"
+        +   sk: "SK#A62"
+
+        + [PK#A63 / SK#A63]
+        +   PK: "PK#A63"
+        +   SK: "SK#A63"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 63
+        +   pk: "PK#A63"
+        +   sk: "SK#A63"
+
+        + [PK#A64 / SK#A64]
+        +   PK: "PK#A64"
+        +   SK: "SK#A64"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 64
+        +   pk: "PK#A64"
+        +   sk: "SK#A64"
+
+        + [PK#A65 / SK#A65]
+        +   PK: "PK#A65"
+        +   SK: "SK#A65"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 65
+        +   pk: "PK#A65"
+        +   sk: "SK#A65"
+
+        + [PK#A66 / SK#A66]
+        +   PK: "PK#A66"
+        +   SK: "SK#A66"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 66
+        +   pk: "PK#A66"
+        +   sk: "SK#A66"
+
+        + [PK#A67 / SK#A67]
+        +   PK: "PK#A67"
+        +   SK: "SK#A67"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 67
+        +   pk: "PK#A67"
+        +   sk: "SK#A67"
+
+        + [PK#A68 / SK#A68]
+        +   PK: "PK#A68"
+        +   SK: "SK#A68"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 68
+        +   pk: "PK#A68"
+        +   sk: "SK#A68"
+
+        + [PK#A69 / SK#A69]
+        +   PK: "PK#A69"
+        +   SK: "SK#A69"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 69
+        +   pk: "PK#A69"
+        +   sk: "SK#A69"
+
+        + [PK#A7 / SK#A7]
+        +   PK: "PK#A7"
+        +   SK: "SK#A7"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 7
+        +   pk: "PK#A7"
+        +   sk: "SK#A7"
+
+        + [PK#A70 / SK#A70]
+        +   PK: "PK#A70"
+        +   SK: "SK#A70"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 70
+        +   pk: "PK#A70"
+        +   sk: "SK#A70"
+
+        + [PK#A71 / SK#A71]
+        +   PK: "PK#A71"
+        +   SK: "SK#A71"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 71
+        +   pk: "PK#A71"
+        +   sk: "SK#A71"
+
+        + [PK#A72 / SK#A72]
+        +   PK: "PK#A72"
+        +   SK: "SK#A72"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 72
+        +   pk: "PK#A72"
+        +   sk: "SK#A72"
+
+        + [PK#A73 / SK#A73]
+        +   PK: "PK#A73"
+        +   SK: "SK#A73"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 73
+        +   pk: "PK#A73"
+        +   sk: "SK#A73"
+
+        + [PK#A74 / SK#A74]
+        +   PK: "PK#A74"
+        +   SK: "SK#A74"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 74
+        +   pk: "PK#A74"
+        +   sk: "SK#A74"
+
+        + [PK#A75 / SK#A75]
+        +   PK: "PK#A75"
+        +   SK: "SK#A75"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 75
+        +   pk: "PK#A75"
+        +   sk: "SK#A75"
+
+        + [PK#A76 / SK#A76]
+        +   PK: "PK#A76"
+        +   SK: "SK#A76"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 76
+        +   pk: "PK#A76"
+        +   sk: "SK#A76"
+
+        + [PK#A77 / SK#A77]
+        +   PK: "PK#A77"
+        +   SK: "SK#A77"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 77
+        +   pk: "PK#A77"
+        +   sk: "SK#A77"
+
+        + [PK#A78 / SK#A78]
+        +   PK: "PK#A78"
+        +   SK: "SK#A78"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 78
+        +   pk: "PK#A78"
+        +   sk: "SK#A78"
+
+        + [PK#A79 / SK#A79]
+        +   PK: "PK#A79"
+        +   SK: "SK#A79"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 79
+        +   pk: "PK#A79"
+        +   sk: "SK#A79"
+
+        + [PK#A8 / SK#A8]
+        +   PK: "PK#A8"
+        +   SK: "SK#A8"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 8
+        +   pk: "PK#A8"
+        +   sk: "SK#A8"
+
+        + [PK#A80 / SK#A80]
+        +   PK: "PK#A80"
+        +   SK: "SK#A80"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 80
+        +   pk: "PK#A80"
+        +   sk: "SK#A80"
+
+        + [PK#A81 / SK#A81]
+        +   PK: "PK#A81"
+        +   SK: "SK#A81"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 81
+        +   pk: "PK#A81"
+        +   sk: "SK#A81"
+
+        + [PK#A82 / SK#A82]
+        +   PK: "PK#A82"
+        +   SK: "SK#A82"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 82
+        +   pk: "PK#A82"
+        +   sk: "SK#A82"
+
+        + [PK#A83 / SK#A83]
+        +   PK: "PK#A83"
+        +   SK: "SK#A83"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 83
+        +   pk: "PK#A83"
+        +   sk: "SK#A83"
+
+        + [PK#A84 / SK#A84]
+        +   PK: "PK#A84"
+        +   SK: "SK#A84"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 84
+        +   pk: "PK#A84"
+        +   sk: "SK#A84"
+
+        + [PK#A85 / SK#A85]
+        +   PK: "PK#A85"
+        +   SK: "SK#A85"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 85
+        +   pk: "PK#A85"
+        +   sk: "SK#A85"
+
+        + [PK#A86 / SK#A86]
+        +   PK: "PK#A86"
+        +   SK: "SK#A86"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 86
+        +   pk: "PK#A86"
+        +   sk: "SK#A86"
+
+        + [PK#A87 / SK#A87]
+        +   PK: "PK#A87"
+        +   SK: "SK#A87"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 87
+        +   pk: "PK#A87"
+        +   sk: "SK#A87"
+
+        + [PK#A88 / SK#A88]
+        +   PK: "PK#A88"
+        +   SK: "SK#A88"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 88
+        +   pk: "PK#A88"
+        +   sk: "SK#A88"
+
+        + [PK#A89 / SK#A89]
+        +   PK: "PK#A89"
+        +   SK: "SK#A89"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 89
+        +   pk: "PK#A89"
+        +   sk: "SK#A89"
+
+        + [PK#A9 / SK#A9]
+        +   PK: "PK#A9"
+        +   SK: "SK#A9"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 9
+        +   pk: "PK#A9"
+        +   sk: "SK#A9"
+
+        + [PK#A90 / SK#A90]
+        +   PK: "PK#A90"
+        +   SK: "SK#A90"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 90
+        +   pk: "PK#A90"
+        +   sk: "SK#A90"
+
+        + [PK#A91 / SK#A91]
+        +   PK: "PK#A91"
+        +   SK: "SK#A91"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 91
+        +   pk: "PK#A91"
+        +   sk: "SK#A91"
+
+        + [PK#A92 / SK#A92]
+        +   PK: "PK#A92"
+        +   SK: "SK#A92"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 92
+        +   pk: "PK#A92"
+        +   sk: "SK#A92"
+
+        + [PK#A93 / SK#A93]
+        +   PK: "PK#A93"
+        +   SK: "SK#A93"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 93
+        +   pk: "PK#A93"
+        +   sk: "SK#A93"
+
+        + [PK#A94 / SK#A94]
+        +   PK: "PK#A94"
+        +   SK: "SK#A94"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 94
+        +   pk: "PK#A94"
+        +   sk: "SK#A94"
+
+        + [PK#A95 / SK#A95]
+        +   PK: "PK#A95"
+        +   SK: "SK#A95"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 95
+        +   pk: "PK#A95"
+        +   sk: "SK#A95"
+
+        + [PK#A96 / SK#A96]
+        +   PK: "PK#A96"
+        +   SK: "SK#A96"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 96
+        +   pk: "PK#A96"
+        +   sk: "SK#A96"
+
+        + [PK#A97 / SK#A97]
+        +   PK: "PK#A97"
+        +   SK: "SK#A97"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 97
+        +   pk: "PK#A97"
+        +   sk: "SK#A97"
+
+        + [PK#A98 / SK#A98]
+        +   PK: "PK#A98"
+        +   SK: "SK#A98"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 98
+        +   pk: "PK#A98"
+        +   sk: "SK#A98"
+
+        + [PK#A99 / SK#A99]
+        +   PK: "PK#A99"
+        +   SK: "SK#A99"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 99
+        +   pk: "PK#A99"
+        +   sk: "SK#A99"
+
+        + [PK#UPDATE / SK#UPDATE]
+        +   PK: "PK#UPDATE"
+        +   SK: "SK#UPDATE"
+        +   _docVersion: 1
+        +   _tag: "B"
+        +   b: "baz"
+        +   pk: "PK#UPDATE"
+        +   sk: "SK#UPDATE"
+
+        + [PK4 / PK4]
+        +   PK: "PK4"
+        +   SK: "PK4"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 4
+        +   pk: "PK4"
+        +   sk: "PK4"
+
+        + [PK5 / PK5]
+        +   PK: "PK5"
+        +   SK: "PK5"
+        +   _docVersion: 0
+        +   _tag: "A"
+        +   a: 5
+        +   pk: "PK5"
+        +   sk: "PK5"
+
+        + [PK6 / SK6]
+        +   PK: "PK6"
+        +   SK: "SK6"
+        +   _docVersion: 0
+        +   _tag: "B"
+        +   b: "baz"
+        +   pk: "PK6"
+        +   sk: "SK6"
+      `)
       //#endregion
     })
 
@@ -2426,28 +2428,28 @@ describe("batchGet", () => {
         Object.entries(results).map(([key, val]) => [key, val.values()])
       )
     ).toMatchInlineSnapshot(`
-      Object {
-        "duplicate": Object {
+      {
+        "duplicate": {
           "a": 1,
           "pk": "PK#1",
           "sk": "SK#1",
         },
-        "four": Object {
+        "four": {
           "a": 4,
           "pk": "PK#4",
           "sk": "SK#4",
         },
-        "one": Object {
+        "one": {
           "a": 1,
           "pk": "PK#1",
           "sk": "SK#1",
         },
-        "three": Object {
+        "three": {
           "a": 3,
           "pk": "PK#3",
           "sk": "SK#3",
         },
-        "two": Object {
+        "two": {
           "a": 2,
           "pk": "PK#2",
           "sk": "SK#2",
@@ -2702,7 +2704,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -2722,7 +2724,7 @@ describe("paginate", () => {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -2742,7 +2744,7 @@ describe("paginate", () => {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -2763,7 +2765,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": true,
@@ -2783,7 +2785,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -2814,7 +2816,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -2834,7 +2836,7 @@ describe("paginate", () => {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -2854,7 +2856,7 @@ describe("paginate", () => {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -2875,7 +2877,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": true,
@@ -2895,7 +2897,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -2925,7 +2927,7 @@ describe("paginate", () => {
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMDkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -2955,7 +2957,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNDkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3036,7 +3038,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3055,7 +3057,7 @@ describe("paginate", () => {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3074,7 +3076,7 @@ describe("paginate", () => {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -3094,7 +3096,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": true,
@@ -3113,7 +3115,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -3142,7 +3144,7 @@ describe("paginate", () => {
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMDkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3171,7 +3173,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNDkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3251,7 +3253,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3270,7 +3272,7 @@ describe("paginate", () => {
         }
       )
       expect(page2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3289,7 +3291,7 @@ describe("paginate", () => {
         }
       )
       expect(page3.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -3309,7 +3311,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage2.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMzkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": true,
@@ -3328,7 +3330,7 @@ describe("paginate", () => {
         }
       )
       expect(backwardsPage1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMTkifQ==",
           "hasNextPage": false,
           "hasPreviousPage": false,
@@ -3358,7 +3360,7 @@ describe("paginate", () => {
         }
       )
       expect(page.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwMDkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,
@@ -3388,7 +3390,7 @@ describe("paginate", () => {
         }
       )
       expect(page1.pageInfo).toMatchInlineSnapshot(`
-        Object {
+        {
           "endCursor": "eyJQSyI6IlBLIiwiU0siOiIwNDkifQ==",
           "hasNextPage": true,
           "hasPreviousPage": false,

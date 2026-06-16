@@ -1,4 +1,4 @@
-import { AWSError } from "aws-sdk/lib/error"
+import { AWSError } from "./aws-sdk-v3-compat"
 import { BulkOperation } from "./operations"
 
 // TODO: populate errors with more info

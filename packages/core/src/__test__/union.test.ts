@@ -18,7 +18,7 @@ describe("without providers", () => {
       const decodedA = Union.from({ a: "a" })
       expect(decodedA).toBeInstanceOf(A)
       expect(decodedA).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "A",
           "a": "a",
         }
@@ -27,7 +27,7 @@ describe("without providers", () => {
       const decodedB = Union.from({ b: 42, c: "" })
       expect(decodedB).toBeInstanceOf(B)
       expect(decodedB).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "B",
           "b": 42,
         }
@@ -50,7 +50,7 @@ describe("without providers", () => {
       const decodedA = Union.from({ _tag: "A", a: "a" })
       expect(decodedA).toBeInstanceOf(A)
       expect(decodedA).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "A",
           "a": "a",
         }
@@ -59,7 +59,7 @@ describe("without providers", () => {
       const decodedB = Union.from({ _tag: "B", b: 42, c: "" })
       expect(decodedB).toBeInstanceOf(B)
       expect(decodedB).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "B",
           "b": 42,
         }
@@ -115,10 +115,10 @@ describe("as io-ts codec", () => {
   test("it decodes", () => {
     expect(t.type({ union: Union }).decode({ union: { b: 42 } }))
       .toMatchInlineSnapshot(`
-      Object {
+      {
         "_tag": "Right",
-        "right": Object {
-          "union": Object {
+        "right": {
+          "union": {
             "_tag": "B",
             "b": 42,
           },
@@ -130,13 +130,13 @@ describe("as io-ts codec", () => {
   test("it fails", () => {
     expect(t.type({ union: Union }).decode({ union: "something else" }))
       .toMatchInlineSnapshot(`
-      Object {
+      {
         "_tag": "Left",
-        "left": Array [
-          Object {
-            "context": Array [
-              Object {
-                "actual": Object {
+        "left": [
+          {
+            "context": [
+              {
+                "actual": {
                   "union": "something else",
                 },
                 "key": "",
@@ -146,18 +146,18 @@ describe("as io-ts codec", () => {
                   "encode": [Function],
                   "is": [Function],
                   "name": "{ union: Union }",
-                  "props": Object {
+                  "props": {
                     "union": [Function],
                   },
                   "validate": [Function],
                 },
               },
-              Object {
+              {
                 "actual": "something else",
                 "key": "union",
                 "type": [Function],
               },
-              Object {
+              {
                 "actual": "something else",
                 "key": "0",
                 "type": [Function],
@@ -166,10 +166,10 @@ describe("as io-ts codec", () => {
             "message": undefined,
             "value": "something else",
           },
-          Object {
-            "context": Array [
-              Object {
-                "actual": Object {
+          {
+            "context": [
+              {
+                "actual": {
                   "union": "something else",
                 },
                 "key": "",
@@ -179,18 +179,18 @@ describe("as io-ts codec", () => {
                   "encode": [Function],
                   "is": [Function],
                   "name": "{ union: Union }",
-                  "props": Object {
+                  "props": {
                     "union": [Function],
                   },
                   "validate": [Function],
                 },
               },
-              Object {
+              {
                 "actual": "something else",
                 "key": "union",
                 "type": [Function],
               },
-              Object {
+              {
                 "actual": "something else",
                 "key": "1",
                 "type": [Function],

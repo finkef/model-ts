@@ -20,7 +20,7 @@ describe("without providers", () => {
       const decoded = MyModel.from({ foo: 42, bar: "omitted" })
       expect(decoded).toBeInstanceOf(MyModel)
       expect(decoded).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "MyModel",
           "foo": 42,
         }
@@ -43,7 +43,7 @@ describe("without providers", () => {
       const decoded = new MyModel({ foo: 42 })
       expect(decoded).toBeInstanceOf(MyModel)
       expect(decoded).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "MyModel",
           "foo": 42,
         }
@@ -111,7 +111,7 @@ describe("with provider", () => {
       const decoded = MyModel.from({ foo: 42, bar: "omitted" })
       expect(decoded).toBeInstanceOf(MyModel)
       expect(decoded).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "MyModel",
           "foo": 42,
         }
@@ -141,7 +141,7 @@ describe("with provider", () => {
       expect(decoded._tag).toEqual(MyModel._tag)
 
       expect(decoded).toMatchInlineSnapshot(`
-        Object {
+        {
           "_tag": "MyModel",
           "foo": 42,
         }
@@ -177,10 +177,10 @@ describe("with provider", () => {
     })
   })
 
-  describe("values", () => {
+  test("it returns values", () => {
     expect(new MyModel({ foo: 432, bar: "omitted" } as any).values())
       .toMatchInlineSnapshot(`
-      Object {
+      {
         "foo": 432,
       }
     `)
@@ -193,10 +193,10 @@ describe("as io-ts codec", () => {
   test("it decodes", () => {
     expect(t.type({ model: MyModel }).decode({ model: { foo: 42 } }))
       .toMatchInlineSnapshot(`
-      Object {
+      {
         "_tag": "Right",
-        "right": Object {
-          "model": Object {
+        "right": {
+          "model": {
             "_tag": "MyModel",
             "foo": 42,
           },
@@ -208,13 +208,13 @@ describe("as io-ts codec", () => {
   test("it fails", () => {
     expect(t.type({ model: MyModel }).decode({ model: "something else" }))
       .toMatchInlineSnapshot(`
-      Object {
+      {
         "_tag": "Left",
-        "left": Array [
-          Object {
-            "context": Array [
-              Object {
-                "actual": Object {
+        "left": [
+          {
+            "context": [
+              {
+                "actual": {
                   "model": "something else",
                 },
                 "key": "",
@@ -224,13 +224,13 @@ describe("as io-ts codec", () => {
                   "encode": [Function],
                   "is": [Function],
                   "name": "{ model: MyModel }",
-                  "props": Object {
+                  "props": {
                     "model": [Function],
                   },
                   "validate": [Function],
                 },
               },
-              Object {
+              {
                 "actual": "something else",
                 "key": "model",
                 "type": [Function],

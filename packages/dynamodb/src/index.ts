@@ -1,4 +1,5 @@
 export * from "./client"
+export * from "./aws-sdk-v3-compat"
 export * from "./dynamodb-model"
 export * from "./errors"
 export * from "./pagination"

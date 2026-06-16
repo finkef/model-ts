@@ -7,7 +7,7 @@ describe("encodeDDBCursor", () => {
     it("should encode basic PK and SK", () => {
       const result = encodeDDBCursor({
         PK: "USER#123",
-        SK: "PROFILE#456",
+        SK: "PROFILE#456"
       })
 
       expect(result).toMatchInlineSnapshot(
@@ -20,7 +20,7 @@ describe("encodeDDBCursor", () => {
         PK: "USER#123",
         SK: "PROFILE#456",
         GSI2PK: "GSI2PK#user123",
-        GSI2SK: "GSI2SK#profile456",
+        GSI2SK: "GSI2SK#profile456"
       })
 
       expect(result).toMatchInlineSnapshot(
@@ -35,7 +35,7 @@ describe("encodeDDBCursor", () => {
         GSI2PK: "GSI2PK#user123",
         GSI2SK: "GSI2SK#profile456",
         GSI3PK: "GSI3PK#fixed",
-        GSI3SK: "GSI3SK#value",
+        GSI3SK: "GSI3SK#value"
       })
 
       expect(result).toMatchInlineSnapshot(
@@ -51,7 +51,7 @@ describe("encodeDDBCursor", () => {
       const result = encodeDDBCursor(
         {
           PK: "USER#123",
-          SK: "PROFILE#456",
+          SK: "PROFILE#456"
         },
         encryptionKey
       )
@@ -66,7 +66,7 @@ describe("encodeDDBCursor", () => {
     it("should produce consistent encrypted results for same input", () => {
       const input = {
         PK: "USER#123",
-        SK: "PROFILE#456",
+        SK: "PROFILE#456"
       }
 
       const result1 = encodeDDBCursor(input, encryptionKey)
@@ -81,7 +81,7 @@ describe("encodeDDBCursor", () => {
           PK: "USER#123",
           SK: "PROFILE#456",
           GSI2PK: "GSI2PK#user123",
-          GSI2SK: "GSI2SK#profile456",
+          GSI2SK: "GSI2SK#profile456"
         },
         encryptionKey
       )
@@ -98,7 +98,7 @@ describe("decodeDDBCursor", () => {
       const result = decodeDDBCursor(encoded)
 
       expect(result).toMatchInlineSnapshot(`
-        Object {
+        {
           "PK": "USER#123",
           "SK": "PROFILE#456",
         }
@@ -111,7 +111,7 @@ describe("decodeDDBCursor", () => {
       const result = decodeDDBCursor(encoded, "GSI2")
 
       expect(result).toMatchInlineSnapshot(`
-        Object {
+        {
           "GSI2PK": "GSI2PK#user123",
           "GSI2SK": "GSI2SK#profile456",
           "PK": "USER#123",
@@ -126,7 +126,7 @@ describe("decodeDDBCursor", () => {
       const result = decodeDDBCursor(encoded, "GSI3")
 
       expect(result).toMatchInlineSnapshot(`
-        Object {
+        {
           "GSI3PK": "GSI3PK#fixed",
           "GSI3SK": "GSI3SK#value",
           "PK": "USER#123",
@@ -142,13 +142,13 @@ describe("decodeDDBCursor", () => {
     it("should decode encrypted cursor", () => {
       const input = {
         PK: "USER#123",
-        SK: "PROFILE#456",
+        SK: "PROFILE#456"
       }
       const encoded = encodeDDBCursor(input, encryptionKey)
       const result = decodeDDBCursor(encoded, undefined, encryptionKey)
 
       expect(result).toMatchInlineSnapshot(`
-        Object {
+        {
           "PK": "USER#123",
           "SK": "PROFILE#456",
         }
@@ -160,13 +160,13 @@ describe("decodeDDBCursor", () => {
         PK: "USER#123",
         SK: "PROFILE#456",
         GSI2PK: "GSI2PK#user123",
-        GSI2SK: "GSI2SK#profile456",
+        GSI2SK: "GSI2SK#profile456"
       }
       const encoded = encodeDDBCursor(input, encryptionKey)
       const result = decodeDDBCursor(encoded, "GSI2", encryptionKey)
 
       expect(result).toMatchInlineSnapshot(`
-        Object {
+        {
           "GSI2PK": "GSI2PK#user123",
           "GSI2SK": "GSI2SK#profile456",
           "PK": "USER#123",
@@ -179,7 +179,7 @@ describe("decodeDDBCursor", () => {
       const wrongKey = crypto.randomBytes(32)
       const input = {
         PK: "USER#123",
-        SK: "PROFILE#456",
+        SK: "PROFILE#456"
       }
       const encoded = encodeDDBCursor(input, encryptionKey)
 
@@ -250,7 +250,7 @@ describe("decodeDDBCursor", () => {
     it("should round-trip basic values", () => {
       const input = {
         PK: "USER#123",
-        SK: "PROFILE#456",
+        SK: "PROFILE#456"
       }
       const encoded = encodeDDBCursor(input)
       const decoded = decodeDDBCursor(encoded)
@@ -265,7 +265,7 @@ describe("decodeDDBCursor", () => {
         GSI2PK: "GSI2PK#user123",
         GSI2SK: "GSI2SK#profile456",
         GSI3PK: "GSI3PK#fixed",
-        GSI3SK: "GSI3SK#value",
+        GSI3SK: "GSI3SK#value"
       }
       const encoded = encodeDDBCursor(input)
       const decoded = decodeDDBCursor(encoded, "GSI2")
@@ -274,7 +274,7 @@ describe("decodeDDBCursor", () => {
         PK: input.PK,
         SK: input.SK,
         GSI2PK: input.GSI2PK,
-        GSI2SK: input.GSI2SK,
+        GSI2SK: input.GSI2SK
       })
     })
 
@@ -284,7 +284,7 @@ describe("decodeDDBCursor", () => {
         PK: "USER#123",
         SK: "PROFILE#456",
         GSI2PK: "GSI2PK#user123",
-        GSI2SK: "GSI2SK#profile456",
+        GSI2SK: "GSI2SK#profile456"
       }
       const encoded = encodeDDBCursor(input, encryptionKey)
       const decoded = decodeDDBCursor(encoded, "GSI2", encryptionKey)
@@ -293,7 +293,7 @@ describe("decodeDDBCursor", () => {
         PK: input.PK,
         SK: input.SK,
         GSI2PK: input.GSI2PK,
-        GSI2SK: input.GSI2SK,
+        GSI2SK: input.GSI2SK
       })
     })
   })
