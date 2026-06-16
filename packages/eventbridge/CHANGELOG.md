@@ -1,5 +1,11 @@
 # @model-ts/eventbridge
 
+## 3.0.0
+
+### Major Changes
+
+- a4f8401: Move to AWS SDK v3
+
 ## 2.0.1
 
 ### Patch Changes
