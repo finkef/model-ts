@@ -3,8 +3,23 @@
   "version": "5.0.0",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
   "author": "Fabian Finke <finkef@icloud.com>",
   "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "module": "./dist/esm/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./effect": {
+      "types": "./dist/cjs/effect.d.ts",
+      "module": "./dist/esm/effect.js",
+      "default": "./dist/cjs/effect.js"
+    },
+    "./package.json": "./package.json",
+    "./dist/*": "./dist/*"
+  },
   "engines": {
     "node": ">=20"
   },
@@ -20,7 +35,13 @@
   "peerDependencies": {
     "@model-ts/core": "^0.4.2",
     "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0"
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "effect": "^4.0.0-rc.112"
+  },
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",

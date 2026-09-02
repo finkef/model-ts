@@ -8,6 +8,20 @@
   "module": "dist/esm/index.js",
   "types": "dist/cjs/index.d.ts",
   "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "module": "./dist/esm/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./effect": {
+      "types": "./dist/cjs/effect.d.ts",
+      "module": "./dist/esm/effect.js",
+      "default": "./dist/cjs/effect.js"
+    },
+    "./package.json": "./package.json",
+    "./dist/*": "./dist/*"
+  },
   "scripts": {
     "build": "tsc -b",
     "build:esm": "tsc -b tsconfig.esm.json",
@@ -29,5 +43,13 @@
     "monocle-ts": "~2.3.13",
     "newtype-ts": "^0.3.5",
     "typescript-memoize": "^1.0.1"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.0-rc.112"
+  },
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
   }
 }

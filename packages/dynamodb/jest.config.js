@@ -12,7 +12,7 @@ module.exports = {
     ],
   },
   transformIgnorePatterns: [
-    "/node_modules/(?!(@aws-sdk|@smithy)/)",
+    "/node_modules/(?!(@aws-sdk|@smithy|effect)/)",
     "packages/core/dist/",
   ],
   setupFilesAfterEnv: ["./src/test-utils/setup.ts"],

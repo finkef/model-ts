@@ -1,6 +1,7 @@
 module.exports = {
   testMatch: ["**/*.test.ts"],
   transform: {
-    "^.+\\.ts$": "ts-jest",
+    "^.+\\.[tj]s$": ["ts-jest", { tsconfig: { allowJs: true } }],
   },
+  transformIgnorePatterns: ["/node_modules/(?!(effect)/)"],
 }
