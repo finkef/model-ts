@@ -13,7 +13,8 @@
     - [delete](#delete)
     - [softDelete](#softdelete)
     - [bulk](#bulk)
-- [Testing](#testing)
+  - [Effect v4](#effect-v4)
+  - [Testing](#testing)
 - [License](#license)
 
 ## Installation
@@ -63,6 +64,122 @@ await user.put()
 
 const anotherUser = await User.load({ PK: "USER#2", SK: "USER#2" }) // User {}
 ```
+
+## Effect v4
+
+`@model-ts/dynamodb/effect` is a lazy Effect facade over the existing client
+and provider. The Promise API from `@model-ts/dynamodb` is unchanged.
+
+### Install and requirements
+
+```sh
+npm install @model-ts/core@^0.5.0 @model-ts/dynamodb effect@4.0.0-rc.112
+```
+
+The Effect entry point requires TypeScript 5.9 or later with `strict: true`
+and `moduleResolution` set to `node16`, `nodenext`, or `bundler`. CommonJS
+consumers need Node.js 20.19 or later (or Node.js 22.12 or later) because
+Effect is ESM-only. `effect` is an optional peer dependency, so applications
+that do not import this subpath do not need it.
+
+### Client and provider
+
+`makeEffectClient` wraps the async `Client` operations. `getEffectProvider`
+adds the same operations to model classes and instances, returning Effects
+instead of Promises.
+
+```ts
+import * as Effect from "effect/Effect"
+import { model, t } from "@model-ts/core"
+import { Client } from "@model-ts/dynamodb"
+import { getEffectProvider, makeEffectClient } from "@model-ts/dynamodb/effect"
+
+const client = new Client({ tableName: "users" })
+const provider = getEffectProvider(client)
+
+class User extends model(
+  "User",
+  t.type({ id: t.string, name: t.string }),
+  provider
+) {
+  get PK() {
+    return `USER#${this.id}`
+  }
+
+  get SK() {
+    return `USER#${this.id}`
+  }
+}
+
+const item = new User({ id: "1", name: "Ada" })
+await Effect.runPromise(item.put())
+
+const user = await Effect.runPromise(
+  User.get(item.keys()).pipe(
+    Effect.catchTag("ItemNotFoundError", () => Effect.succeed(undefined))
+  )
+)
+
+// Use the client facade directly when an operation has already been built.
+const db = makeEffectClient(client)
+const sameUser = await Effect.runPromise(
+  db.get({ _model: User, _operation: "get", key: item.keys() })
+)
+```
+
+`getEffectProvider(client)` is a replacement provider: methods such as
+`User.get`, `User.load`, `item.put`, and `item.update` now return Effects, not
+Promises. Do not combine it with `getProvider(client)` on one model class,
+because the method names collide. Define separate model classes for Promise
+and Effect usage, or call `Effect.runPromise` at the application boundary.
+
+### Streams and layers
+
+`iterator` returns a re-runnable `Stream` whose elements are DynamoDB result
+pages. Flatten it when processing individual model instances.
+
+```ts
+import * as Effect from "effect/Effect"
+import * as Stream from "effect/Stream"
+import { DynamoDB } from "@model-ts/dynamodb/effect"
+
+const pages = User.iterator({
+  KeyConditionExpression: "PK = :pk",
+  ExpressionAttributeValues: { ":pk": "USER#1" },
+  ChunkSize: 25,
+})
+
+const users = await Effect.runPromise(
+  Stream.runCollect(Stream.flattenIterable(pages))
+)
+
+const loadedThroughLayer = await Effect.runPromise(
+  Effect.gen(function* () {
+    const db = yield* DynamoDB
+    return yield* db.get({ _model: User, _operation: "get", key: item.keys() })
+  }).pipe(Effect.provide(DynamoDB.layerFromClient(client)))
+)
+```
+
+`DynamoDB.layer(props)` creates a client from `ClientProps`; use
+`DynamoDB.layerFromClient(client)` when the application already owns one. The
+service is for standalone client access—models remain bound to the client used
+when their provider was created.
+
+### Errors and unchanged synchronous APIs
+
+Known DynamoDB domain errors preserve their class and gain a `_tag`, so they
+work with `Effect.catchTag`: `KeyExistsError`, `ItemNotFoundError`,
+`ConditionalCheckFailedError`, `RaceConditionError`,
+`BulkWriteTransactionError`, `BulkWriteRollbackError`, `PaginationError`, and
+`NotSupportedError`. Decode failures are `RuntimeTypeValidationError`.
+Unexpected SDK, network, and programming failures become
+`DynamoDBClientError` with `_tag === "DynamoDBClientError"`, `operation`, and
+`cause`.
+
+| Effect-wrapped async APIs                                                                                                                                           | Unchanged synchronous APIs                                                                                                                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `put`, `get`, `load`, `loadMany`, `updateRaw`, `delete`, `softDelete`, `query`, `paginate`, `batchGet`, and `bulk` return `Effect`s. `iterator` returns a `Stream`. | The provider's `dynamodb`, `operation`, `__dynamoDBDecode`, `__dynamoDBEncode`, `keys`, `cursor`, and `applyUpdate` members are reused as-is. Cursor codecs and configuration mutators are also not wrapped. |
 
 ### API
 

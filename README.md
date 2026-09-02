@@ -8,6 +8,7 @@
 - [About](#about)
 - [Installation](#installation)
 - [Usage](#usage)
+  - [Effect v4](#effect-v4)
   - [Composing models and io-ts codecs](#composing-models-and-io-ts-codecs)
   - [Providers](#providers)
     - [Enforcing Properties on models](#enforcing-properties-on-models)
@@ -98,7 +99,7 @@ import { model, t } from "@model-ts/core"
 
 const codec = t.type({
   foo: t.string,
-  bar: t.DateFromISOString
+  bar: t.DateFromISOString,
 })
 
 class MyModel extends model("MyModel", codec) {
@@ -126,6 +127,40 @@ const decoded = MyModel.from({ foo: "bar", bar: "2020-12-12T12:12:12.000Z" })
 MyModel.from("this is just a string, not the expected signature")
 // -> throws RuntimeTypeValidationError
 ```
+
+### Effect v4
+
+The existing API remains Promise-based and is unchanged. Effect support is an
+optional, lazy facade exposed from package subpaths, so install `effect` only
+when using it:
+
+```sh
+npm install effect@4.0.0-rc.112
+```
+
+Effect entry points require TypeScript 5.9 or later with `strict: true` and
+`moduleResolution` set to `node16`, `nodenext`, or `bundler`. CommonJS
+consumers also need Node.js 20.19 or later (or Node.js 22.12 or later) to load
+Effect's ESM package.
+
+```ts
+import * as Effect from "effect/Effect"
+import { decode } from "@model-ts/core/effect"
+
+const user = await Effect.runPromise(decode(MyModel, input))
+```
+
+See the package guides for the full API:
+
+- [`@model-ts/core`](./packages/core/README.md#effect-v4)
+- [`@model-ts/dynamodb`](./packages/dynamodb/README.md#effect-v4)
+- [`@model-ts/eventbridge`](./packages/eventbridge/README.md#effect-v4)
+
+`getEffectProvider(client)` replaces the asynchronous provider methods on a
+model class with methods that return Effects. Do not combine it with the
+regular Promise provider on the same model class: define a separate model
+class for each style, or execute Effects with `Effect.runPromise` at the
+boundary.
 
 ### Composing models and io-ts codecs
 
@@ -180,14 +215,14 @@ const myProvider = {
       // using an interface.
       // Check the description of the `Provider` type for reference.
       return this._namespace
-    }
+    },
   },
   instanceProps: {
     // Same as for classProps
   },
   unionProps: {
     // Same as for classProps
-  }
+  },
 }
 ```
 
@@ -224,13 +259,13 @@ const provider: KVProvider = {
     save() {
       const key = this.getKey()
       return store.save(key, this)
-    }
+    },
   },
   classProps: {
     getAll() {
       return store.list(this.namespace)
-    }
-  }
+    },
+  },
 }
 
 const codec = t.type({ foo: t.number })
