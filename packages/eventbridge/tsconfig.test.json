@@ -1,8 +1,9 @@
 {
-  "extends": "../../tsconfig.base.json",
+  "extends": "./tsconfig.json",
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist/test",
-    "emitDeclarationOnly": true
-  }
+    "allowJs": true,
+    "isolatedModules": true
+  },
+  "include": ["src/**/*"],
+  "exclude": []
 }

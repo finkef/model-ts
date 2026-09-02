@@ -17,6 +17,7 @@
   "exclude": [
     "dist",
     "__test__",
+    "__tests__",
     "test-utils"
   ]
 }

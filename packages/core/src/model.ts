@@ -257,7 +257,7 @@ export function model<
     }
     static pipe<
       B,
-      IB,
+      IB extends {},
       T extends IB,
       M extends ModelConstructor<T>,
       OB extends T
@@ -279,7 +279,7 @@ export function model<
         b => this.encode(ab.encode(b) as any)
       )
     }
-    static asDecoder<T, M extends ModelConstructor<T>>(
+    static asDecoder<T extends {}, M extends ModelConstructor<T>>(
       this: M
     ): t.Decoder<unknown, TypeOf<M>> {
       return this

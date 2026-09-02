@@ -4,15 +4,11 @@ module.exports = {
   transform: {
     "^.+\\.[tj]s$": [
       "ts-jest",
-      {
-        tsconfig: {
-          allowJs: true,
-        },
-      },
+      { tsconfig: "<rootDir>/tsconfig.test.json" },
     ],
   },
   transformIgnorePatterns: [
-    "/node_modules/(?!(@aws-sdk|@smithy)/)",
+    "/node_modules/(?!(@aws-sdk|@smithy|effect)/)",
     "packages/core/dist/",
   ],
   setupFilesAfterEnv: ["./src/test-utils/setup.ts"],

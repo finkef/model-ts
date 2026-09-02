@@ -3,16 +3,31 @@
   "version": "5.0.0",
   "main": "dist/cjs/index.js",
   "module": "dist/esm/index.js",
+  "types": "dist/cjs/index.d.ts",
   "author": "Fabian Finke <finkef@icloud.com>",
   "license": "MIT",
+  "exports": {
+    ".": {
+      "types": "./dist/cjs/index.d.ts",
+      "module": "./dist/esm/index.js",
+      "default": "./dist/cjs/index.js"
+    },
+    "./effect": {
+      "types": "./dist/cjs/effect.d.ts",
+      "module": "./dist/esm/effect.js",
+      "default": "./dist/cjs/effect.js"
+    },
+    "./package.json": "./package.json",
+    "./dist/*": "./dist/*"
+  },
   "engines": {
     "node": ">=20"
   },
   "scripts": {
     "build": "tsc -b",
     "build:esm": "tsc -b tsconfig.esm.json",
-    "test": "TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
-    "test:memory": "EXPERIMENTAL_DYNAMODB_IN_MEMORY=1 TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
+    "test": "tsc --noEmit -p tsconfig.test.json && TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
+    "test:memory": "tsc --noEmit -p tsconfig.test.json && EXPERIMENTAL_DYNAMODB_IN_MEMORY=1 TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
     "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
     "dynamodb:stop": "docker stop dynamodb"
   },
@@ -20,20 +35,26 @@
   "peerDependencies": {
     "@model-ts/core": "^0.4.2",
     "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0"
+    "@aws-sdk/lib-dynamodb": "^3.0.0",
+    "effect": "^4.0.0-rc.112"
+  },
+  "peerDependenciesMeta": {
+    "effect": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@model-ts/core": "*",
     "@types/jest": "^29.5.0",
-    "io-ts": "^2.2.4",
+    "io-ts": "^2.2.22",
     "jest": "^29.7.0",
     "mockdate": "^3.0.5",
     "prettier": "^2.2.1",
     "ts-jest": "^29.2.5",
     "tslib": "^2.3.0",
-    "typescript": "~4.5.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "dataloader": "^2.0.0",

@@ -1,4 +1,5 @@
 export class PublishError extends Error {
+  readonly _tag = "PublishError" as const
   readonly details: any
 
   constructor(details?: any) {

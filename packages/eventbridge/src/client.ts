@@ -53,7 +53,7 @@ export class Client {
     }
 
     if (failedCount > 0) {
-      throw new PublishError()
+      throw new PublishError({ failedCount, entries })
     }
 
     return entries

@@ -3,6 +3,7 @@
   "compilerOptions": {
     "rootDir": "./src",
     "module": "ES2015",
+    "moduleResolution": "bundler",
     "outDir": "./dist/esm"
   },
   "exclude": [

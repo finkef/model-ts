@@ -107,6 +107,25 @@ export interface Key {
   SK: string
 }
 
+export type LoadResult<
+  M extends Decodable,
+  Null extends boolean,
+  Recover extends boolean
+> = Recover extends true
+  ? Null extends true
+    ? (DecodableInstance<M> & { isDeleted?: true }) | null
+    : DecodableInstance<M> & { isDeleted?: true }
+  : Null extends true
+  ? DecodableInstance<M> | null
+  : DecodableInstance<M>
+
+export type BatchGetResult<
+  R extends Record<string, GetOperation<any>>,
+  IndividualErrors extends boolean
+> = IndividualErrors extends true
+  ? { [K in keyof R]: DecodableInstance<R[K]["_model"]> | Error }
+  : { [K in keyof R]: DecodableInstance<R[K]["_model"]> }
+
 export class Client {
   tableName: string
   documentClient: DocumentClient
@@ -244,15 +263,7 @@ export class Client {
   >(
     operation: GetOperation<M>,
     params?: { null?: Null; recover?: Recover }
-  ): Promise<
-    Recover extends true
-      ? Null extends true
-        ? (DecodableInstance<M> & { isDeleted?: true }) | null
-        : DecodableInstance<M> & { isDeleted?: true }
-      : Null extends true
-      ? DecodableInstance<M> | null
-      : DecodableInstance<M>
-  > {
+  ): Promise<LoadResult<M, Null, Recover>> {
     const item = await this.dataLoader.load(operation).catch((e) => {
       // Maybe return null instead of throwing
       if (e instanceof ItemNotFoundError) {
@@ -662,11 +673,7 @@ export class Client {
       stronglyConsistent?: boolean
       individualErrors?: IndividualErrors
     }
-  ): Promise<
-    IndividualErrors extends true
-      ? { [K in keyof R]: DecodableInstance<R[K]["_model"]> | Error }
-      : { [K in keyof R]: DecodableInstance<R[K]["_model"]> }
-  > {
+  ): Promise<BatchGetResult<R, IndividualErrors>> {
     // Early exit if requests are empty
     if (!Object.keys(requests).length) return {} as any
 

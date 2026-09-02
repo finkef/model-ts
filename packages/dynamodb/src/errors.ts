@@ -4,22 +4,27 @@ import { BulkOperation } from "./operations"
 // TODO: populate errors with more info
 
 export class KeyExistsError extends Error {
+  readonly _tag = "KeyExistsError" as const
   name = "KeyExistsError"
 }
 
 export class ItemNotFoundError extends Error {
+  readonly _tag = "ItemNotFoundError" as const
   name = "ItemNotFoundError"
 }
 
 export class ConditionalCheckFailedError extends Error {
+  readonly _tag = "ConditionalCheckFailedError" as const
   name = "ConditionalCheckFailedError"
 }
 
 export class RaceConditionError extends Error {
+  readonly _tag = "RaceConditionError" as const
   name = "RaceConditionError"
 }
 
 export class BulkWriteTransactionError extends Error {
+  readonly _tag = "BulkWriteTransactionError" as const
   name = "BulkWriteTransactionError"
   error: AWSError
 
@@ -30,6 +35,7 @@ export class BulkWriteTransactionError extends Error {
 }
 
 export class BulkWriteRollbackError extends Error {
+  readonly _tag = "BulkWriteRollbackError" as const
   name = "BulkWriteRollbackError"
   requiresRollback: BulkOperation<any, any>[]
 
@@ -42,10 +48,12 @@ export class BulkWriteRollbackError extends Error {
 }
 
 export class PaginationError extends Error {
+  readonly _tag = "PaginationError" as const
   name = "PaginationError"
 }
 
 export class NotSupportedError extends Error {
+  readonly _tag = "NotSupportedError" as const
   name = "NotSupportedError"
   code = "NotSupportedError"
   method: string
