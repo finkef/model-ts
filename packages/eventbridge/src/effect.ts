@@ -32,7 +32,7 @@ export const makeEffectClient = (client: Client): EffectClient => ({
   publish: Effect.fn("@model-ts/eventbridge/publish")(
     (...events: PublishEvent[]) =>
       Effect.tryPromise({
-        try: () => client.publish(...events),
+        try: async () => client.publish(...events),
         catch: (cause): PublishEffectError =>
           cause instanceof PublishError
             ? cause

@@ -3,5 +3,7 @@
   "compilerOptions": {
     "allowJs": true,
     "isolatedModules": true
-  }
+  },
+  "include": ["src/**/*"],
+  "exclude": []
 }

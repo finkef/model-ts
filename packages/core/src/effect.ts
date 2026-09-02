@@ -14,17 +14,15 @@ type Decoder = {
   decode(value: unknown): t.Validation<any>
 }
 
-const decodeWithSpan = Effect.fn("@model-ts/core/decode")(function* (
-  decoder: Decoder,
-  value: unknown
-): Effect.fn.Return<any, RuntimeTypeValidationError> {
-  return yield* Effect.suspend(() => {
-    const result = decoder.decode(value)
-    return isLeft(result)
-      ? Effect.fail(new RuntimeTypeValidationError(result.left))
-      : Effect.succeed(result.right)
-  })
-})
+const decodeWithSpan = Effect.fn("@model-ts/core/decode")(
+  (decoder: Decoder, value: unknown) =>
+    Effect.suspend(() => {
+      const result = decoder.decode(value)
+      return isLeft(result)
+        ? Effect.fail(new RuntimeTypeValidationError(result.left))
+        : Effect.succeed(result.right)
+    })
+)
 
 /**
  * Lazily decodes a model, union, or io-ts codec.

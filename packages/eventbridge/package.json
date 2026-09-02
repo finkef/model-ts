@@ -26,7 +26,7 @@
   "scripts": {
     "build": "tsc -b",
     "build:esm": "tsc -b tsconfig.esm.json",
-    "test": "TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest"
+    "test": "tsc --noEmit -p tsconfig.test.json && TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest"
   },
   "keywords": [],
   "peerDependencies": {

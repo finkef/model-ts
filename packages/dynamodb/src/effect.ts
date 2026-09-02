@@ -35,6 +35,7 @@ import { PaginationInput, PaginationResult } from "./pagination"
 import { getProvider } from "./provider"
 
 export * from "./errors"
+export { RuntimeTypeValidationError }
 
 export class DynamoDBClientError extends Data.TaggedError(
   "DynamoDBClientError"
@@ -400,7 +401,7 @@ export const getEffectProvider = (client: Client) => {
           _model: this,
           _operation: "updateRaw",
           key,
-          attributes,
+          attributes: stripUndefinedValues(attributes),
           ...params,
         })
       },
@@ -527,6 +528,12 @@ export const getEffectProvider = (client: Client) => {
 }
 
 export type DynamoDBEffectProvider = ReturnType<typeof getEffectProvider>
+
+function stripUndefinedValues<T extends Record<string, unknown>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([_key, value]) => typeof value !== "undefined")
+  ) as T
+}
 
 export class DynamoDB extends Context.Service<DynamoDB, EffectClient>()(
   "@model-ts/dynamodb/DynamoDB"

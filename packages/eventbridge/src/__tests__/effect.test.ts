@@ -135,9 +135,7 @@ it("returns Effects from the provider and keeps stubEventBus interception", asyn
   const effect = event.publish()
 
   expect(received).toEqual([])
-  await expect(Effect.runPromise(Effect.flip(effect))).resolves.toBeInstanceOf(
-    EventBridgeClientError
-  )
+  await expect(Effect.runPromise(effect)).resolves.toBeUndefined()
   expect(received).toEqual([event])
 })
 

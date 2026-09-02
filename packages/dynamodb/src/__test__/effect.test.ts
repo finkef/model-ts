@@ -4,6 +4,8 @@ import * as t from "io-ts"
 import { model, union } from "@model-ts/core"
 import { Client } from "../client"
 import {
+  BulkWriteTransactionError,
+  ConditionalCheckFailedError,
   DynamoDB,
   DynamoDBClientError,
   getEffectProvider,
@@ -11,6 +13,7 @@ import {
   KeyExistsError,
   PaginationError,
   RaceConditionError,
+  RuntimeTypeValidationError,
 } from "../effect"
 import { Sandbox, createSandbox } from "../sandbox"
 
@@ -90,6 +93,37 @@ const queryParams = {
   ExpressionAttributeValues: { ":pk": "query", ":sk": "item#" },
 }
 
+type IsExact<T, U> = (<G>() => G extends T ? 1 : 2) extends <G>() => G extends U
+  ? 1
+  : 2
+  ? true
+  : false
+
+type ErrorOf<T> = T extends Effect.Effect<any, infer E, any> ? E : never
+
+const nullLoad = Simple.load(
+  { PK: "PK#compile-time", SK: "SK#compile-time" },
+  { null: true }
+)
+const nullLoadErrorType: IsExact<
+  ErrorOf<typeof nullLoad>,
+  RuntimeTypeValidationError | DynamoDBClientError
+> = true
+
+const instanceUpdate = new Simple({ foo: "compile-time", bar: 1 }).update({
+  foo: "updated",
+})
+const instanceUpdateErrorType: IsExact<
+  ErrorOf<typeof instanceUpdate>,
+  | RaceConditionError
+  | BulkWriteTransactionError
+  | import("../effect").BulkWriteRollbackError
+  | DynamoDBClientError
+> = true
+
+void nullLoadErrorType
+void instanceUpdateErrorType
+
 describe("Effect provider", () => {
   test("is lazy, returns model instances, and exposes tagged domain errors", async () => {
     const item = new Simple({ foo: "lazy", bar: 1 })
@@ -157,6 +191,66 @@ describe("Effect provider", () => {
     expect(updated.foo).toBe("new")
   })
 
+  test("updates raw values after removing undefined attributes and reports conditions", async () => {
+    const item = await Effect.runPromise(
+      new Simple({ foo: "raw", bar: 1 }).put()
+    )
+    const updateRaw = jest.spyOn(client, "updateRaw")
+
+    const updated = await Effect.runPromise(
+      Simple.updateRaw(item.keys(), { bar: 2, foo: undefined })
+    )
+    expect(updated.bar).toBe(2)
+    expect(updateRaw).toHaveBeenCalledWith(
+      expect.objectContaining({ attributes: { bar: 2 } })
+    )
+
+    const conditional = await Effect.runPromise(
+      Effect.flip(
+        Simple.updateRaw(
+          { PK: "missing", SK: "missing" },
+          { bar: 2 },
+          { ConditionExpression: "attribute_exists(PK)" }
+        )
+      )
+    )
+    expect(conditional).toBeInstanceOf(ConditionalCheckFailedError)
+  })
+
+  test("supports deletion and retains soft-deleted items at prefixed keys", async () => {
+    const deleted = await Effect.runPromise(
+      new Simple({ foo: "deleted", bar: 1 }).put()
+    )
+    await Effect.runPromise(deleted.softDelete())
+
+    expect(await sandbox.get(deleted.PK, deleted.SK)).toBeNull()
+    expect(
+      await sandbox.get(`$$DELETED$$${deleted.PK}`, `$$DELETED$$${deleted.SK}`)
+    ).toMatchObject({ foo: "deleted", bar: 1 })
+
+    const removable = await Effect.runPromise(
+      new Simple({ foo: "remove", bar: 2 }).put()
+    )
+    await Effect.runPromise(removable.delete())
+    expect(await sandbox.get(removable.PK, removable.SK)).toBeNull()
+  })
+
+  test("returns load-many item errors and runtime codec failures", async () => {
+    const item = await Effect.runPromise(
+      new Simple({ foo: "many", bar: 1 }).put()
+    )
+    const [loaded, missing] = await Effect.runPromise(
+      Simple.loadMany([item.keys(), { PK: "missing", SK: "missing" }])
+    )
+    expect(loaded).toBeInstanceOf(Simple)
+    expect(missing).toBeInstanceOf(ItemNotFoundError)
+
+    const invalidKey = { PK: "invalid", SK: "invalid" }
+    await sandbox.seed({ ...invalidKey, foo: "invalid", bar: "not-a-number" })
+    const invalid = await Effect.runPromise(Effect.flip(Simple.get(invalidKey)))
+    expect(invalid).toBeInstanceOf(RuntimeTypeValidationError)
+  })
+
   test("returns query metadata and streams iterator chunks lazily", async () => {
     await sandbox.seed(
       ...Array.from(
@@ -212,11 +306,11 @@ describe("Effect provider", () => {
     await Effect.runPromise(a.put())
     await Effect.runPromise(b.put())
 
-    const batch: any = await Effect.runPromise(
+    const batch = await Effect.runPromise(
       Effect.gen(function* () {
-        const db: any = yield* DynamoDB as any
+        const db = yield* Effect.service(DynamoDB)
         return yield* db.batchGet({ a: A.operation("get", a.keys()) })
-      }).pipe(Effect.provide(DynamoDB.layerFromClient(client))) as any
+      }).pipe(Effect.provide(DynamoDB.layerFromClient(client)))
     )
     expect(batch.a).toBeInstanceOf(A)
 
@@ -233,14 +327,56 @@ describe("Effect provider", () => {
     const missing = await Effect.runPromise(
       Effect.flip(
         Effect.gen(function* () {
-          const db: any = yield* DynamoDB as any
+          const db = yield* Effect.service(DynamoDB)
           return yield* db.batchGet({
             missing: A.operation("get", { PK: "no", SK: "no" }),
           })
-        }).pipe(Effect.provide(DynamoDB.layerFromClient(client))) as any
+        }).pipe(Effect.provide(DynamoDB.layerFromClient(client)))
       )
     )
     expect(missing).toBeInstanceOf(ItemNotFoundError)
+  })
+
+  test("returns batch item errors and bulk transaction failures", async () => {
+    const item = await Effect.runPromise(
+      new A({ pk: "batch", sk: "item", value: 1 }).put()
+    )
+
+    const batch = await Effect.runPromise(
+      Effect.service(DynamoDB).pipe(
+        Effect.flatMap((db) =>
+          db.batchGet(
+            {
+              item: A.operation("get", item.keys()),
+              missing: A.operation("get", { PK: "missing", SK: "missing" }),
+            },
+            { individualErrors: true }
+          )
+        ),
+        Effect.provide(DynamoDB.layerFromClient(client))
+      )
+    )
+    expect(batch.item).toBeInstanceOf(A)
+    expect(batch.missing).toBeInstanceOf(ItemNotFoundError)
+
+    const bulk = await Effect.runPromise(
+      Effect.flip(
+        Effect.service(DynamoDB).pipe(
+          Effect.flatMap((db) =>
+            db.bulk([
+              A.operation("put", new A({ pk: "bulk", sk: "put", value: 1 })),
+              A.operation(
+                "updateRaw",
+                { PK: "missing", SK: "missing" },
+                { value: 2 }
+              ),
+            ])
+          ),
+          Effect.provide(DynamoDB.layerFromClient(client))
+        )
+      )
+    )
+    expect(bulk).toBeInstanceOf(BulkWriteTransactionError)
   })
 
   test("wraps unknown client rejections with operation metadata", async () => {
