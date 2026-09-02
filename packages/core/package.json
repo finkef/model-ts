@@ -19,11 +19,11 @@
     "jest": "^29.7.0",
     "ts-jest": "^29.2.5",
     "tslib": "^2.3.0",
-    "typescript": "~4.5.5"
+    "typescript": "^5.9.3"
   },
   "dependencies": {
     "fp-ts": "~2.6.5",
-    "io-ts": "^2.2.4",
+    "io-ts": "^2.2.22",
     "io-ts-reporters": "^1.2.2",
     "io-ts-types": "^0.5.19",
     "monocle-ts": "~2.3.13",
