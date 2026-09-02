@@ -3,6 +3,7 @@ import reporter from "io-ts-reporters"
 import { left } from "fp-ts/lib/Either"
 
 export class RuntimeTypeValidationError extends Error {
+  readonly _tag = "RuntimeTypeValidationError" as const
   errors: t.Errors
 
   constructor(errors: t.Errors)
