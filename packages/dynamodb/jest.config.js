@@ -4,11 +4,7 @@ module.exports = {
   transform: {
     "^.+\\.[tj]s$": [
       "ts-jest",
-      {
-        tsconfig: {
-          allowJs: true,
-        },
-      },
+      { tsconfig: "<rootDir>/tsconfig.test.json" },
     ],
   },
   transformIgnorePatterns: [
