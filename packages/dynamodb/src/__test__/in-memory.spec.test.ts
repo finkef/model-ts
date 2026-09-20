@@ -326,3 +326,41 @@ describe("in-memory spec", () => {
     expect(second).toEqual(first)
   })
 })
+
+
+test("transaction cancellation reasons preserve all failed indices and roll back passing writes", async () => {
+  await withInMemory(async ({ client, sandbox }) => {
+    const TableName = client.tableName
+    const failure = await client.documentClient
+      .transactWrite({
+        TransactItems: [
+          {
+            Delete: {
+              TableName,
+              Key: { PK: "first", SK: "first" },
+              ConditionExpression: "attribute_exists(PK)"
+            }
+          },
+          { Put: { TableName, Item: { PK: "middle", SK: "middle" } } },
+          {
+            Delete: {
+              TableName,
+              Key: { PK: "last", SK: "last" },
+              ConditionExpression: "attribute_exists(PK)"
+            }
+          }
+        ]
+      })
+      .promise()
+      .catch(error => error)
+    expect(failure).toMatchObject({
+      code: "TransactionCanceledException",
+      CancellationReasons: [
+        { Code: "ConditionalCheckFailed" },
+        { Code: "None" },
+        { Code: "ConditionalCheckFailed" }
+      ]
+    })
+    expect(await sandbox.get("middle", "middle")).toBeNull()
+  })
+})

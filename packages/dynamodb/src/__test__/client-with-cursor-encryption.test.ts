@@ -1,3 +1,4 @@
+import { versionedDeleteTests } from "../test-utils/versioned-deletes"
 import * as t from "io-ts"
 import { model, RuntimeTypeValidationError, union } from "@model-ts/core"
 import { Sandbox, createSandbox } from "../sandbox"
@@ -3200,3 +3201,5 @@ describe("paginate", () => {
     })
   })
 })
+
+versionedDeleteTests(client, () => sandbox)

@@ -17,6 +17,7 @@ import {
   GetOperation,
   UpdateRawOperation,
   DeleteOperation,
+  DeleteOptions,
   Operation,
   ConditionCheckOperation,
   isTransactionOperation,
@@ -28,6 +29,7 @@ import {
   ConditionalCheckFailedError,
   BulkWriteTransactionError,
   BulkWriteRollbackError,
+  RaceConditionError,
 } from "./errors"
 import {
   Decodable,
@@ -48,6 +50,7 @@ import {
 } from "./pagination"
 import { GSI, GSI_NAMES, GSIPK, GSISK } from "./gsi"
 import { createInMemoryDocumentClient } from "./in-memory"
+import { softDeleteOperations } from "./delete"
 
 export type QueryParams = Omit<
   DocumentClient.QueryInput,
@@ -454,11 +457,15 @@ export class Client {
 
   async delete<M extends DynamoDBModelConstructor<any>>({
     key,
+    _model,
+    _operation,
+    ...params
   }: DeleteOperation<M>): Promise<null> {
     await this.documentClient
       .delete({
         TableName: this.tableName,
         Key: key,
+        ...params,
       })
       .promise()
 
@@ -466,20 +473,35 @@ export class Client {
   }
 
   /**
-   * Updates all item keys to be prefixed with "$$DELETED$$" and adds a "_deletedAt" field.
+   * Moves an item to $$DELETED$$ keys using its loaded version by default.
+   * ignoreVersion skips the live guard, but archive collisions still fail.
+   * Only an unambiguous live-guard cancellation becomes RaceConditionError.
    */
   public async softDelete<T extends DynamoDBModelInstance>(
-    item: T
+    item: T,
+    options?: DeleteOptions
   ): Promise<T> {
-    await this.bulk([
-      {
-        _operation: "delete",
-        _model: item._model,
-        key: { PK: item.PK, SK: item.SK },
-      },
-      { _operation: "put", _model: item._model, _deleted: true, item },
-    ])
-
+    const operations = softDeleteOperations(item._model, item, options)
+    try {
+      await this.bulk([operations])
+    } catch (error) {
+      const reasons =
+        error instanceof BulkWriteTransactionError
+          ? error.error.CancellationReasons
+          : undefined
+      if (
+        operations[0].action.ConditionExpression &&
+        Array.isArray(reasons) &&
+        reasons.length === 2 &&
+        reasons[0]?.Code === "ConditionalCheckFailed" &&
+        reasons[1]?.Code === "None"
+      ) {
+        throw new RaceConditionError(
+          "The instance you are attempting to soft-delete is out of sync with the stored value."
+        )
+      }
+      throw error
+    }
     return item
   }
 
@@ -757,8 +779,9 @@ export class Client {
   }
 
   /**
-   * Runs a series of operations using DynamoDB's `transactWrite` API. If > 25 operations are specified,
-   * multiple calls are made.
+   * Runs operations in transactions of at most 100 actions. Nested arrays stay together,
+   * including during rollback; a group over 100 is rejected before any writes.
+   * Pass softDelete pairs as nested arrays. Spread pairs have no grouping guarantee.
    *
    * In case of a failure in a consecutive call, actions will be attempted to be rolled back.
    *
@@ -770,9 +793,28 @@ export class Client {
       | BulkOperation<DynamoDBModelInstance, DynamoDBModelConstructor<any>>[]
     )[]
   ): Promise<BulkWriteState> {
-    const result = await this.executeBulkTransaction(
-      operations.map((op) => (Array.isArray(op) ? op : [op])).flat()
-    )
+    const batches: BulkOperation<
+      DynamoDBModelInstance,
+      DynamoDBModelConstructor<any>
+    >[][] = []
+    let batch: BulkOperation<
+      DynamoDBModelInstance,
+      DynamoDBModelConstructor<any>
+    >[] = []
+    for (const operation of operations) {
+      const group = Array.isArray(operation) ? operation : [operation]
+      if (group.length > 100)
+        throw new RangeError(
+          "A bulk operation group cannot exceed 100 actions."
+        )
+      if (batch.length + group.length > 100) {
+        batches.push(batch)
+        batch = []
+      }
+      batch.push(...group)
+    }
+    if (batch.length) batches.push(batch)
+    const result = await this.executeBulkTransaction(batches)
 
     if (E.isLeft(result)) {
       const { rollbackSuccessful, transactionError, rollbackFailure } =
@@ -786,23 +828,27 @@ export class Client {
   }
 
   private async executeBulkTransaction(
-    operations: BulkOperation<
+    batches: BulkOperation<
       DynamoDBModelInstance,
       DynamoDBModelConstructor<any>
-    >[],
+    >[][],
     state: BulkWriteState = {
       successful: [],
       rollbackSuccess: [],
       rollbackFailure: [],
-    }
+    },
+    committed: BulkOperation<
+      DynamoDBModelInstance,
+      DynamoDBModelConstructor<any>
+    >[][] = []
   ): Promise<E.Either<BulkWriteState, BulkWriteState>> {
     // Base case reached
-    if (!operations.length)
+    if (!batches.length)
       return state.inRollback
         ? E.left({ ...state, rollbackSuccessful: true })
         : E.right(state)
 
-    const [currentBatch, remaining] = A.splitAt(100)(operations)
+    const [currentBatch, ...remaining] = batches
 
     try {
       const transactItems = currentBatch
@@ -822,23 +868,27 @@ export class Client {
           rollbackSuccess: [...state.rollbackSuccess, ...currentBatch],
         })
 
-      return await this.executeBulkTransaction(remaining, {
-        ...state,
-        successful: [...state.successful, ...currentBatch],
-      })
+      return await this.executeBulkTransaction(
+        remaining,
+        {
+          ...state,
+          successful: [...state.successful, ...currentBatch],
+        },
+        [...committed, currentBatch]
+      )
     } catch (error) {
       // Already in rollback, but failed again. Terminate.
       if (state.inRollback)
         return E.left({
           ...state,
           rollbackError: error,
-          rollbackFailure: operations,
+          rollbackFailure: batches.flat(),
         })
 
       // Failed for the first time, start rollback.
       return await this.executeBulkTransaction(
-        // Rollback all successful operations
-        state.successful,
+        // Reuse committed batches so grouped actions also compensate together.
+        committed,
         {
           inRollback: true,
           transactionError: error,
@@ -935,13 +985,16 @@ export class Client {
           },
         }
       }
-      case "delete":
+      case "delete": {
+        const { key, _model, _operation, ...params } = operation
         return {
           Delete: {
-            Key: operation.key,
+            Key: key,
             TableName: this.tableName,
+            ...params,
           },
         }
+      }
       case "condition":
         const { key, _operation, ...rest } = operation
         return {

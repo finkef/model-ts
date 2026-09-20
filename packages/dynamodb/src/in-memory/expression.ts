@@ -282,6 +282,20 @@ function evaluateSingleClause(
 ): boolean {
   const source = clause.trim()
 
+  // Recurse only when the parentheses enclose the entire clause.
+  if (source.startsWith("(")) {
+    let depth = 0
+    for (let i = 0; i < source.length; i++) {
+      if (source[i] === "(") depth++
+      if (source[i] === ")") depth--
+      if (depth === 0) {
+        if (i === source.length - 1)
+          return evaluateConditionExpression(source.slice(1, -1), item, context)
+        break
+      }
+    }
+  }
+
   const existsMatch = source.match(/^attribute_exists\((.+)\)$/i)
   if (existsMatch) {
     const value = resolveAttributeValue(existsMatch[1].trim(), item, context)

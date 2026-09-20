@@ -16,12 +16,14 @@ import {
   GetOperation,
   PutOperation,
   DeleteOperation,
+  DeleteOptions,
   ConditionCheckOperation,
   Operation,
   BulkOperation,
 } from "./operations"
 import { OutputOf, TypeOf, ModelOf } from "@model-ts/core"
 import { RaceConditionError } from "./errors"
+import { itemDelete, softDeleteOperations } from "./delete"
 import { absurd } from "fp-ts/lib/function"
 import { encodeDDBCursor, PaginationInput } from "./pagination"
 import { GSI_NAMES, GSIPK, GSISK } from "./gsi"
@@ -84,20 +86,22 @@ export const getProvider = (client: Client) => {
   function operation<M extends DynamoDBModelConstructor<any>>(
     this: M,
     operation: "delete",
-    key: Key
+    key: Key,
+    params?: Omit<DeleteOperation<M>, "_model" | "_operation" | "key">
   ): DeleteOperation<M>
   function operation<M extends DynamoDBModelConstructor<any>>(
     this: M,
     operation: "softDelete",
-    item: TypeOf<M>
+    item: TypeOf<M>,
+    options?: DeleteOptions
   ): [
-    {
-      action: PutOperation<TypeOf<M>, M>
-      rollback: DeleteOperation<M>
-    },
     {
       action: DeleteOperation<M>
       rollback: PutOperation<TypeOf<M>, M>
+    },
+    {
+      action: PutOperation<TypeOf<M>, M>
+      rollback: DeleteOperation<M>
     }
   ]
   function operation(
@@ -213,41 +217,12 @@ export const getProvider = (client: Client) => {
         }
       }
       case "delete": {
-        const [key] = args
-        return {
-          _model: this,
-          _operation: "delete",
-          key,
-        }
+        const [key, params] = args
+        return { _model: this, _operation: "delete", key, ...params }
       }
       case "softDelete": {
-        const [item] = args
-        return [
-          {
-            action: {
-              _model: this,
-              _operation: "delete",
-              key: { PK: item.PK, SK: item.SK },
-            },
-            rollback: { _model: this, _operation: "put", item },
-          },
-          {
-            action: {
-              _model: this,
-              _operation: "put",
-              _deleted: true,
-              item,
-            },
-            rollback: {
-              _model: this,
-              _operation: "delete",
-              key: {
-                PK: `$$DELETED$$${item.PK}`,
-                SK: `$$DELETED$$${item.SK}`,
-              },
-            },
-          },
-        ]
+        const [item, options] = args
+        return softDeleteOperations(this, item, options)
       }
       case "condition": {
         const [key, params] = args
@@ -298,19 +273,21 @@ export const getProvider = (client: Client) => {
   ): UpdateRawOperation<ModelOf<T>>
   function instanceOperation<T extends DynamoDBModelInstance>(
     this: T,
-    operation: "delete"
+    operation: "delete",
+    options?: DeleteOptions
   ): DeleteOperation<ModelOf<T>>
   function instanceOperation<T extends DynamoDBModelInstance>(
     this: T,
-    operation: "softDelete"
+    operation: "softDelete",
+    options?: DeleteOptions
   ): [
-    {
-      action: PutOperation<T, ModelOf<T>>
-      rollback: DeleteOperation<ModelOf<T>>
-    },
     {
       action: DeleteOperation<ModelOf<T>>
       rollback: PutOperation<T, ModelOf<T>>
+    },
+    {
+      action: PutOperation<T, ModelOf<T>>
+      rollback: DeleteOperation<ModelOf<T>>
     }
   ]
   function instanceOperation(
@@ -352,17 +329,10 @@ export const getProvider = (client: Client) => {
         ) as any
       }
       case "delete": {
-        return (operation as any).call(this._model as any, "delete", {
-          PK: this.PK,
-          SK: this.SK,
-        }) as any
+        return itemDelete(this._model, this, args[0])
       }
       case "softDelete": {
-        return (operation as any).call(
-          this._model as any,
-          "softDelete",
-          this
-        ) as any
+        return softDeleteOperations(this._model, this, args[0])
       }
       case "condition": {
         const [params] = args
@@ -569,26 +539,31 @@ export const getProvider = (client: Client) => {
       },
 
       /**
-       * Deletes an item from DynamoDB by its primary key.
-       * The item will be permanently removed from the table.
+       * Permanently deletes an item by key, unconditionally unless raw conditions are supplied.
        */
-      delete<M extends DynamoDBModelConstructor<any>>(this: M, key: Key) {
+      delete<M extends DynamoDBModelConstructor<any>>(
+        this: M,
+        key: Key,
+        params?: Omit<DeleteOperation<M>, "_model" | "_operation" | "key">
+      ): Promise<null> {
         return client.delete<M>({
           _model: this,
           _operation: "delete",
           key,
+          ...params,
         })
       },
 
       /**
-       * Performs a soft delete by moving the item to a deleted state.
+       * Soft-deletes using the item version by default; ignoreVersion skips that guard.
        * The original item is deleted and a new item with a $$DELETED$$ prefix is created.
        */
       softDelete<M extends DynamoDBModelConstructor<any>>(
         this: M,
-        item: TypeOf<M>
-      ) {
-        return client.softDelete<TypeOf<M>>(item)
+        item: TypeOf<M>,
+        options?: DeleteOptions
+      ): Promise<TypeOf<M>> {
+        return client.softDelete<TypeOf<M>>(item, options)
       },
     },
     instanceProps: {
@@ -701,29 +676,45 @@ export const getProvider = (client: Client) => {
       },
 
       /**
-       * Deletes this instance from DynamoDB.
-       * The item will be permanently removed from the table.
+       * Permanently deletes this item using its loaded version by default.
+       * Set ignoreVersion for unconditional deletion. Unversioned instances are unconditional.
+       * @throws RaceConditionError if the guarded item is stale or missing.
        */
-      delete<T extends DynamoDBModelInstance>(this: T): Promise<null> {
-        const { PK, SK } = this.keys()
-
-        return client.delete({
-          _model: this._model,
-          _operation: "delete",
-          key: { PK, SK },
-        })
+      async delete<T extends DynamoDBModelInstance>(
+        this: T,
+        options?: DeleteOptions
+      ): Promise<null> {
+        const op = itemDelete(this._model, this, options)
+        try {
+          return await client.delete(op)
+        } catch (error) {
+          if (
+            op.ConditionExpression &&
+            error?.code === "ConditionalCheckFailedException"
+          )
+            throw new RaceConditionError(
+              "The instance you are attempting to delete is out of sync with the stored value."
+            )
+          throw error
+        }
       },
 
       /**
-       * Performs a soft delete on this instance.
-       * The original item is deleted and a new item with a $$DELETED$$ prefix is created.
+       * Moves this item to its $$DELETED$$ keys, checking its loaded version by default.
+       * ignoreVersion skips the live-item guard, but does not allow archive overwrites.
+       * @throws RaceConditionError when cancellation identifies the version guard alone.
        */
-      softDelete<T extends DynamoDBModelInstance>(this: T) {
-        return client.softDelete<T>(this)
+      softDelete<T extends DynamoDBModelInstance>(
+        this: T,
+        options?: DeleteOptions
+      ): Promise<T> {
+        return client.softDelete<T>(this, options)
       },
 
       /**
        * Creates operation objects for this instance for batch processing and transactions.
+       * Delete/softDelete use the item version unless ignoreVersion is true.
+       * Pass softDelete pairs as nested arrays to bulk() to keep both actions together.
        * Supports put, update, updateRaw, delete, softDelete, and condition operations.
        */
       operation: instanceOperation,
