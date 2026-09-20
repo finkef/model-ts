@@ -23,7 +23,6 @@ import {
 } from "./operations"
 import { OutputOf, TypeOf, ModelOf } from "@model-ts/core"
 import { RaceConditionError } from "./errors"
-import { itemDelete, softDeleteOperations } from "./delete"
 import { absurd } from "fp-ts/lib/function"
 import { encodeDDBCursor, PaginationInput } from "./pagination"
 import { GSI_NAMES, GSIPK, GSISK } from "./gsi"
@@ -39,6 +38,29 @@ export interface DynamoDBInternals<M extends Decodable> {
   __dynamoDBEncode(
     item: DynamoDBModelInstance
   ): M extends DynamoDBModelConstructor<any> ? OutputOf<M> : never
+}
+
+// Capture the snapshot version when building the Delete, not when executing it.
+function itemDelete<M extends DynamoDBModelConstructor<any>>(
+  model: M,
+  item: DynamoDBModelInstance,
+  options?: DeleteOptions
+): DeleteOperation<M> {
+  const operation: DeleteOperation<M> = {
+    _model: model,
+    _operation: "delete",
+    key: { PK: item.PK, SK: item.SK },
+  }
+  const version = item._docVersion
+  if (options?.ignoreVersion || typeof version !== "number") return operation
+  return {
+    ...operation,
+    ConditionExpression: version === 0
+      ? "attribute_exists(PK) AND (attribute_not_exists(#docVersion) OR #docVersion = :docVersion)"
+      : "attribute_exists(PK) AND #docVersion = :docVersion",
+    ExpressionAttributeNames: { "#docVersion": "_docVersion" },
+    ExpressionAttributeValues: { ":docVersion": version },
+  }
 }
 
 export const getProvider = (client: Client) => {
@@ -222,7 +244,20 @@ export const getProvider = (client: Client) => {
       }
       case "softDelete": {
         const [item, options] = args
-        return softDeleteOperations(this, item, options)
+        return [
+          {
+            action: itemDelete(this, item, options),
+            rollback: { _model: this, _operation: "put", item },
+          },
+          {
+            action: { _model: this, _operation: "put", _deleted: true, item },
+            rollback: {
+              _model: this,
+              _operation: "delete",
+              key: { PK: `$$DELETED$$${item.PK}`, SK: `$$DELETED$$${item.SK}` },
+            },
+          },
+        ]
       }
       case "condition": {
         const [key, params] = args
@@ -332,7 +367,7 @@ export const getProvider = (client: Client) => {
         return itemDelete(this._model, this, args[0])
       }
       case "softDelete": {
-        return softDeleteOperations(this._model, this, args[0])
+        return (operation as any).call(this._model, "softDelete", this, args[0])
       }
       case "condition": {
         const [params] = args

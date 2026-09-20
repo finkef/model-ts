@@ -38,7 +38,7 @@ import {
   DynamoDBModelInstance,
   DynamoDBUnion,
 } from "./dynamodb-model"
-import { DynamoDBInternals } from "./provider"
+import type { DynamoDBInternals, getProvider } from "./provider"
 import {
   decodeDDBCursor,
   decodePagination,
@@ -50,7 +50,6 @@ import {
 } from "./pagination"
 import { GSI, GSI_NAMES, GSIPK, GSISK } from "./gsi"
 import { createInMemoryDocumentClient } from "./in-memory"
-import { softDeleteOperations } from "./delete"
 
 export type QueryParams = Omit<
   DocumentClient.QueryInput,
@@ -481,7 +480,9 @@ export class Client {
     item: T,
     options?: DeleteOptions
   ): Promise<T> {
-    const operations = softDeleteOperations(item._model, item, options)
+    const operations = (
+      item.operation as ReturnType<typeof getProvider>["instanceProps"]["operation"]
+    )("softDelete", options)
     try {
       await this.bulk([operations])
     } catch (error) {

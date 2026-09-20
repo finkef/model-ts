@@ -1,9 +1,9 @@
-import { versionedDeleteTests } from "../test-utils/versioned-deletes"
 import * as t from "io-ts"
 import { model, RuntimeTypeValidationError, union } from "@model-ts/core"
 import { Sandbox, createSandbox } from "../sandbox"
 import { Client } from "../client"
 import { getProvider } from "../provider"
+import { DeleteOptions } from "../operations"
 import {
   KeyExistsError,
   ItemNotFoundError,
@@ -3202,4 +3202,48 @@ describe("paginate", () => {
   })
 })
 
-versionedDeleteTests(client, () => sandbox)
+describe("versioned deletes", () => {
+  const create = async (id = "versioned") => {
+    const item = await new A({ pk: id, sk: id, a: 0 }).put()
+    return A.load(item.keys())
+  }
+  const archive = (item: A) => sandbox.get(`$$DELETED$$${item.PK}`, `$$DELETED$$${item.SK}`)
+  const routes: [string, boolean, boolean, (item: A, options?: DeleteOptions) => Promise<unknown>][] = [
+    ["instance delete", false, false, (item, options) => item.delete(options)],
+    ["instance softDelete", true, false, (item, options) => item.softDelete(options)],
+    ["model softDelete", true, false, (item, options) => A.softDelete(item, options)],
+    ["client softDelete", true, false, (item, options) => client.softDelete(item, options)],
+    ["instance delete builder", false, true, (item, options) => client.bulk([item.operation("delete", options)])],
+    ["instance softDelete builder", true, true, (item, options) => client.bulk([item.operation("softDelete", options)])],
+    ["model softDelete builder", true, true, (item, options) => client.bulk([A.operation("softDelete", item, options)])],
+  ]
+
+  test.each(routes)("%s guards snapshots and supports ignoreVersion", async (_name, soft, bulk, run) => {
+    const item = await create()
+    await (await A.load(item.keys())).update({ a: 1 })
+    const error = bulk ? BulkWriteTransactionError : RaceConditionError
+    await expect(run(item)).rejects.toBeInstanceOf(error)
+    await expect(run(item, { ignoreVersion: false })).rejects.toBeInstanceOf(error)
+    expect(await sandbox.get(item.PK, item.SK)).toMatchObject({ a: 1, _docVersion: 1 })
+    expect(await archive(item)).toBeNull()
+    await run(item, { ignoreVersion: true })
+    expect(await sandbox.get(item.PK, item.SK)).toBeNull()
+    if (soft) expect(await archive(item)).toMatchObject({ a: 0 })
+    const fresh = await (await create("fresh")).update({ a: 1 })
+    const result = await run(fresh)
+    if (!bulk) expect(result).toBe(soft ? fresh : null)
+    expect(await sandbox.get(fresh.PK, fresh.SK)).toBeNull()
+  })
+
+  test.each(["delete", "softDelete"] as const)("%s accepts legacy zero but rejects a missing live row", async method => {
+    const seed = new A({ pk: "legacy", sk: "row", a: 0 })
+    await sandbox.seed({ ...seed.encode(), ...seed.keys() })
+    const loaded = await A.load(seed.keys())
+    await loaded[method]()
+    expect(await sandbox.get(seed.PK, seed.SK)).toBeNull()
+    const missing = await create("missing")
+    await A.delete(missing.keys())
+    await expect(missing[method]()).rejects.toBeInstanceOf(RaceConditionError)
+    expect(await archive(missing)).toBeNull()
+  })
+})
