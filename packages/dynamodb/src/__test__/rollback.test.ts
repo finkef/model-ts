@@ -3,6 +3,7 @@ import { model } from "@model-ts/core"
 import { Sandbox, createSandbox } from "../sandbox"
 import { Client } from "../client"
 import { getProvider } from "../provider"
+import { BulkWriteRollbackError, BulkWriteTransactionError } from "../errors"
 
 const client = new Client({ tableName: "table" })
 const provider = getProvider(client)
@@ -275,5 +276,116 @@ describe("existing sandbox semantics still work", () => {
     await new Simple({ foo: "diffed", bar: 1 }).put()
     const diffResult = await sandbox.diff(before)
     expect(diffResult).toContain("PK#diffed")
+  })
+})
+
+
+describe("grouped bulk compensation", () => {
+  let sandbox: Sandbox
+  let originalClient = client.documentClient
+  beforeEach(async () => {
+    sandbox = await createSandbox(client)
+    originalClient = client.documentClient
+    client.setDocumentClient(
+      Object.assign(Object.create(originalClient), {
+        transactWrite: originalClient.transactWrite.bind(originalClient)
+      })
+    )
+  })
+  afterEach(async () => {
+    jest.restoreAllMocks()
+    client.setDocumentClient(originalClient)
+    await sandbox.destroy()
+  })
+
+  test.each([false, true])(
+    "keeps soft-delete groups together; recreated live row: %s",
+    async recreate => {
+      const target = await new Simple({ foo: "grouped", bar: 1 }).put()
+      const loaded = await Simple.load(target.keys())
+      const fillers = Array.from({ length: 197 }, (_, i) =>
+        new Simple({ foo: `filler-${i}`, bar: 1 }).operation("put")
+      )
+      const pair = loaded.operation("softDelete")
+      const original = client.documentClient.transactWrite.bind(
+        client.documentClient
+      )
+      let calls = 0
+      const write = jest
+        .spyOn(client.documentClient, "transactWrite")
+        .mockImplementation(params => ({
+          promise: async () => {
+            calls++
+            if (recreate && calls === 3) {
+              await client.documentClient
+                .put({
+                  TableName: client.tableName,
+                  Item: { ...target.encode(), ...target.keys(), _docVersion: 1 }
+                })
+                .promise()
+            }
+            return original(params).promise()
+          }
+        }))
+      let failure: unknown
+      try {
+        await client.bulk([
+          ...fillers.slice(0, 99),
+          pair,
+          ...fillers.slice(99),
+          Simple.operation(
+            "condition",
+            { PK: "missing", SK: "missing" },
+            {
+              ConditionExpression: "attribute_exists(PK)"
+            }
+          )
+        ])
+      } catch (error) {
+        failure = error
+      }
+      expect(failure).toBeInstanceOf(
+        recreate ? BulkWriteRollbackError : BulkWriteTransactionError
+      )
+      expect(
+        write.mock.calls.map(([params]) => params.TransactItems!.length)
+      ).toEqual([99, 100, 1, 99, 100])
+      const forward = write.mock.calls[1][0].TransactItems!
+      expect(forward[0].Delete?.Key).toEqual(target.keys())
+      expect(forward[1].Put?.Item?.PK).toBe(`$$DELETED$$${target.PK}`)
+      const rollback = write.mock.calls[4][0].TransactItems!
+      expect(rollback[0].Put?.ConditionExpression).toBe(
+        "attribute_not_exists(PK)"
+      )
+      expect(rollback[1].Delete?.ConditionExpression).toBeUndefined()
+      expect(await sandbox.get(target.PK, target.SK)).toMatchObject({
+        _docVersion: recreate ? 1 : 0
+      })
+      const archive = await sandbox.get(
+        `$$DELETED$$${target.PK}`,
+        `$$DELETED$$${target.SK}`
+      )
+      if (recreate) {
+        expect(archive).not.toBeNull()
+        expect((failure as BulkWriteRollbackError).requiresRollback).toEqual([
+          ...pair,
+          ...fillers.slice(99)
+        ])
+      } else expect(archive).toBeNull()
+      expect(await sandbox.get("PK#filler-0", "SK#1")).toBeNull()
+      expect(await sandbox.get("PK#filler-196", "SK#1")).toEqual(
+        recreate ? expect.any(Object) : null
+      )
+    }
+  )
+
+  test("rejects oversized groups before executing preceding operations", async () => {
+    const write = jest.spyOn(client.documentClient, "transactWrite")
+    const op = new Simple({ foo: "too-many", bar: 1 }).operation("put")
+    await expect(
+      client.bulk([op, Array.from({ length: 101 }, () => op)])
+    ).rejects.toBeInstanceOf(RangeError)
+    expect(write).not.toHaveBeenCalled()
+    expect(await sandbox.get("PK#too-many", "SK#1")).toBeNull()
   })
 })

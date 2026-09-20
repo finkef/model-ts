@@ -1107,6 +1107,89 @@ const generatedVectors: Vector[] = Object.keys(IN_MEMORY_SPEC.methods).flatMap(
 )
 
 const additionalDifferentialVectors: Vector[] = [
+  ...["live", "archive", "both"].map(
+    (failure): Vector => ({
+      id: `transact-write.versioned-delete-${failure}`,
+      method: "transactWrite",
+      execute: async ({ client, tableName }) => {
+        const live = { PK: "versioned", SK: "versioned", _docVersion: 1 }
+        const archive = {
+          PK: "$$DELETED$$versioned",
+          SK: "$$DELETED$$versioned",
+        }
+        await client.documentClient
+          .put({ TableName: tableName, Item: live })
+          .promise()
+        if (failure !== "live") {
+          await client.documentClient
+            .put({ TableName: tableName, Item: archive })
+            .promise()
+        }
+        try {
+          await client.documentClient
+            .transactWrite({
+              TransactItems: [
+                {
+                  Delete: {
+                    TableName: tableName,
+                    Key: { PK: live.PK, SK: live.SK },
+                    ConditionExpression: "attribute_exists(PK) AND #v = :v",
+                    ExpressionAttributeNames: { "#v": "_docVersion" },
+                    ExpressionAttributeValues: {
+                      ":v": failure === "archive" ? 1 : 0,
+                    },
+                  },
+                },
+                {
+                  Put: {
+                    TableName: tableName,
+                    Item: archive,
+                    ConditionExpression: "attribute_not_exists(PK)",
+                  },
+                },
+              ],
+            })
+            .promise()
+          throw new Error("Expected transaction cancellation")
+        } catch (error) {
+          expect(error.code).toBe("TransactionCanceledException")
+          const codes = error.CancellationReasons.map(
+            (reason: { Code: string }) => reason.Code
+          )
+          expect(codes).toEqual([
+            failure === "archive" ? "None" : "ConditionalCheckFailed",
+            failure === "live" ? "None" : "ConditionalCheckFailed",
+          ])
+          return codes
+        }
+      },
+    })
+  ),
+  {
+    id: "transact-write.condition-and-delete-same-item",
+    method: "transactWrite",
+    setup: createSeed,
+    execute: ({ client, tableName }) =>
+      client.documentClient
+        .transactWrite({
+          TransactItems: [
+            {
+              ConditionCheck: {
+                TableName: tableName,
+                Key: { PK: "USER#2", SK: "PROFILE#001" },
+                ConditionExpression: "attribute_exists(PK)",
+              },
+            },
+            {
+              Delete: {
+                TableName: tableName,
+                Key: { PK: "USER#2", SK: "PROFILE#001" },
+              },
+            },
+          ],
+        })
+        .promise(),
+  },
   {
     id: "query.pagination-continuity",
     method: "query",

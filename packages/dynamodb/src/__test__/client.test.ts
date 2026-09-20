@@ -3,6 +3,7 @@ import { model, RuntimeTypeValidationError, union } from "@model-ts/core"
 import { Sandbox, createSandbox } from "../sandbox"
 import { Client } from "../client"
 import { getProvider } from "../provider"
+import { DeleteOptions } from "../operations"
 import {
   KeyExistsError,
   ItemNotFoundError,
@@ -3478,4 +3479,178 @@ describe("sandbox", () => {
       )
     )
   })
+})
+
+describe("versioned deletes", () => {
+  const create = async (id = "versioned") => {
+    const item = await new A({ pk: id, sk: id, a: 0 }).put()
+    return A.load(item.keys())
+  }
+  const archive = (item: A) => sandbox.get(`$$DELETED$$${item.PK}`, `$$DELETED$$${item.SK}`)
+  const routes: [string, boolean, boolean, (item: A, options?: DeleteOptions) => Promise<unknown>][] = [
+    ["instance delete", false, false, (item, options) => item.delete(options)],
+    ["instance softDelete", true, false, (item, options) => item.softDelete(options)],
+    ["model softDelete", true, false, (item, options) => A.softDelete(item, options)],
+    ["client softDelete", true, false, (item, options) => client.softDelete(item, options)],
+    ["instance delete builder", false, true, (item, options) => client.bulk([item.operation("delete", options)])],
+    ["instance softDelete builder", true, true, (item, options) => client.bulk([item.operation("softDelete", options)])],
+    ["model softDelete builder", true, true, (item, options) => client.bulk([A.operation("softDelete", item, options)])],
+  ]
+
+  test.each(routes)("%s guards snapshots and supports ignoreVersion", async (_name, soft, bulk, run) => {
+    const item = await create()
+    await (await A.load(item.keys())).update({ a: 1 })
+    const error = bulk ? BulkWriteTransactionError : RaceConditionError
+    await expect(run(item)).rejects.toBeInstanceOf(error)
+    await expect(run(item, { ignoreVersion: false })).rejects.toBeInstanceOf(error)
+    expect(await sandbox.get(item.PK, item.SK)).toMatchObject({ a: 1, _docVersion: 1 })
+    expect(await archive(item)).toBeNull()
+    await run(item, { ignoreVersion: true })
+    expect(await sandbox.get(item.PK, item.SK)).toBeNull()
+    if (soft) expect(await archive(item)).toMatchObject({ a: 0 })
+    const fresh = await (await create("fresh")).update({ a: 1 })
+    const result = await run(fresh)
+    if (!bulk) expect(result).toBe(soft ? fresh : null)
+    expect(await sandbox.get(fresh.PK, fresh.SK)).toBeNull()
+  })
+
+  test.each(["delete", "softDelete"] as const)("%s handles legacy zero and missing rows", async method => {
+    for (const stored of [undefined, 0, 1]) {
+      const seed = new A({ pk: `legacy-${stored}`, sk: "row", a: 0 })
+      const raw = { ...seed.encode(), ...seed.keys() }
+      await client.documentClient.put({ TableName: client.tableName, Item: raw }).promise()
+      const loaded = await A.load(seed.keys()) // legacy row decodes to zero
+      if (stored !== undefined) {
+        await client.documentClient.put({ TableName: client.tableName, Item: { ...raw, _docVersion: stored } }).promise()
+      }
+      if (stored === 1) {
+        await expect(loaded[method]()).rejects.toBeInstanceOf(RaceConditionError)
+        expect(await archive(loaded)).toBeNull()
+      } else {
+        await loaded[method]()
+        expect(await sandbox.get(seed.PK, seed.SK)).toBeNull()
+      }
+    }
+    const item = await (await create("nonzero")).update({ a: 1 })
+    await client.documentClient.put({
+      TableName: client.tableName, Item: { ...item.encode(), ...item.keys() },
+    }).promise()
+    await expect(item[method]()).rejects.toBeInstanceOf(RaceConditionError)
+    for (const snapshot of [item, await create("missing-zero")]) {
+      await A.delete(snapshot.keys())
+      await expect(snapshot[method]()).rejects.toBeInstanceOf(RaceConditionError)
+      expect(await archive(snapshot)).toBeNull()
+    }
+  })
+
+  test("key-only APIs forward raw conditions and remain unconditional by default", async () => {
+    const item = await create()
+    await item.update({ a: 1 })
+    const params = {
+      ConditionExpression: "(#a = :first OR #a = :second) AND attribute_exists(PK)",
+      ExpressionAttributeNames: { "#a": "a" },
+      ExpressionAttributeValues: { ":first": 2, ":second": 3 },
+    }
+    await expect(A.delete(item.keys(), params)).rejects.toMatchObject({ code: "ConditionalCheckFailedException" })
+    await expect(client.bulk([A.operation("delete", item.keys(), params)])).rejects.toBeInstanceOf(BulkWriteTransactionError)
+    await client.delete(A.operation("delete", item.keys(), {
+      ...params, ExpressionAttributeValues: { ":first": 0, ":second": 1 },
+    }))
+    await expect(A.delete(item.keys())).resolves.toBeNull()
+    const other = await create("static-bulk")
+    await client.bulk([A.operation("delete", other.keys())])
+    expect(await sandbox.get(other.PK, other.SK)).toBeNull()
+  })
+
+  test("unversioned manual instances retain unconditional deletion", async () => {
+    for (const method of ["delete", "softDelete"] as const) {
+      const item = await create(method)
+      await item.update({ a: 1 })
+      await new A({ pk: item.pk, sk: item.sk, a: 0 })[method]()
+      expect(await sandbox.get(item.PK, item.SK)).toBeNull()
+      if (method === "softDelete") expect(await archive(item)).toMatchObject({ a: 0 })
+    }
+  })
+
+  test("builders capture versions and failed bulk writes remain atomic", async () => {
+    const item = await create()
+    const hard = item.operation("delete")
+    const soft = item.operation("softDelete")
+    // Also type-check the corrected tuple positions with TS 4.5.
+    expect(soft[0].action.key).toEqual(item.keys())
+    expect(soft[1].action.item).toBe(item)
+    expect(soft[1].rollback.ConditionExpression).toBeUndefined()
+    await item.update({ a: 1 })
+    Object.assign(item, { _docVersion: 1 })
+    await expect(client.delete(hard)).rejects.toMatchObject({ code: "ConditionalCheckFailedException" })
+    const unrelated = new A({ pk: "unrelated", sk: "row", a: 0 })
+    await expect(client.bulk([unrelated.operation("put"), soft])).rejects.toBeInstanceOf(BulkWriteTransactionError)
+    expect(await sandbox.get(unrelated.PK, unrelated.SK)).toBeNull()
+    expect(await archive(item)).toBeNull()
+  })
+
+  test("archive collisions remain protected even when ignoring the live version", async () => {
+    const item = await create()
+    const pair = item.operation("softDelete")
+    expect(pair[0].action.ConditionExpression).toContain("attribute_exists(PK)")
+    expect(pair[1].action._deleted).toBe(true)
+    await item.softDelete() // DynamoDB also rejects any same-item ConditionCheck + Delete.
+    const replacement = await create()
+    await expect(replacement.softDelete()).rejects.toBeInstanceOf(BulkWriteTransactionError)
+    await expect(replacement.softDelete({ ignoreVersion: true })).rejects.toBeInstanceOf(BulkWriteTransactionError)
+    await replacement.update({ a: 1 })
+    await expect(replacement.softDelete()).rejects.toBeInstanceOf(BulkWriteTransactionError) // both guards fail
+    expect(await sandbox.get(item.PK, item.SK)).toMatchObject({ a: 1 })
+    expect(await archive(item)).toMatchObject({ a: 0 })
+  })
+
+  test("direct soft-delete error mapping is narrow and generic bulk errors stay wrapped", async () => {
+    const item = await create()
+    const original = client.documentClient
+    // Sandbox proxies bind methods: install an own mock and restore it after this test.
+    const write = jest.fn()
+    client.setDocumentClient(Object.assign(Object.create(original), { transactWrite: write }))
+    try {
+      const failed = { Code: "ConditionalCheckFailed" }, none = { Code: "None" }
+      let reasons: unknown
+      write.mockReturnValue({
+        promise: async () => {
+          throw Object.assign(new Error("cancelled"), {
+            code: "TransactionCanceledException", CancellationReasons: reasons,
+          })
+        },
+      })
+      for (reasons of [
+        undefined, [], [failed], [null, none], [none, failed],
+        [failed, failed], [failed, { Code: "ValidationError" }],
+      ]) {
+        await expect(item.softDelete()).rejects.toBeInstanceOf(BulkWriteTransactionError)
+      }
+      reasons = [failed, none]
+      await expect(item.softDelete()).rejects.toBeInstanceOf(RaceConditionError)
+      await expect(item.softDelete({ ignoreVersion: true })).rejects.toBeInstanceOf(BulkWriteTransactionError)
+      await expect(client.bulk([item.operation("softDelete")])).rejects.toBeInstanceOf(BulkWriteTransactionError)
+      expect(write).toHaveBeenCalledTimes(10) // cancellations are not retried
+    } finally {
+      client.setDocumentClient(original)
+    }
+  })
+
+  // Compile-only API fixtures; never invoke writes.
+  const checkTypes = (item: A) => {
+    const hard: Promise<null> = item.delete({ ignoreVersion: true })
+    const soft: Promise<A> = item.softDelete()
+    const staticSoft: Promise<A> = A.softDelete(item)
+    const clientSoft: Promise<A> = client.softDelete(item)
+    // @ts-expect-error Versions are snapshot metadata, not public options.
+    item.delete({ expectedVersion: 0 })
+    // @ts-expect-error Key-only APIs accept raw conditions, not instance options.
+    A.delete(item.keys(), { ignoreVersion: true })
+    client.delete({ _model: A, _operation: "delete", key: item.keys(),
+      // @ts-expect-error Raw Delete operations do not expose a version parameter.
+      expectedVersion: 0,
+    })
+    return [hard, soft, staticSoft, clientSoft]
+  }
+  void checkTypes
 })

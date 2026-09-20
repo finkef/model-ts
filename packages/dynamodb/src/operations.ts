@@ -41,7 +41,18 @@ export interface PutOperation<
   item: T
 }
 
-export interface DeleteOperation<M extends DynamoDBModelConstructor<any>> {
+export interface DeleteOptions {
+  /** Skip the item's version and existence check. Archive collisions still fail. */
+  ignoreVersion?: boolean
+}
+
+export interface DeleteOperation<M extends DynamoDBModelConstructor<any>>
+  extends Pick<
+    DocumentClient.DeleteItemInput,
+    | "ConditionExpression"
+    | "ExpressionAttributeNames"
+    | "ExpressionAttributeValues"
+  > {
   _operation: "delete"
   _model: M
   key: Key

@@ -511,8 +511,23 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
         }
       }
 
+      const reasons: { Code: string }[] = transactItems.map(() => ({ Code: "None" }))
+      const conditionPasses = (
+        params: AnyParams,
+        existing: AnyParams | undefined,
+        index: number
+      ) => {
+        try {
+          this.assertCondition("transactWrite", params, existing)
+          return true
+        } catch (error) {
+          if (error?.code !== "ConditionalCheckFailedException") throw error
+          reasons[index] = { Code: "ConditionalCheckFailed" }
+          return false
+        }
+      }
       try {
-        for (const transactionEntry of transactItems) {
+        for (const [index, transactionEntry] of transactItems.entries()) {
           if (transactionEntry.Put) {
             const put = transactionEntry.Put
             const tableName = this.getRequiredTableName(put)
@@ -533,7 +548,7 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
 
             const existing = table.cloneItemByKey(key)
             this.assertExpressionAttributeInputs(put, [put.ConditionExpression])
-            this.assertCondition("transactWrite", put, existing)
+            if (!conditionPasses(put, existing, index)) continue
 
             remember(tableName, key, existing)
             table.put(item)
@@ -553,7 +568,7 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
               update.ConditionExpression,
               update.UpdateExpression,
             ])
-            this.assertCondition("transactWrite", update, existing)
+            if (!conditionPasses(update, existing, index)) continue
 
             if (typeof update.UpdateExpression !== "string") {
               throw new NotSupportedError({
@@ -594,7 +609,7 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
             const table = this.getTable(tableName)
             const existing = table.cloneItemByKey(key)
             this.assertExpressionAttributeInputs(del, [del.ConditionExpression])
-            this.assertCondition("transactWrite", del, existing)
+            if (!conditionPasses(del, existing, index)) continue
             remember(tableName, key, existing)
 
             table.deleteByKey(key)
@@ -610,7 +625,7 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
             const table = this.getTable(tableName)
             const existing = table.cloneItemByKey(key)
             this.assertExpressionAttributeInputs(check, [check.ConditionExpression])
-            this.assertCondition("transactWrite", check, existing)
+            if (!conditionPasses(check, existing, index)) continue
             continue
           }
 
@@ -619,6 +634,11 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
             featurePath: "transactWrite.TransactItems",
             reason: "Each transaction entry must include Put, Update, Delete, or ConditionCheck.",
           })
+        }
+        if (reasons.some(({ Code }) => Code !== "None")) {
+          throw Object.assign(this.transactionCanceledError(
+            `Transaction cancelled, please refer cancellation reasons for specific reasons [${reasons.map(({ Code }) => Code).join(", ")}]`
+          ), { CancellationReasons: reasons })
         }
       } catch (error: any) {
         rollback()
@@ -638,12 +658,6 @@ class InMemoryDocumentClientImpl implements InMemoryDocumentClient {
 
         if (error?.code === "ValidationException") {
           throw error
-        }
-
-        if (error?.code === "ConditionalCheckFailedException") {
-          throw this.transactionCanceledError(
-            "Transaction cancelled, please refer cancellation reasons for specific reasons [None, ConditionalCheckFailed]"
-          )
         }
 
         if (error?.code === "TransactionCanceledException") {

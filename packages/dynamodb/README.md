@@ -137,18 +137,40 @@ const updated = await MyModel.updateRaw(
 
 #### delete
 
-Deletes an item.
+Permanently deletes an item. Loaded instances check their `_docVersion` by default,
+including whether the live item still exists. A stale or missing instance throws
+`RaceConditionError`. Use `{ ignoreVersion: true }` for deliberate force deletion.
+Key-only `MyModel.delete(key, params?)` remains unconditional unless you supply
+standard DynamoDB `ConditionExpression`, `ExpressionAttributeNames`, and
+`ExpressionAttributeValues` params; raw conditional failures retain SDK errors.
+
+Decoded legacy rows without a stored version count as version zero. A manually
+constructed instance without version metadata retains unconditional behavior;
+load the item first to obtain protection. Checks cannot detect writes that leave
+the version unchanged or recreation that reuses the version.
 
 ##### Example
 
 ```ts
 const item = await MyModel.load({ PK: "MYMODEL#123", SK: "SOMESK#ABC" })
-await item.delete()
+await item.delete() // rejects if the stored version changed
+await MyModel.delete({ PK: "MYMODEL#123", SK: "SOMESK#ABC" }) // unconditional
+// For administrative force deletion: await item.delete({ ignoreVersion: true })
 ```
 
 #### softDelete
 
-Deletes an item, but keeps a copy by prepending `$$DELETED$$` to both PK and SK.
+Deletes the live item and archives the supplied snapshot under `$$DELETED$$` keys
+in one transaction. Instance, `MyModel.softDelete(item, options?)`, and
+`client.softDelete(item, options?)` calls check the item version by default.
+`{ ignoreVersion: true }` skips the live-item guard and may archive a stale snapshot;
+it never permits overwriting an existing archive.
+
+Direct soft-delete calls throw `RaceConditionError` only when structured
+cancellation reasons identify the live version guard alone. Archive collisions,
+mixed failures, or unavailable reasons retain `BulkWriteTransactionError`.
+Recovery reads via `load(key, { recover: true })` are unchanged; no restore
+primitive is provided.
 
 ##### Example
 
@@ -159,7 +181,36 @@ await item.softDelete()
 
 #### bulk
 
-> TODO
+Instance `operation("delete", options?)` and `operation("softDelete", options?)`
+builders retain the same version guards and `ignoreVersion` option. Static
+`MyModel.operation("softDelete", item, options?)` also uses the item version;
+key-only `MyModel.operation("delete", key, params?)` accepts raw conditions and
+otherwise remains unconditional. `client.delete(operation)` forwards conditions
+without inferring a version or mapping SDK errors.
+
+```ts
+await client.bulk([
+  first.operation("delete"),
+  second.operation("softDelete"), // keep the pair nested
+])
+```
+
+Transactions contain at most 100 actions. Each nested array stays together,
+including during compensation after a later transaction fails. Groups over 100
+are rejected before any writes. Use `bulk([pair])`; `bulk(pair)` or spreading a
+pair into the outer array does not preserve its grouping. Soft-delete tuples are
+ordered live Delete then archive Put (their declarations now match runtime).
+
+Generic `bulk()` retains `BulkWriteTransactionError` for transaction cancellations,
+even for generated version guards. Compensation failures retain
+`BulkWriteRollbackError` and `requiresRollback`. Multi-batch bulk is not globally
+atomic: only operations with declared rollbacks are compensated. A soft-delete
+restore refuses to overwrite a recreated live row, leaving the archive intact.
+
+Version 6 changes the defaults for loaded-instance deletes and item-taking soft
+deletes. Existing calls still compile, but stale/missing items now reject. Migrate
+intentional force deletion to `ignoreVersion: true` or key-only static deletion;
+callers inspecting soft-delete tuple positions should use the corrected order.
 
 ## Testing
 
