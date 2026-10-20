@@ -86,9 +86,15 @@ The provider adds:
 | unions    | `get`, `load`, `loadOption`, `loadMany`, `query`, `stream`, `paginate`                                                          |
 
 Instance members need `PK` and `SK`; calling them on a model without keys is
-a type error. Each member also exists as a function in the `Dynamo`
-namespace, which works for any model, union or key:
-`Dynamo.load(Post, key)` is `Post.load(key)`.
+a type error.
+
+The reads and writes wrap functions of the `Dynamo` namespace, which take the
+model, union or item as their first argument: `Post.load(key)` is
+`Dynamo.load(Post, key)` and `post.update(patch)` is
+`Dynamo.update(post, patch)`. `applyUpdate` and `operation` build
+operations with the `Operation` module (see
+[Bulk writes](#bulk-writes-and-transactions)), and `keys()` is
+`keysOf(post)`.
 
 ## The `DynamoDB` service
 
@@ -186,6 +192,16 @@ yield *
 
 `post.delete({ ignoreVersion: true })` deletes regardless of the version.
 
+Three cases are not guarded. They behave as in earlier versions, so that both
+send the same requests:
+
+- `update` on an instance whose item was deleted in the meantime stores it
+  again: the condition accepts a missing item.
+- `update` that changes an item's keys deletes the old item without checking
+  its version.
+- `update` on an instance that was never read from the table (so it has no
+  version) writes without a condition.
+
 ## Soft delete
 
 `softDelete` moves an item to the same keys prefixed with `$$DELETED$$` and
@@ -223,6 +239,12 @@ bulk write, the transactions already committed are rolled back, last to first,
 and the original failure is returned. If a rollback fails as well, the error is
 a `BulkWriteRollbackError` that lists the operations still in the table.
 Interrupting a bulk write waits until it has finished or been rolled back.
+
+Rolling back undoes the operations that know how: `put`, `softDelete` and an
+`update` that changes keys are `TransactionOperation`s with a `rollback`.
+A same-key `update`, `updateRaw`, `delete` and `condition` have none, and
+a committed one stays applied. To make your own operation reversible, pass
+`{ action, rollback }`.
 
 `Dynamo.transactWrite(items)` sends raw `TransactItems`. Server errors and
 network failures are retried up to three times with the same
@@ -293,24 +315,32 @@ Each operation's union is exported from `Dynamo`:
 
 ## Tracing
 
-Each operation has a span named `Dynamo.<operation>` (`Dynamo.load`,
-`Dynamo.update`, …) with these attributes:
+Every operation runs in a span named after its `Dynamo` function. Model
+members such as `Post.load` create the same spans, and `loadOption`,
+`loadMany`, `stream` and a model's `query` run inside the spans of the
+operations they call.
 
-| Attribute        | Value                                          |
-| ---------------- | ---------------------------------------------- |
-| `model_ts.model` | The model, or `"Post \| Comment"` for a union. |
-| `model_ts.key`   | `"PK / SK"` of the item, when there is one.    |
+| Span                                                                                                                     | Attributes                                                                                   |
+| ------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------- |
+| `Dynamo.get`, `Dynamo.load`, `Dynamo.put`, `Dynamo.update`, `Dynamo.updateRaw`, `Dynamo.deleteItem`, `Dynamo.softDelete` | `model_ts.model` (`"Post \| Comment"` for a union), `model_ts.key` (`"PK / SK"`)             |
+| `Dynamo.delete`                                                                                                          | `model_ts.key`                                                                               |
+| `Dynamo.query`                                                                                                           | `model_ts.models`, `aws.dynamodb.index_name`, `aws.dynamodb.count`, `model_ts.unknown_count` |
+| `Dynamo.paginate`                                                                                                        | none; its Queries are `Dynamo.query` spans                                                   |
+| `Dynamo.bulk`                                                                                                            | `model_ts.operations`, `model_ts.transactions`                                               |
+| `Dynamo.transactWrite`                                                                                                   | none                                                                                         |
+| `Dynamo.batchGet`                                                                                                        | `batchSize`, and a link to the `Dynamo.load` span of every load it served                    |
 
-Inside it, every AWS call has a client span named `DynamoDB.<Command>`
-(`DynamoDB.GetItem`, `DynamoDB.BatchGetItem`, …) with the OpenTelemetry
-attributes for DynamoDB: `db.system.name`, `db.operation.name`,
-`aws.dynamodb.table_names`, `rpc.system`, `rpc.service` and `rpc.method`, plus
-`aws.dynamodb.index_name` for index queries. Failed calls end their span with
-the failure.
+Inside them, every AWS call has a client span named `DynamoDB.<Command>`
+(`DynamoDB.GetItem`, `DynamoDB.Query`, …) with the OpenTelemetry attributes
+for DynamoDB: `db.system.name`, `db.operation.name`,
+`aws.dynamodb.table_names`, `rpc.system`, `rpc.service` and `rpc.method`.
+Some commands add their own: `aws.dynamodb.index_name`, `aws.dynamodb.limit`
+and `aws.dynamodb.scan_forward` on Query, `aws.dynamodb.keys_count` on
+BatchGetItem and `aws.dynamodb.transact_items_count` on TransactWriteItems.
+Failed calls end their span with the failure.
 
-Concurrent loads share one BatchGetItem. Its `DynamoDB.BatchGetItem` span sits
-in a `Dynamo.batchGet` span that links to the `Dynamo.load` span of every
-load it served, so each caller's trace leads to the call that answered it.
+Concurrent loads share one BatchGetItem, which runs in the `Dynamo.batchGet`
+span, so each caller's trace leads to the call that answered it.
 
 ## Testing with `Sandbox`
 
@@ -353,6 +383,17 @@ layer(Sandbox.layerMemory())((it) => {
 })
 ```
 
-The in-memory engine supports the operations and expressions this library
-uses, and the repository's conformance suite runs the same requests against
-it and DynamoDB Local. It is meant for tests, not as a database.
+The in-memory engine is meant for tests, not as a database. It supports what
+this library sends: GetItem, PutItem, UpdateItem, DeleteItem, Query, Scan,
+BatchGetItem, BatchWriteItem and TransactWriteItems, with key condition,
+filter, condition and update expressions. The repository's conformance suite
+runs the same requests against it and DynamoDB Local. It does not support:
+
+- the `GSI1` index,
+- `ProjectionExpression` and `Select`,
+- the legacy parameters `KeyConditions`, `QueryFilter`, `AttributesToGet`
+  and `Expected`,
+- idempotent retries with `ClientRequestToken` (the token is accepted).
+
+A request that uses one of these fails with a `DynamoDBError` that names the
+missing feature. Tests that need them use `Sandbox.layerLocal()`.

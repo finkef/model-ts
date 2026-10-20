@@ -138,6 +138,41 @@ describe("bulk", () => {
     }),
   )
 
+  it.effect("reports a rollback that dies as BulkWriteRollbackError", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(0))
+      class Exploding extends Post {
+        override get GSI2PK(): string {
+          throw new Error("rollback exploded")
+        }
+      }
+      // The first transaction commits a write whose rollback cannot be built.
+      const unrecoverable: Operation.TransactionOperation = {
+        action: { _tag: "Put", item: makePost(1) },
+        rollback: { _tag: "Put", item: new Exploding(makePost(1).values()) },
+      }
+
+      const error = yield* Effect.flip(
+        Dynamo.bulk([
+          unrecoverable,
+          ...Array.from({ length: 99 }, (_, i) =>
+            makePost(i + 2).operation("put"),
+          ),
+          makePost(0).operation("put"),
+        ]),
+      )
+
+      expect(error._tag).toBe("BulkWriteRollbackError")
+      if (error._tag !== "BulkWriteRollbackError") return
+      expect(error.requiresRollback).toHaveLength(100)
+      expect(error.cause).toMatchObject({ _tag: "TransactionCanceledError" })
+      expect(error.rollbackCause).toMatchObject({
+        message: "rollback exploded",
+      })
+    }),
+  )
+
   it.effect("rolls back committed transactions when a later one fails", () =>
     Effect.gen(function* () {
       const sandbox = yield* Sandbox

@@ -17,18 +17,23 @@ export const encodeIndexEntryKey = (
 
 /**
  * A deep copy of an item. Binary values and sets are copied; attributes set
- * to `undefined` are left out, as DynamoDB leaves them out.
+ * to `undefined`, and `undefined` list and set members, are left out, as
+ * the AWS SDK leaves them out.
  */
 export const cloneItem = <T>(item: T): T => cloneValue(item) as T
 
+const isDefined = (value: unknown) => value !== undefined
+
 const cloneValue = (value: unknown): unknown => {
   if (value instanceof Uint8Array) return new Uint8Array(value)
-  if (value instanceof Set) return new Set([...value].map(cloneValue))
-  if (Array.isArray(value)) return value.map(cloneValue)
+  if (value instanceof Set) {
+    return new Set([...value].filter(isDefined).map(cloneValue))
+  }
+  if (Array.isArray(value)) return value.filter(isDefined).map(cloneValue)
   if (value !== null && typeof value === "object") {
     return Object.fromEntries(
       Object.entries(value)
-        .filter(([, entry]) => entry !== undefined)
+        .filter(([, entry]) => isDefined(entry))
         .map(([key, entry]) => [key, cloneValue(entry)]),
     )
   }

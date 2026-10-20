@@ -696,8 +696,12 @@ const MAX_TRANSACTION_ITEMS = 100
  * are rolled back (last to first) and the original error is returned; if a
  * rollback fails too, the error is `BulkWriteRollbackError`.
  *
- * A defect rolls back the same way. Interruption waits until the bulk write
- * has finished or been rolled back, so it never leaves the table half written.
+ * Rolling back runs the `rollback` of each committed `TransactionOperation`:
+ * `put`, `softDelete` and key-changing `update` operations carry one. Other
+ * operations (a same-key `update`, `updateRaw`, `delete`) stay applied.
+ *
+ * A defect rolls back the same way, and interruption waits until the bulk
+ * write has finished or been rolled back.
  *
  * A group of more than 100 operations is a defect: it can never succeed.
  *
@@ -763,13 +767,14 @@ const rollback = Effect.fnUntraced(function* (
 ) {
   for (let index = committed.length - 1; index >= 0; index--) {
     yield* writeBatch(committed[index]!, "rollback").pipe(
-      Effect.mapError(
-        (rollbackCause) =>
+      Effect.catchCause((rollbackCause) =>
+        Effect.fail(
           new BulkWriteRollbackError({
             requiresRollback: committed.slice(0, index + 1).flat(),
             cause,
-            rollbackCause,
+            rollbackCause: Cause.squash(rollbackCause),
           }),
+        ),
       ),
     )
   }

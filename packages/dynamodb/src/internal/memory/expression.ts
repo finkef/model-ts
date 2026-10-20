@@ -271,7 +271,7 @@ export const matchesRangeCondition = (
         compareValues(value, condition.upper) <= 0
       )
     case "=":
-      return compareValues(value, condition.value) === 0
+      return valuesEqual(value, condition.value)
     case "<":
       return compareValues(value, condition.value) < 0
     case "<=":
@@ -283,10 +283,22 @@ export const matchesRangeCondition = (
   }
 }
 
+const isBytes = (value: unknown): value is Uint8Array =>
+  value instanceof Uint8Array
+
+const isMap = (value: unknown): value is Record<string, unknown> =>
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  !isBytes(value) &&
+  !(value instanceof Set)
+
+/** Numbers by value, binary byte by byte, everything else as strings. */
 export const compareValues = (left: any, right: any): number => {
   if (typeof left === "number" && typeof right === "number") {
     return left - right
   }
+  if (isBytes(left) && isBytes(right)) return Buffer.compare(left, right)
 
   const leftString = String(left)
   const rightString = String(right)
@@ -294,6 +306,47 @@ export const compareValues = (left: any, right: any): number => {
   if (leftString < rightString) return -1
   if (leftString > rightString) return 1
   return 0
+}
+
+/** `<`, `<=`, `>` and `>=` hold only between two numbers, strings or binaries. */
+const isOrderable = (left: unknown, right: unknown) =>
+  (typeof left === "number" && typeof right === "number") ||
+  (typeof left === "string" && typeof right === "string") ||
+  (isBytes(left) && isBytes(right))
+
+/** DynamoDB equality: the same type and the same contents. */
+export const valuesEqual = (left: unknown, right: unknown): boolean => {
+  if (isBytes(left) || isBytes(right)) {
+    return isBytes(left) && isBytes(right) && Buffer.compare(left, right) === 0
+  }
+  if (left instanceof Set || right instanceof Set) {
+    if (!(left instanceof Set && right instanceof Set)) return false
+    if (left.size !== right.size) return false
+    const rightValues = [...right]
+    return [...left].every((entry) =>
+      rightValues.some((other) => valuesEqual(entry, other)),
+    )
+  }
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return (
+      Array.isArray(left) &&
+      Array.isArray(right) &&
+      left.length === right.length &&
+      left.every((entry, index) => valuesEqual(entry, right[index]))
+    )
+  }
+  if (isMap(left) || isMap(right)) {
+    if (!(isMap(left) && isMap(right))) return false
+    const keys = Object.keys(left)
+    return (
+      keys.length === Object.keys(right).length &&
+      keys.every(
+        (key) =>
+          Object.hasOwn(right, key) && valuesEqual(left[key], right[key]),
+      )
+    )
+  }
+  return left === right
 }
 
 function evaluateSingleClause(
@@ -376,6 +429,8 @@ function evaluateSingleClause(
 
     if (current === MISSING || lower === MISSING || upper === MISSING)
       return false
+    if (!isOrderable(current, lower) || !isOrderable(current, upper))
+      return false
 
     return (
       compareValues(current, lower) >= 0 && compareValues(current, upper) <= 0
@@ -391,13 +446,15 @@ function evaluateSingleClause(
 
     if (left === MISSING || right === MISSING) return false
 
-    const result = compareValues(left, right)
-
     switch (operator) {
       case "=":
-        return result === 0
+        return valuesEqual(left, right)
       case "<>":
-        return result !== 0
+        return !valuesEqual(left, right)
+    }
+    if (!isOrderable(left, right)) return false
+    const result = compareValues(left, right)
+    switch (operator) {
       case "<":
         return result < 0
       case "<=":
@@ -866,8 +923,10 @@ function sizeOfValue(value: any, context: ExpressionContext): number {
 function containsValue(container: any, expected: any): boolean {
   if (typeof container === "string") return container.includes(String(expected))
   if (Array.isArray(container))
-    return container.some((entry) => entry === expected)
-  if (container instanceof Set) return container.has(expected)
+    return container.some((entry) => valuesEqual(entry, expected))
+  if (container instanceof Set)
+    return [...container].some((entry) => valuesEqual(entry, expected))
+  if (isBytes(container)) return false
   if (container && typeof container === "object") {
     return Object.prototype.hasOwnProperty.call(container, String(expected))
   }
@@ -883,24 +942,14 @@ function attributeMatchesType(value: any, expectedType: string): boolean {
   if (t === "BOOL") return typeof value === "boolean"
   if (t === "NULL") return value === null
   if (t === "L") return Array.isArray(value)
-  if (t === "M")
-    return (
-      !!value &&
-      typeof value === "object" &&
-      !Array.isArray(value) &&
-      !Buffer.isBuffer(value) &&
-      !(value instanceof Set)
-    )
-  if (t === "B") return Buffer.isBuffer(value) || value instanceof Uint8Array
+  if (t === "M") return isMap(value)
+  if (t === "B") return isBytes(value)
 
   if (value instanceof Set) {
     const values = [...value.values()]
     if (t === "SS") return values.every((entry) => typeof entry === "string")
     if (t === "NS") return values.every((entry) => typeof entry === "number")
-    if (t === "BS")
-      return values.every(
-        (entry) => Buffer.isBuffer(entry) || entry instanceof Uint8Array,
-      )
+    if (t === "BS") return values.every(isBytes)
   }
 
   return false

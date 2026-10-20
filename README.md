@@ -450,7 +450,11 @@ describe("Post", () => {
         const sandbox = yield* Sandbox
         const before = yield* sandbox.snapshot
 
-        yield* createPost({ id: PostId.make("post_001"), title: "Hello" })
+        yield* new Post({
+          id: PostId.make("post_001"),
+          title: "Hello",
+          publishedAt: null,
+        }).put()
 
         expect(yield* sandbox.diff(before)).toMatchInlineSnapshot(`
           "+ [POST#post_001 / POST]
@@ -468,15 +472,20 @@ describe("Post", () => {
 })
 ```
 
-`layer(...)` from `@effect/vitest` builds the layer once for every test in the
-block. For a fresh table per test, wrap `it.effect` so each test provides the
-layer itself:
+`layer(...)` from `@effect/vitest` builds the layer once for the whole block,
+so its tests share one table. For a fresh table per test, wrap `it.effect` so
+each test provides the layer itself:
 
 ```ts
-const it = {
+import { it as vitest } from "@effect/vitest"
+import type { DynamoDB } from "@model-ts/dynamodb"
+import { Sandbox } from "@model-ts/dynamodb/sandbox"
+import { Effect, type Scope } from "effect"
+
+export const it = {
   effect: <A, E>(
     name: string,
-    body: () => Effect.Effect<A, E, Sandbox | DynamoDB>,
+    body: () => Effect.Effect<A, E, Sandbox | DynamoDB | Scope.Scope>,
   ) =>
     vitest.effect(name, () =>
       Effect.provide(Effect.suspend(body), Sandbox.layerMemory()),
@@ -523,29 +532,38 @@ The ideas carry over (models with methods, providers, single-table DynamoDB,
 sandboxes), but the API is new. Plan for one pass over each model and each
 call site.
 
-| io-ts versions                                        | Version 7                                                                       |
-| ----------------------------------------------------- | ------------------------------------------------------------------------------- |
-| `t.type({...})` codecs                                | `Schema` fields: `Schema.String`, `Schema.Struct`, `Schema.DateFromString` …    |
-| `class X extends model("X", t.type({...}), provider)` | `class X extends model<X>()("X", provider, {...})`                              |
-| `X.from(input)` / `X.decodeOrThrow(input)`            | `X.from(input)`                                                                 |
-| `X.decode(input)` returns an `Either`                 | `X.decode(input)` returns an `Effect`                                           |
-| `getProvider(client)`                                 | the constant `dynamodb` provider plus a `DynamoDB` layer                        |
-| `new Client({ tableName })`                           | `DynamoDB.layer({ tableName })`                                                 |
-| `Promise` results, thrown errors                      | `Effect` results, typed errors (see [Errors](#errors))                          |
-| `X.load(key, { null: true })`                         | `X.loadOption(key)`, returning an `Option`                                      |
-| `X.iterator(...)` / async iteration                   | `X.stream(...)`, an Effect `Stream`                                             |
-| `client.bulk([...])`                                  | `Dynamo.bulk([...])`                                                            |
-| `item._docVersion`                                    | `docVersion(item)`                                                              |
-| `createSandbox(client)`, `startTracking`, `rollback`  | `Sandbox.layerMemory()` / `Sandbox.layerLocal()`, `snapshot`, `diff`            |
-| `EXPERIMENTAL_DYNAMODB_IN_MEMORY`                     | `Sandbox.layerMemory()`                                                         |
-| `getProvider(eventBridgeClient)`, `stubEventBus`      | the `eventBridge` provider plus `EventBridge.layer` / `EventBridge.layerMemory` |
-| CommonJS                                              | ESM only, Node.js 22+                                                           |
+| io-ts versions                                        | Version 7                                                                                                                                                 |
+| ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `t.type({...})` codecs                                | `Schema` fields: `Schema.String`, `Schema.Struct`, `Schema.DateFromString` …                                                                              |
+| `class X extends model("X", t.type({...}), provider)` | `class X extends model<X>()("X", provider, {...})`                                                                                                        |
+| `X.from(input)` / `X.decodeOrThrow(input)`            | `X.from(input)`                                                                                                                                           |
+| `X.decode(input)` returns an `Either`                 | `X.decode(input)` returns an `Effect`                                                                                                                     |
+| `getProvider(client)`                                 | the constant `dynamodb` provider plus a `DynamoDB` layer                                                                                                  |
+| `new Client({ tableName })`                           | `DynamoDB.layer({ tableName })`                                                                                                                           |
+| `Promise` results, thrown errors                      | `Effect` results, typed errors (see [Errors](#errors))                                                                                                    |
+| `X.load(key, { null: true })`                         | `X.loadOption(key)`, returning an `Option`                                                                                                                |
+| `X.loadMany(keys)` with a result or error per key     | `X.loadMany(keys)` fails on the first error; for per-key results, `Effect.forEach(keys, (key) => Effect.exit(X.load(key)), { concurrency: "unbounded" })` |
+| `X.iterator(...)` / async iteration                   | `X.stream(...)`, an Effect `Stream`                                                                                                                       |
+| `client.bulk([...])`                                  | `Dynamo.bulk([...])`                                                                                                                                      |
+| `item._docVersion`                                    | `docVersion(item)`                                                                                                                                        |
+| `createSandbox(client)`, `startTracking`, `rollback`  | `Sandbox.layerMemory()` / `Sandbox.layerLocal()`, `snapshot`, `diff`                                                                                      |
+| `EXPERIMENTAL_DYNAMODB_IN_MEMORY`                     | `Sandbox.layerMemory()`                                                                                                                                   |
+| `getProvider(eventBridgeClient)`, `stubEventBus`      | the `eventBridge` provider plus `EventBridge.layer` / `EventBridge.layerMemory`                                                                           |
+| CommonJS                                              | ESM only, Node.js 22+                                                                                                                                     |
 
-What stays the same: the table layout (`PK`/`SK`, `GSI1` to `GSI19`), the
-stored item format including `_tag` and `_docVersion`, soft-deleted keys,
-pagination cursors, and the requests sent to DynamoDB. Version 7 reads and
-writes the same items as the io-ts versions, so both can share a table during
-a migration.
+Stored data is compatible: the table layout (`PK`/`SK`, `GSI1` to `GSI19`),
+the item format including `_tag` and `_docVersion`, soft-deleted keys and
+pagination cursors are unchanged. Both versions read and write the same items,
+so they can share a table during a migration, and each operation sends the
+same requests as before. A few behaviours changed:
+
+- `paginate` keeps querying when a filter or items of other models leave a
+  page short, where it used to return a short page that claimed to be the last.
+- `bulk` rolls back committed transactions last to first, also after a
+  defect, and waits for that before it can be interrupted.
+- A retried transaction sends the same `ClientRequestToken` on every attempt,
+  so DynamoDB applies it once.
+- `loadMany` fails as a whole, as described above.
 
 ## Development
 

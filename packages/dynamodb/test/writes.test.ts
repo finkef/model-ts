@@ -1,5 +1,5 @@
 import { describe, expect } from "@effect/vitest"
-import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb"
+import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb"
 import { Effect } from "effect"
 import { docVersion, DynamoDB, RaceConditionError } from "../src/index.ts"
 import { Sandbox } from "../src/sandbox.ts"
@@ -387,6 +387,74 @@ describe("attribute types", () => {
         }),
       )
       expect(output.Item).toEqual(Item)
+    }),
+  )
+
+  it.effect("compares values by type and contents in conditions", () =>
+    Effect.gen(function* () {
+      const db = yield* DynamoDB
+      const Key = { PK: "TYPES", SK: "1" }
+      yield* db.send(
+        "PutItem",
+        new PutCommand({
+          TableName: db.tableName,
+          Item: {
+            ...Key,
+            n: 1,
+            bytes: new Uint8Array([2]),
+            byteSet: new Set([new Uint8Array([4]), new Uint8Array([5])]),
+            tags: new Set(["a"]),
+            nested: { x: 1 },
+          },
+        }),
+      )
+      const holds = (
+        ConditionExpression: string,
+        ExpressionAttributeValues: Record<string, unknown>,
+      ) =>
+        db
+          .send(
+            "UpdateItem",
+            new UpdateCommand({
+              TableName: db.tableName,
+              Key,
+              UpdateExpression: "SET touched = :touched",
+              ConditionExpression,
+              ExpressionAttributeValues: {
+                ...ExpressionAttributeValues,
+                ":touched": true,
+              },
+            }),
+          )
+          .pipe(
+            Effect.as(true),
+            Effect.catchIf(
+              (error) => error.code === "ConditionalCheckFailedException",
+              () => Effect.succeed(false),
+            ),
+          )
+
+      expect({
+        sameSet: yield* holds("tags = :v", { ":v": new Set(["a"]) }),
+        otherSet: yield* holds("tags = :v", { ":v": new Set(["b", "c"]) }),
+        bytesBelow: yield* holds("bytes < :v", { ":v": new Uint8Array([10]) }),
+        bytesAbove: yield* holds("bytes > :v", { ":v": new Uint8Array([10]) }),
+        inByteSet: yield* holds("contains(byteSet, :v)", {
+          ":v": new Uint8Array([5]),
+        }),
+        bytesIsMap: yield* holds("attribute_type(bytes, :v)", { ":v": "M" }),
+        nestedIsMap: yield* holds("attribute_type(nested, :v)", { ":v": "M" }),
+        numberEqualsString: yield* holds("n = :v", { ":v": "1" }),
+      }).toEqual({
+        sameSet: true,
+        otherSet: false,
+        bytesBelow: true,
+        bytesAbove: false,
+        inByteSet: true,
+        bytesIsMap: false,
+        nestedIsMap: true,
+        numberEqualsString: false,
+      })
     }),
   )
 })

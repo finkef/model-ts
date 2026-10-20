@@ -163,4 +163,35 @@ describe("formatSnapshotDiff", () => {
       +   count: 2"
     `)
   })
+  test("compares sets by contents and binary values by bytes", () => {
+    const before = {
+      A__1: {
+        PK: "A",
+        SK: "1",
+        tags: new Set(["a"]),
+        same: new Set(["y", "x"]),
+        bytes: new Uint8Array([1, 2, 3]),
+      },
+    }
+    const after = {
+      A__1: {
+        PK: "A",
+        SK: "1",
+        tags: new Set(["c", "b"]),
+        same: new Set(["x", "y"]),
+        bytes: new Uint8Array([1, 2, 4]),
+      },
+    }
+
+    expect(formatSnapshotDiff(before, after)).toMatchInlineSnapshot(`
+      "[A / 1]
+          PK: "A"
+          SK: "1"
+      -   bytes: Binary("AQID")
+      +   bytes: Binary("AQIE")
+          same: Set ["x", "y"]
+      -   tags: Set ["a"]
+      +   tags: Set ["b", "c"]"
+    `)
+  })
 })

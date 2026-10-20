@@ -9,8 +9,15 @@ type RenderResult = { lines: string[]; changed: boolean }
 
 const indent = (level: number) => " ".repeat(level)
 
+/** Sets and binary values print and compare as single values. */
+const isAtomic = (value: unknown): value is Set<unknown> | Uint8Array =>
+  value instanceof Set || value instanceof Uint8Array
+
 const isPlainObject = (value: any): value is Record<string, any> =>
-  value !== null && typeof value === "object" && !Array.isArray(value)
+  value !== null &&
+  typeof value === "object" &&
+  !Array.isArray(value) &&
+  !isAtomic(value)
 
 const orderKeys = (keys: string[]) => {
   const uniqueKeys = Array.from(new Set(keys))
@@ -23,6 +30,9 @@ const isEqual = (left: any, right: any): boolean => {
   if (left === right) return true
   if (left === null || right === null) return left === right
   if (left === undefined || right === undefined) return left === right
+  if (isAtomic(left) || isAtomic(right)) {
+    return formatScalar(left) === formatScalar(right)
+  }
   if (Array.isArray(left) && Array.isArray(right)) {
     if (left.length !== right.length) return false
     for (let i = 0; i < left.length; i += 1) {
@@ -55,6 +65,14 @@ const formatScalar = (value: any): string => {
     return String(value)
   if (typeof value === "bigint") return `${value}n`
   if (value instanceof Date) return JSON.stringify(value.toISOString())
+  if (value instanceof Uint8Array) {
+    return `Binary(${JSON.stringify(Buffer.from(value).toString("base64"))})`
+  }
+  if (value instanceof Set) {
+    // Sets have no order; sorting their entries keeps snapshots stable.
+    const entries = [...value].map(formatScalar).sort()
+    return `Set [${entries.join(", ")}]`
+  }
 
   return JSON.stringify(value)
 }
