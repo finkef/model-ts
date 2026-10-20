@@ -1,20 +1,23 @@
 {
   "compilerOptions": {
     "strict": true,
-    "incremental": true,
-    "lib": ["ES2019", "WebWorker"],
-    "target": "ES6",
-    "module": "commonjs",
+    "target": "ES2022",
+    "lib": ["ES2022"],
+    "types": ["node"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "moduleDetection": "force",
+    "verbatimModuleSyntax": true,
+    "rewriteRelativeImportExtensions": true,
+    "noImplicitOverride": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
     "declaration": true,
+    "declarationMap": true,
     "sourceMap": true,
     "composite": true,
-    "importHelpers": true,
-    "moduleResolution": "node",
-    "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
-    "useUnknownInCatchVariables": false,
-    "experimentalDecorators": true,
-    "emitDecoratorMetadata": true,
-    "downlevelIteration": true
+    "incremental": true,
+    "skipLibCheck": true
   }
 }

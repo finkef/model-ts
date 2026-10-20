@@ -1,45 +1,56 @@
 {
   "name": "@model-ts/dynamodb",
-  "version": "6.0.0",
-  "main": "dist/cjs/index.js",
-  "module": "dist/esm/index.js",
-  "author": "Fabian Finke <finkef@icloud.com>",
+  "version": "7.0.0",
+  "description": "Single-table DynamoDB for @model-ts/core models, built on Effect: typed errors, batching, transactions, tracing and an in-memory sandbox.",
   "license": "MIT",
-  "engines": {
-    "node": ">=20"
+  "author": "Fabian Finke <finkef@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/finkef/model-ts.git",
+    "directory": "packages/dynamodb"
   },
+  "keywords": [
+    "effect",
+    "dynamodb",
+    "single-table",
+    "model"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=22"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./sandbox": {
+      "types": "./dist/sandbox.d.ts",
+      "default": "./dist/sandbox.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "build": "tsc -b",
-    "build:esm": "tsc -b tsconfig.esm.json",
-    "test": "TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
-    "test:memory": "EXPERIMENTAL_DYNAMODB_IN_MEMORY=1 TZ=UTC LOCAL_ENDPOINT='http://localhost:8000' jest",
-    "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
-    "dynamodb:stop": "docker stop dynamodb"
+    "test": "vitest run --project dynamodb:memory --root ../..",
+    "test:local": "vitest run --project dynamodb:local --root ../.."
   },
-  "keywords": [],
   "peerDependencies": {
-    "@model-ts/core": "^0.4.2",
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0"
-  },
-  "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "@model-ts/core": "*",
-    "@types/jest": "^29.5.0",
-    "io-ts": "^2.2.4",
-    "jest": "^29.7.0",
-    "mockdate": "^3.0.5",
-    "prettier": "^2.2.1",
-    "ts-jest": "^29.2.5",
-    "tslib": "^2.3.0",
-    "typescript": "~4.5.5"
+    "@aws-sdk/util-dynamodb": "^3.0.0",
+    "@model-ts/core": "^7.0.0",
+    "effect": "^4.0.5"
   },
-  "dependencies": {
-    "dataloader": "^2.0.0",
-    "fp-ts": "~2.6.5",
-    "io-ts-reporters": "^1.2.2",
-    "retry-ts": "^0.1.2",
-    "snapshot-diff": "^0.8.1"
+  "devDependencies": {
+    "@model-ts/core": "*",
+    "effect": "4.0.5"
   }
 }

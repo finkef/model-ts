@@ -1,13 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist/cjs"
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
-  "exclude": [
-    "dist",
-    "__test__",
-    "test-utils"
-  ],
+  "include": ["src"],
   "references": []
 }

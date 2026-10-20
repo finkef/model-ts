@@ -43,7 +43,7 @@ class User extends model(
   "User",
   t.type({ id: t.string, firstName: t.string, lastName: t.string }),
   // Pass in the provider
-  provider
+  provider,
 ) {
   // Add a derived PK property
   get PK() {
@@ -81,7 +81,7 @@ const item = await MyModel.load({ PK: "MYMODEL#123", SK: "SOMESK#ABC" }) // MyMo
 // Returns `null` if the item doesn't exist.
 const item = await MyModel.load(
   { PK: "MYMODEL#234", SK: "SOMESK#NOTEXISTING" },
-  { null: true }
+  { null: true },
 ) // MyModel | null
 ```
 
@@ -131,7 +131,7 @@ const updated = await MyModel.updateRaw(
   {
     UpdateExpression: "SET bar = :newnum",
     ExpressionAttributeValues: { ":newnum": 123 },
-  }
+  },
 )
 ```
 

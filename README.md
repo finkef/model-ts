@@ -98,7 +98,7 @@ import { model, t } from "@model-ts/core"
 
 const codec = t.type({
   foo: t.string,
-  bar: t.DateFromISOString
+  bar: t.DateFromISOString,
 })
 
 class MyModel extends model("MyModel", codec) {
@@ -180,14 +180,14 @@ const myProvider = {
       // using an interface.
       // Check the description of the `Provider` type for reference.
       return this._namespace
-    }
+    },
   },
   instanceProps: {
     // Same as for classProps
   },
   unionProps: {
     // Same as for classProps
-  }
+  },
 }
 ```
 
@@ -214,7 +214,7 @@ interface KVProvider extends Provider {
     // C is a generic type for the model class itself and needs to extend `ModelConstructor` for us
     // to be able to derive the instance type via `InstanceType<C>`
     getAll<C extends ModelConstructor & { namespace: string }>(
-      this: C
+      this: C,
     ): Promise<InstanceType<C>>
   }
 }
@@ -224,13 +224,13 @@ const provider: KVProvider = {
     save() {
       const key = this.getKey()
       return store.save(key, this)
-    }
+    },
   },
   classProps: {
     getAll() {
       return store.list(this.namespace)
-    }
-  }
+    },
+  },
 }
 
 const codec = t.type({ foo: t.number })

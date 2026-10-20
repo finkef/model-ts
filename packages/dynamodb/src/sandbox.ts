@@ -1,383 +1,248 @@
-import crypto from "crypto"
-import { chunksOf } from "fp-ts/lib/Array"
-import DynamoDB, { DocumentClient } from "./aws-sdk-v3-compat"
-import { formatSnapshotDiff } from "./diff"
-import { Client } from "./client"
-import { GSI_NAMES } from "./gsi"
-import { createInMemoryDocumentClient } from "./in-memory"
+/**
+ * Test tables as layers. Each layer provides `DynamoDB` (so the code under
+ * test runs unchanged) and `Sandbox` (to seed and inspect the table), and
+ * every build of the layer gets a fresh, empty table.
+ *
+ * - `Sandbox.layerMemory()`: an in-process engine behind the real AWS SDK.
+ *   No DynamoDB process, no network, fast enough for every unit test.
+ * - `Sandbox.layerLocal()`: a new table on DynamoDB Local, deleted when the
+ *   layer's scope closes.
+ *
+ * Both print the same diff, so snapshot tests pass against either.
+ *
+ * ```ts
+ * it.effect("renames a post", () =>
+ *   Effect.gen(function* () {
+ *     const sandbox = yield* Sandbox
+ *     yield* sandbox.seed(post)
+ *     const before = yield* sandbox.snapshot
+ *     yield* post.update({ title: "Renamed" })
+ *     expect(yield* sandbox.diff(before)).toMatchInlineSnapshot()
+ *   }).pipe(Effect.provide(Sandbox.layerMemory())),
+ * )
+ * ```
+ *
+ * @since 7.0.0
+ */
+import { randomBytes } from "node:crypto"
+import {
+  DeleteTableCommand,
+  DynamoDBClient,
+  type DynamoDBClientConfig,
+} from "@aws-sdk/client-dynamodb"
+import {
+  BatchWriteCommand,
+  DynamoDBDocumentClient,
+  ScanCommand,
+} from "@aws-sdk/lib-dynamodb"
+import { Context, Effect, Layer } from "effect"
+import { DynamoDB, type DynamoDBOptions } from "./DynamoDB.ts"
+import type { ItemEncodeError } from "./Errors.ts"
+import { encodeItem, type RawItem } from "./Item.ts"
+import type { Key } from "./Keys.ts"
+import { formatSnapshotDiff } from "./internal/diff.ts"
+import {
+  makeMemoryEngine,
+  type MemoryEngine,
+} from "./internal/memory/engine.ts"
+import { memoryClientConfig } from "./internal/memory/handler.ts"
+import { createTableCommand } from "./internal/table.ts"
 
-const ddb = new DynamoDB({
-  accessKeyId: "xxx",
-  secretAccessKey: "xxx",
-  endpoint: process.env.LOCAL_ENDPOINT,
-  region: "local",
-})
+/**
+ * Every item of a table, keyed by `"PK__SK"`.
+ *
+ * @since 7.0.0
+ */
+export type TableSnapshot = Record<string, RawItem>
 
-const docClient = new DocumentClient({
-  accessKeyId: "xxx",
-  secretAccessKey: "xxx",
-  endpoint: process.env.LOCAL_ENDPOINT,
-  region: "local",
-})
-
-export const createTable = async () => {
-  const tableName = crypto.randomBytes(20).toString("hex")
-
-  await ddb
-    .createTable({
-      TableName: tableName,
-      AttributeDefinitions: [
-        { AttributeName: "PK", AttributeType: "S" as const },
-        { AttributeName: "SK", AttributeType: "S" as const },
-        ...GSI_NAMES.flatMap((GSI) => [
-          { AttributeName: `${GSI}PK`, AttributeType: "S" as const },
-          { AttributeName: `${GSI}SK`, AttributeType: "S" as const },
-        ]),
-      ],
-      KeySchema: [
-        { AttributeName: "PK", KeyType: "HASH" as const },
-        { AttributeName: "SK", KeyType: "RANGE" as const },
-      ],
-      GlobalSecondaryIndexes: [
-        {
-          IndexName: "GSI1",
-          KeySchema: [
-            { AttributeName: "SK", KeyType: "HASH" as const },
-            { AttributeName: "PK", KeyType: "RANGE" as const },
-          ],
-          Projection: {
-            ProjectionType: "ALL" as const,
-          },
-        },
-        ...GSI_NAMES.map((GSI) => ({
-          IndexName: GSI,
-          KeySchema: [
-            { AttributeName: `${GSI}PK`, KeyType: "HASH" as const },
-            { AttributeName: `${GSI}SK`, KeyType: "RANGE" as const },
-          ],
-          Projection: {
-            ProjectionType: "ALL" as const,
-          },
-        })),
-      ],
-      BillingMode: "PAY_PER_REQUEST" as const,
-    })
-    .promise()
-    .catch((e: any) => {
-      throw e
-    })
-
-  return tableName
+/**
+ * @since 7.0.0
+ */
+export interface SandboxService {
+  readonly tableName: string
+  /**
+   * Writes model instances (encoded with keys and `_docVersion`) or raw items
+   * straight into the table, without spans or conditions.
+   */
+  readonly seed: (
+    ...items: ReadonlyArray<Key | RawItem>
+  ) => Effect.Effect<void, ItemEncodeError>
+  /** The current contents of the table. */
+  readonly snapshot: Effect.Effect<TableSnapshot>
+  /**
+   * What changed since `before`: one `+`, `-` or `~` block per item, with the
+   * attributes that changed.
+   */
+  readonly diff: (before: TableSnapshot) => Effect.Effect<string>
+  /** The stored item at `key`. */
+  readonly get: (key: Key) => Effect.Effect<RawItem | undefined>
 }
 
-export const destroyTable = async (tableName: string) => {
-  return ddb
-    .deleteTable({ TableName: tableName })
-    .promise()
-    .then(() => {})
-    .catch((e) => {
-      throw e
-    })
+/**
+ * Options for the table's `DynamoDB` service.
+ *
+ * @since 7.0.0
+ */
+export type SandboxOptions = Omit<DynamoDBOptions, "tableName" | "client">
+
+/**
+ * @since 7.0.0
+ */
+export interface LocalSandboxOptions extends SandboxOptions {
+  /** Defaults to `http://localhost:8000`. */
+  readonly endpoint?: string | undefined
+  /** Extra client options, e.g. a different region or credentials. */
+  readonly client?: DynamoDBClientConfig | undefined
 }
 
-export const getTableContents = async (
-  tableName: string
-): Promise<{ [key: string]: any }> => {
-  const scan = async (ExclusiveStartKey?: any): Promise<any[]> => {
-    const { Items = [], LastEvaluatedKey } = await docClient
-      .scan({
-        TableName: tableName,
-        ExclusiveStartKey,
-      })
-      .promise()
-
-    if (LastEvaluatedKey) return [...Items, ...(await scan(LastEvaluatedKey))]
-    return Items
-  }
-
-  const items = await scan()
-
-  const acc: { [key: string]: any } = {}
-
-  items.forEach((item) => (acc[`${item.PK}__${item.SK}`] = item))
-
-  return acc
-}
-
-// -------------------------------------------------------------------------------------
-// Tracking
-// -------------------------------------------------------------------------------------
-
-interface TrackedEntry {
-  pk: string
-  sk: string
-  original: any | null
-}
-
-const WRITE_METHODS = new Set([
-  "put",
-  "update",
-  "delete",
-  "batchWrite",
-  "transactWrite",
-])
-
-function createTrackedDocClient(
-  original: DocumentClient,
-  tableName: string
+/**
+ * @since 7.0.0
+ */
+export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
+  "@model-ts/dynamodb/Sandbox",
 ) {
-  let isTracking = false
-  const trackedKeys = new Map<string, TrackedEntry>()
-
-  const captureKey = async (pk: string, sk: string) => {
-    const compositeKey = `${pk}__${sk}`
-    if (trackedKeys.has(compositeKey)) return
-
-    const { Item } = await original
-      .get({ TableName: tableName, Key: { PK: pk, SK: sk } })
-      .promise()
-
-    trackedKeys.set(compositeKey, { pk, sk, original: Item ?? null })
-  }
-
-  const captureKeysForOperation = async (method: string, params: any) => {
-    switch (method) {
-      case "put":
-        if (params.TableName === tableName && params.Item) {
-          await captureKey(params.Item.PK, params.Item.SK)
-        }
-        break
-      case "update":
-      case "delete":
-        if (params.TableName === tableName && params.Key) {
-          await captureKey(params.Key.PK, params.Key.SK)
-        }
-        break
-      case "batchWrite": {
-        const tableItems = params.RequestItems?.[tableName] || []
-        await Promise.all(
-          tableItems.map((item: any) => {
-            if (item.PutRequest) {
-              return captureKey(
-                item.PutRequest.Item.PK,
-                item.PutRequest.Item.SK
-              )
-            }
-            if (item.DeleteRequest) {
-              return captureKey(
-                item.DeleteRequest.Key.PK,
-                item.DeleteRequest.Key.SK
-              )
-            }
-          })
+  /** A fresh in-memory table on every build. */
+  static readonly layerMemory = (
+    options: SandboxOptions = {},
+  ): Layer.Layer<Sandbox | DynamoDB> =>
+    Layer.unwrap(
+      Effect.sync(() => {
+        const engine = makeMemoryEngine()
+        const client = memoryClientConfig(engine)
+        const tableName = newTableName()
+        return Layer.merge(
+          Layer.succeed(
+            Sandbox,
+            make(tableName, {
+              write: (items) => writeItems(engine, tableName, items),
+              read: async () => structuredClone(engine.snapshot(tableName)),
+            }),
+          ),
+          DynamoDB.layer({ ...options, tableName, client }),
         )
-        break
-      }
-      case "transactWrite": {
-        const transactItems = params.TransactItems || []
-        await Promise.all(
-          transactItems
-            .map((item: any) => {
-              if (item.Put?.TableName === tableName) {
-                return captureKey(item.Put.Item.PK, item.Put.Item.SK)
-              }
-              if (item.Update?.TableName === tableName) {
-                return captureKey(item.Update.Key.PK, item.Update.Key.SK)
-              }
-              if (item.Delete?.TableName === tableName) {
-                return captureKey(item.Delete.Key.PK, item.Delete.Key.SK)
-              }
-            })
-            .filter(Boolean)
-        )
-        break
-      }
-    }
-  }
+      }),
+    )
 
-  const proxy = new Proxy(original, {
-    get(target, prop) {
-      const value = (target as any)[prop]
-      if (value === undefined) return undefined
-
-      if (typeof value === "function") {
-        if (isTracking && WRITE_METHODS.has(prop as string)) {
-          return (params: any) => {
-            const request = value.call(target, params)
-            const origPromise = request.promise.bind(request)
-            request.promise = async () => {
-              await captureKeysForOperation(prop as string, params)
-              return origPromise()
-            }
-            return request
-          }
+  /**
+   * A fresh table on DynamoDB Local on every build, deleted when the scope
+   * closes. Start DynamoDB Local with
+   * `docker run -p 8000:8000 amazon/dynamodb-local`.
+   */
+  static readonly layerLocal = (
+    options: LocalSandboxOptions = {},
+  ): Layer.Layer<Sandbox | DynamoDB> =>
+    Layer.unwrap(
+      Effect.gen(function* () {
+        const {
+          endpoint = "http://localhost:8000",
+          client: config,
+          ...rest
+        } = options
+        const client: DynamoDBClientConfig = {
+          endpoint,
+          region: "local",
+          credentials: { accessKeyId: "local", secretAccessKey: "local" },
+          ...config,
         }
-        return value.bind(target)
-      }
+        const documents = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            DynamoDBDocumentClient.from(new DynamoDBClient(client), {
+              marshallOptions: { removeUndefinedValues: true },
+            }),
+          ),
+          (documents) => Effect.sync(() => documents.destroy()),
+        )
+        const tableName = newTableName()
+        yield* Effect.acquireRelease(
+          Effect.promise(() => documents.send(createTableCommand(tableName))),
+          () =>
+            Effect.promise(() =>
+              documents.send(new DeleteTableCommand({ TableName: tableName })),
+            ),
+        )
+        return Layer.merge(
+          Layer.succeed(
+            Sandbox,
+            make(tableName, {
+              write: (items) => batchWrite(documents, tableName, items),
+              read: () => scan(documents, tableName),
+            }),
+          ),
+          DynamoDB.layer({ ...rest, tableName, client }),
+        )
+      }),
+    )
+}
 
-      return value
-    },
+interface Backend {
+  readonly write: (items: ReadonlyArray<RawItem>) => Promise<void>
+  readonly read: () => Promise<TableSnapshot>
+}
+
+const make = (tableName: string, backend: Backend) => {
+  const snapshot = Effect.promise(backend.read)
+  return Sandbox.of({
+    tableName,
+    seed: (...items) =>
+      Effect.forEach(items, (item) =>
+        isModelInstance(item)
+          ? encodeItem(item)
+          : Effect.succeed(item as RawItem),
+      ).pipe(
+        Effect.flatMap((encoded) =>
+          Effect.promise(() => backend.write(encoded)),
+        ),
+      ),
+    snapshot,
+    diff: (before) =>
+      Effect.map(snapshot, (after) => formatSnapshotDiff(before, after)),
+    get: (key) =>
+      Effect.map(snapshot, (table) => table[`${key.PK}__${key.SK}`]),
   })
+}
 
-  return {
-    proxy: proxy as DocumentClient,
-    startTracking: () => {
-      isTracking = true
-      trackedKeys.clear()
-    },
-    rollback: async () => {
-      isTracking = false
+const newTableName = () => `sandbox-${randomBytes(8).toString("hex")}`
 
-      const entries = Array.from(trackedKeys.values())
-      const toDelete = entries.filter((e) => e.original === null)
-      const toRestore = entries.filter((e) => e.original !== null)
+const isModelInstance = (item: object): item is Key =>
+  typeof (item.constructor as { identifier?: unknown }).identifier === "string"
 
-      const deleteChunks = chunksOf(25)(toDelete)
-      const restoreChunks = chunksOf(25)(toRestore)
+const writeItems = async (
+  engine: MemoryEngine,
+  TableName: string,
+  items: ReadonlyArray<RawItem>,
+) => {
+  for (const Item of items) await engine.put({ TableName, Item })
+}
 
-      await Promise.all([
-        ...deleteChunks.map((chunk) =>
-          original
-            .batchWrite({
-              RequestItems: {
-                [tableName]: chunk.map(({ pk, sk }) => ({
-                  DeleteRequest: { Key: { PK: pk, SK: sk } },
-                })),
-              },
-            })
-            .promise()
-        ),
-        ...restoreChunks.map((chunk) =>
-          original
-            .batchWrite({
-              RequestItems: {
-                [tableName]: chunk.map(({ original: item }) => ({
-                  PutRequest: { Item: item },
-                })),
-              },
-            })
-            .promise()
-        ),
-      ])
-
-      trackedKeys.clear()
-    },
+const batchWrite = async (
+  documents: DynamoDBDocumentClient,
+  tableName: string,
+  items: ReadonlyArray<RawItem>,
+) => {
+  for (let i = 0; i < items.length; i += 25) {
+    await documents.send(
+      new BatchWriteCommand({
+        RequestItems: {
+          [tableName]: items
+            .slice(i, i + 25)
+            .map((Item) => ({ PutRequest: { Item } })),
+        },
+      }),
+    )
   }
 }
 
-// -------------------------------------------------------------------------------------
-// Sandbox
-// -------------------------------------------------------------------------------------
-
-export interface Sandbox {
-  destroy: () => Promise<void>
-  snapshot: () => Promise<{ [key: string]: any }>
-  seed: (...args: Array<{ [key: string]: any }>) => Promise<void>
-  get: (pk: string, sk: string) => Promise<null | any>
-  diff: (before: { [key: string]: any }) => Promise<string>
-  startTracking: () => void
-  rollback: () => Promise<void>
-}
-
-export const createSandbox = async (client: Client): Promise<Sandbox> => {
-  if (process.env.EXPERIMENTAL_DYNAMODB_IN_MEMORY === "1") {
-    const tableName = crypto.randomBytes(20).toString("hex")
-    const inMemoryClient =
-      createInMemoryDocumentClient() as any as DocumentClient & {
-        __inMemorySnapshot: (name: string) => { [key: string]: any }
-        __inMemoryResetTable: (name: string) => void
-      }
-
-    const tracked = createTrackedDocClient(inMemoryClient, tableName)
-
-    client.setDocumentClient(tracked.proxy)
-    client.setTableName(tableName)
-
-    return {
-      destroy: async () => {
-        inMemoryClient.__inMemoryResetTable(tableName)
-      },
-      snapshot: async () => inMemoryClient.__inMemorySnapshot(tableName),
-      seed: async (...args: Array<{ [key: string]: any }>) => {
-        const chunks = chunksOf(25)(args)
-
-        await Promise.all(
-          chunks.map(async (chunk) => {
-            const items = chunk.map((i) =>
-              typeof i?._model?.__dynamoDBEncode === "function"
-                ? i._model.__dynamoDBEncode(i)
-                : typeof i.encode === "function"
-                ? i.encode()
-                : i
-            )
-
-            return client.documentClient
-              .batchWrite({
-                RequestItems: {
-                  [tableName]: items.map((i) => ({ PutRequest: { Item: i } })),
-                },
-              })
-              .promise()
-          })
-        )
-      },
-      get: (pk: string, sk: string) =>
-        client.documentClient
-          .get({ TableName: tableName, Key: { PK: pk, SK: sk } })
-          .promise()
-          .then(({ Item }) => Item ?? null),
-      diff: async (before) => {
-        const snapshot = inMemoryClient.__inMemorySnapshot(tableName)
-        return formatSnapshotDiff(before, snapshot)
-      },
-      startTracking: tracked.startTracking,
-      rollback: tracked.rollback,
+const scan = async (documents: DynamoDBDocumentClient, tableName: string) => {
+  const table: TableSnapshot = {}
+  let ExclusiveStartKey: Record<string, unknown> | undefined
+  do {
+    const page = await documents.send(
+      new ScanCommand({ TableName: tableName, ExclusiveStartKey }),
+    )
+    for (const item of (page.Items ?? []) as Array<RawItem>) {
+      table[`${item.PK}__${item.SK}`] = item
     }
-  }
-
-  const tableName = await createTable()
-
-  const tracked = createTrackedDocClient(docClient, tableName)
-  client.setDocumentClient(tracked.proxy)
-  client.setTableName(tableName)
-
-  return {
-    destroy: () => destroyTable(tableName),
-    snapshot: () => getTableContents(tableName),
-    seed: async (...args: Array<{ [key: string]: any }>) => {
-      const chunks = chunksOf(25)(args)
-
-      await Promise.all(
-        chunks.map(async (chunk) => {
-          const items = chunk.map((i) =>
-            typeof i?._model?.__dynamoDBEncode === "function"
-              ? i._model.__dynamoDBEncode(i)
-              : typeof i.encode === "function"
-              ? i.encode()
-              : i
-          )
-
-          return client.documentClient
-            .batchWrite({
-              RequestItems: {
-                [tableName]: items.map((i) => ({ PutRequest: { Item: i } })),
-              },
-            })
-            .promise()
-        })
-      )
-    },
-    get: (pk: string, sk: string) =>
-      client.documentClient
-        .get({ TableName: tableName, Key: { PK: pk, SK: sk } })
-        .promise()
-        .then(({ Item }) => Item ?? null),
-    diff: async (before) => {
-      const snapshot = await getTableContents(tableName)
-
-      return formatSnapshotDiff(before, snapshot)
-    },
-    startTracking: tracked.startTracking,
-    rollback: tracked.rollback,
-  }
+    ExclusiveStartKey = page.LastEvaluatedKey
+  } while (ExclusiveStartKey)
+  return table
 }

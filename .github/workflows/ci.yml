@@ -1,65 +1,28 @@
 name: CI
 on: [pull_request]
 jobs:
-  build:
-    name: "build"
+  check:
+    name: "build, typecheck, format"
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set Node.js 20.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: yarn
+      - uses: oven-sh/setup-bun@v2
 
-      - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
       - name: Build
-        run: yarn build
+        run: bun run build
 
-  test_core:
-    name: "test:core"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
+      - name: Typecheck (sources and tests)
+        run: bun run typecheck
 
-      - name: Set Node.js 20.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: yarn
+      - name: Format
+        run: bun run format:check
 
-      - name: Install Dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Test
-        run: yarn workspace @model-ts/core test
-
-  test_eventbridge:
-    name: "test:eventbridge"
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Set Node.js 20.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: yarn
-
-      - name: Install Dependencies
-        run: yarn install --frozen-lockfile
-
-      - name: Build Core
-        run: yarn workspace @model-ts/core build
-
-      - name: Test
-        run: yarn workspace @model-ts/eventbridge test
-
-  test_dynamodb:
-    name: "test:dynamodb"
+  test:
+    name: "test"
     runs-on: ubuntu-latest
     services:
       dynamodb:
@@ -69,20 +32,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set Node.js 20.x
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20.x
-          cache: yarn
+      - uses: oven-sh/setup-bun@v2
 
-      - name: Install Dependencies
-        run: yarn install --frozen-lockfile
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
 
-      - name: Build Core
-        run: yarn workspace @model-ts/core build
+      - name: Test (in-memory engine)
+        run: bun run test
 
-      - name: Test
-        run: yarn workspace @model-ts/dynamodb test
-
-      - name: Test (memory)
-        run: yarn workspace @model-ts/dynamodb test:memory
+      - name: Test (DynamoDB Local)
+        run: bun run test:local
