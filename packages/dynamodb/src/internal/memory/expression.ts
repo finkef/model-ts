@@ -293,11 +293,32 @@ const isMap = (value: unknown): value is Record<string, unknown> =>
   !isBytes(value) &&
   !(value instanceof Set)
 
-/** Numbers by value, binary byte by byte, everything else as strings. */
-export const compareValues = (left: any, right: any): number => {
+/** DynamoDB numbers: the SDK reads large ones as `bigint`. */
+const isNumber = (value: unknown): value is number | bigint =>
+  typeof value === "number" || typeof value === "bigint"
+
+/** Compares two numbers exactly, whether each is a `number` or a `bigint`. */
+const compareNumbers = (left: number | bigint, right: number | bigint) => {
   if (typeof left === "number" && typeof right === "number") {
     return left - right
   }
+  // A fractional number is within the safe integer range, so converting the
+  // bigint to a number keeps the order; integers compare exactly as bigints.
+  const exact = (value: number | bigint) =>
+    typeof value === "number" && !Number.isInteger(value)
+      ? value
+      : BigInt(value)
+  const [a, b] = [exact(left), exact(right)]
+  const [x, y] =
+    typeof a === "bigint" && typeof b === "bigint"
+      ? [a, b]
+      : [Number(a), Number(b)]
+  return x < y ? -1 : x > y ? 1 : 0
+}
+
+/** Numbers by value, binary byte by byte, everything else as strings. */
+export const compareValues = (left: any, right: any): number => {
+  if (isNumber(left) && isNumber(right)) return compareNumbers(left, right)
   if (isBytes(left) && isBytes(right)) return Buffer.compare(left, right)
 
   const leftString = String(left)
@@ -310,12 +331,15 @@ export const compareValues = (left: any, right: any): number => {
 
 /** `<`, `<=`, `>` and `>=` hold only between two numbers, strings or binaries. */
 const isOrderable = (left: unknown, right: unknown) =>
-  (typeof left === "number" && typeof right === "number") ||
+  (isNumber(left) && isNumber(right)) ||
   (typeof left === "string" && typeof right === "string") ||
   (isBytes(left) && isBytes(right))
 
 /** DynamoDB equality: the same type and the same contents. */
 export const valuesEqual = (left: unknown, right: unknown): boolean => {
+  if (isNumber(left) && isNumber(right)) {
+    return compareNumbers(left, right) === 0
+  }
   if (isBytes(left) || isBytes(right)) {
     return isBytes(left) && isBytes(right) && Buffer.compare(left, right) === 0
   }
@@ -722,6 +746,8 @@ function splitTopLevelByKeyword(
   let current = ""
   let depth = 0
   const marker = ` ${keyword} `
+  // `x BETWEEN a AND b` owns the next top-level AND.
+  let inBetween = false
 
   for (let i = 0; i < expression.length; i += 1) {
     const char = expression[i]
@@ -729,14 +755,18 @@ function splitTopLevelByKeyword(
     if (char === "(") depth += 1
     if (char === ")") depth = Math.max(0, depth - 1)
 
-    if (
-      depth === 0 &&
-      expression.slice(i, i + marker.length).toLowerCase() === marker
-    ) {
+    const atTopLevel = (word: string) =>
+      depth === 0 && expression.slice(i, i + word.length).toLowerCase() === word
+
+    if (keyword === "and" && atTopLevel(" between ")) inBetween = true
+    if (atTopLevel(marker) && !(keyword === "and" && inBetween)) {
       clauses.push(current.trim())
       current = ""
       i += marker.length - 1
       continue
+    }
+    if (keyword === "and" && inBetween && atTopLevel(marker)) {
+      inBetween = false
     }
 
     current += char

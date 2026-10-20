@@ -401,6 +401,7 @@ describe("attribute types", () => {
           Item: {
             ...Key,
             n: 1,
+            big: 9007199254740993n,
             bytes: new Uint8Array([2]),
             byteSet: new Set([new Uint8Array([4]), new Uint8Array([5])]),
             tags: new Set(["a"]),
@@ -445,6 +446,18 @@ describe("attribute types", () => {
         bytesIsMap: yield* holds("attribute_type(bytes, :v)", { ":v": "M" }),
         nestedIsMap: yield* holds("attribute_type(nested, :v)", { ":v": "M" }),
         numberEqualsString: yield* holds("n = :v", { ":v": "1" }),
+        bigAbove: yield* holds("big > :v", { ":v": 9007199254740992n }),
+        bigBetween: yield* holds("big BETWEEN :a AND :b", {
+          ":a": 9007199254740992n,
+          ":b": 9007199254740994n,
+        }),
+        bigEqual: yield* holds("big = :v", { ":v": 9007199254740993n }),
+        betweenAndMore: yield* holds("big BETWEEN :a AND :b AND n = :n", {
+          ":a": 9007199254740992n,
+          ":b": 9007199254740994n,
+          ":n": 2,
+        }),
+        bigNotEqual: yield* holds("big = :v", { ":v": 9007199254740992n }),
       }).toEqual({
         sameSet: true,
         otherSet: false,
@@ -454,6 +467,11 @@ describe("attribute types", () => {
         bytesIsMap: false,
         nestedIsMap: true,
         numberEqualsString: false,
+        bigAbove: true,
+        bigBetween: true,
+        bigEqual: true,
+        betweenAndMore: false,
+        bigNotEqual: false,
       })
     }),
   )
