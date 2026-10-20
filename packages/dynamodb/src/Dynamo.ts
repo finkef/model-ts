@@ -19,7 +19,7 @@ import {
   type TransactWriteCommandInput,
   UpdateCommand,
 } from "@aws-sdk/lib-dynamodb"
-import { Clock, Effect, Option, Schedule, Stream } from "effect"
+import { Cause, Clock, Effect, Option, Schedule, Stream } from "effect"
 import { DynamoDB } from "./DynamoDB.ts"
 import {
   BulkWriteRollbackError,
@@ -422,14 +422,23 @@ export const paginate: <A extends Key>(
     ? yield* decodeCursor(page.cursor, index, db.cursorEncryptionKey)
     : undefined
 
-  // One extra item tells whether there is another page.
-  const items = yield* queryItems(model, {
-    ...params,
-    Limit: page.limit + 1,
-    ExclusiveStartKey: exclusiveStartKey,
-    ScanIndexForward: page.direction === "forward",
-  })
-  const hasMore = items.length === page.limit + 1
+  // One extra item tells whether there is another page. A filter or items of
+  // other models can leave a Query short, so keep reading until the page is
+  // full or the query is exhausted.
+  const wanted = page.limit + 1
+  const items: Array<A> = []
+  let startKey: Record<string, unknown> | undefined = exclusiveStartKey
+  do {
+    const batch = yield* queryItems(model, {
+      ...params,
+      Limit: wanted - items.length,
+      ExclusiveStartKey: startKey,
+      ScanIndexForward: page.direction === "forward",
+    })
+    items.push(...batch)
+    startKey = batch.meta.lastEvaluatedKey
+  } while (items.length < wanted && startKey !== undefined)
+  const hasMore = items.length === wanted
   const slice = items.slice(0, page.limit)
   if (page.direction === "backward") slice.reverse()
   const edges = slice.map((node) => ({
@@ -684,8 +693,11 @@ const MAX_TRANSACTION_ITEMS = 100
 /**
  * Runs operations in transactions of up to 100 items. A nested array stays
  * in one transaction. When a transaction fails, the ones already committed
- * are rolled back (first to last) and the original error is returned; if a
+ * are rolled back (last to first) and the original error is returned; if a
  * rollback fails too, the error is `BulkWriteRollbackError`.
+ *
+ * A defect rolls back the same way. Interruption waits until the bulk write
+ * has finished or been rolled back, so it never leaves the table half written.
  *
  * A group of more than 100 operations is a defect: it can never succeed.
  *
@@ -700,17 +712,23 @@ export const bulk: (
       "model_ts.operations": batches.reduce((n, batch) => n + batch.length, 0),
       "model_ts.transactions": batches.length,
     })
-    for (const [index, batch] of batches.entries()) {
-      yield* writeBatch(batch, "action").pipe(
-        Effect.catch((error) =>
-          rollback(batches.slice(0, index), error).pipe(
-            Effect.andThen(Effect.fail(error)),
-          ),
-        ),
-      )
-    }
+    yield* Effect.uninterruptible(writeAll(batches))
   },
 )
+
+const writeAll = Effect.fnUntraced(function* (
+  batches: ReadonlyArray<ReadonlyArray<Operation.BulkOperation>>,
+) {
+  for (const [index, batch] of batches.entries()) {
+    yield* writeBatch(batch, "action").pipe(
+      Effect.catchCause((cause) =>
+        rollback(batches.slice(0, index), Cause.squash(cause)).pipe(
+          Effect.andThen(Effect.failCause(cause)),
+        ),
+      ),
+    )
+  }
+})
 
 const toBatches = (operations: Operation.BulkInput) =>
   Effect.suspend(() => {
@@ -735,16 +753,20 @@ const toBatches = (operations: Operation.BulkInput) =>
     return Effect.succeed(batches)
   })
 
+/**
+ * Undoes committed batches, last to first, so that a later batch that built
+ * on an earlier one is undone before it.
+ */
 const rollback = Effect.fnUntraced(function* (
   committed: ReadonlyArray<ReadonlyArray<Operation.BulkOperation>>,
   cause: unknown,
 ) {
-  for (const [index, batch] of committed.entries()) {
-    yield* writeBatch(batch, "rollback").pipe(
+  for (let index = committed.length - 1; index >= 0; index--) {
+    yield* writeBatch(committed[index]!, "rollback").pipe(
       Effect.mapError(
         (rollbackCause) =>
           new BulkWriteRollbackError({
-            requiresRollback: committed.slice(index).flat(),
+            requiresRollback: committed.slice(0, index + 1).flat(),
             cause,
             rollbackCause,
           }),
@@ -773,7 +795,9 @@ const writeBatch = (
 /**
  * TransactWriteItems. Server faults and network errors are retried up to
  * three times, 50ms apart; a cancelled transaction or a client error
- * (validation, permissions) fails right away.
+ * (validation, permissions) fails right away. Every attempt sends the same
+ * `ClientRequestToken`, so a retry of a transaction that committed without
+ * a response is not applied twice.
  *
  * @since 7.0.0
  */
@@ -784,10 +808,14 @@ export const transactWrite: (
     items: ReadonlyArray<TransactItem>,
   ) {
     const db = yield* DynamoDB
+    const ClientRequestToken = crypto.randomUUID()
     yield* db
       .send(
         "TransactWriteItems",
-        new TransactWriteCommand({ TransactItems: [...items] }),
+        new TransactWriteCommand({
+          TransactItems: [...items],
+          ClientRequestToken,
+        }),
         { "aws.dynamodb.transact_items_count": items.length },
       )
       .pipe(

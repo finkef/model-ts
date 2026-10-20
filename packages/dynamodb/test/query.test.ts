@@ -11,7 +11,7 @@ import {
   Post,
   PostContent,
 } from "./fixtures.ts"
-import { it, testEffect, testTable } from "./utils.ts"
+import { it, recordSpans, testEffect, testTable } from "./utils.ts"
 
 describe("query", () => {
   it.effect("returns the model's items with the query meta", () =>
@@ -171,6 +171,32 @@ describe("paginate", () => {
       yield* seedPosts
       const page = yield* Post.paginate({ first: 1 }, byAuthor("ada"))
       expect(page.edges[0]!.cursor).toBe(yield* page.edges[0]!.node.cursor())
+    }),
+  )
+
+  it.effect("keeps reading when a filter leaves a Query short", () =>
+    Effect.gen(function* () {
+      yield* seedPosts
+      const { spans, value: page } = yield* recordSpans(
+        Post.paginate(
+          { first: 1 },
+          {
+            ...byAuthor("ada"),
+            FilterExpression: "title >= :title",
+            ExpressionAttributeValues: {
+              ":pk": "AUTHOR#ada",
+              ":title": "Post 4",
+            },
+          },
+        ),
+      )
+
+      expect(page.edges.map((edge) => edge.node.id)).toEqual(["post_004"])
+      expect(page.pageInfo.hasNextPage).toBe(true)
+      // Limit 2 reads posts 1-2, 3-4, then 5: three Queries.
+      expect(
+        spans.filter((span) => span.name === "DynamoDB.Query"),
+      ).toHaveLength(3)
     }),
   )
 

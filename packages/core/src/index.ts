@@ -9,6 +9,7 @@ export {
   model,
   type Model,
   type ModelFactory,
+  type ModelFields,
   type ModelMethods,
   type ModelStatics,
   type ModelStruct,

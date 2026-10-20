@@ -15,7 +15,25 @@ export const encodeIndexEntryKey = (
   itemKey: string,
 ): string => `${rangeKey}${ITEM_KEY_SEPARATOR}${itemKey}`
 
-export const cloneItem = <T>(item: T): T => JSON.parse(JSON.stringify(item))
+/**
+ * A deep copy of an item. Binary values and sets are copied; attributes set
+ * to `undefined` are left out, as DynamoDB leaves them out.
+ */
+export const cloneItem = <T>(item: T): T => cloneValue(item) as T
+
+const cloneValue = (value: unknown): unknown => {
+  if (value instanceof Uint8Array) return new Uint8Array(value)
+  if (value instanceof Set) return new Set([...value].map(cloneValue))
+  if (Array.isArray(value)) return value.map(cloneValue)
+  if (value !== null && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value)
+        .filter(([, entry]) => entry !== undefined)
+        .map(([key, entry]) => [key, cloneValue(entry)]),
+    )
+  }
+  return value
+}
 
 export const stablePriority = (
   indexName: string,

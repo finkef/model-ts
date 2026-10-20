@@ -1,6 +1,6 @@
 import { describe, expect } from "@effect/vitest"
 import { Effect, Exit, Option } from "effect"
-import { docVersion, ItemDecodeError } from "../src/index.ts"
+import { docVersion, DynamoDB, ItemDecodeError } from "../src/index.ts"
 import { Sandbox } from "../src/sandbox.ts"
 import { makePost, Post, PostId } from "./fixtures.ts"
 import { it, recordSpans } from "./utils.ts"
@@ -75,6 +75,33 @@ describe("load", () => {
       const calls = spans.filter((span) => span.name.startsWith("DynamoDB."))
       expect(calls.map((span) => span.name)).toEqual(["DynamoDB.BatchGetItem"])
       expect(calls[0]!.attributes.get("aws.dynamodb.keys_count")).toBe(3)
+
+      // The batch span links to every load it served.
+      const batch = spans.find((span) => span.name === "Dynamo.batchGet")!
+      const loads = spans.filter((span) => span.name === "Dynamo.load")
+      expect(batch.links.map((link) => link.span.spanId).sort()).toEqual(
+        loads.map((span) => span.spanId).sort(),
+      )
+      expect(Option.getOrUndefined(calls[0]!.parent)?.spanId).toBe(batch.spanId)
+    }),
+  )
+
+  it.effect("keeps keys apart whatever characters they contain", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(
+        { PK: "a::b", SK: "c", value: 1 },
+        { PK: "a", SK: "b::c", value: 2 },
+      )
+
+      const items = yield* Effect.all(
+        [
+          DynamoDB.use((db) => db.getBatched({ PK: "a::b", SK: "c" })),
+          DynamoDB.use((db) => db.getBatched({ PK: "a", SK: "b::c" })),
+        ],
+        { concurrency: "unbounded" },
+      )
+      expect(items.map((item) => item?.value)).toEqual([1, 2])
     }),
   )
 

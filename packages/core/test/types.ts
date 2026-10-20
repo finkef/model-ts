@@ -2,8 +2,9 @@
  * Type-level tests, checked by `bun run typecheck`. Every `@ts-expect-error`
  * must stay an error, or the build fails.
  */
-import { Effect, Schema } from "effect"
+import { Context, Effect, Schema } from "effect"
 import {
+  Field,
   makeProvider,
   model,
   type ProviderMembers,
@@ -89,4 +90,29 @@ new Unnamed({ id: 1 }).hello()
 makeProvider<NeedsName>()({
   // @ts-expect-error hello returns a number, declared string
   instanceProps: { hello: () => 1 },
+})
+
+// An implementation cannot leave out a group with required members.
+// @ts-expect-error instanceProps is missing
+makeProvider<NeedsName>()({})
+
+// Field defaults are decoded values, also for transformed fields.
+export const createdAt = Schema.DateFromString.pipe(
+  Field.withDefault(() => new Date()),
+)
+// @ts-expect-error the default is the decoded Date, not its encoded string
+Schema.DateFromString.pipe(Field.withDefault(() => "2026-01-01"))
+
+// Fields that need Effect services cannot be model fields: construction,
+// from() and encode() run synchronously.
+class Locale extends Context.Service<Locale, string>()("test/Locale") {}
+model()("Localized", {
+  // @ts-expect-error decoding this field requires the Locale service
+  locale: Schema.String.pipe(
+    Schema.withDecodingDefaultKey(
+      Effect.gen(function* () {
+        return yield* Locale
+      }),
+    ),
+  ),
 })

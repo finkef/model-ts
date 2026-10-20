@@ -52,14 +52,19 @@ export interface DeferrerService {
 
 const toDeferred = (event: PublishableEvent, timestamp: Date) =>
   Effect.try({
-    try: (): DeferredEvent => ({
-      timestamp,
-      event: {
-        source: event.source,
-        detailType: event.detailType,
-        detail: event.encode(),
-      },
-    }),
+    try: (): DeferredEvent => {
+      if (Number.isNaN(timestamp.getTime())) {
+        throw new RangeError("The timestamp is an invalid Date")
+      }
+      return {
+        timestamp,
+        event: {
+          source: event.source,
+          detailType: event.detailType,
+          detail: event.encode(),
+        },
+      }
+    },
     catch: (cause) =>
       new EventEncodeError({ detailType: event.detailType, cause }),
   })
@@ -73,11 +78,16 @@ const make = (
 ) =>
   Deferrer.of({
     defer: Effect.fn("Deferrer.defer")(function* (event, timestamp) {
-      yield* Effect.annotateCurrentSpan({
-        "model_ts.detail_type": event.detailType,
-        "model_ts.deferred_until": timestamp.toISOString(),
-      })
-      yield* schedule(yield* toDeferred(event, timestamp))
+      yield* Effect.annotateCurrentSpan(
+        "model_ts.detail_type",
+        event.detailType,
+      )
+      const deferred = yield* toDeferred(event, timestamp)
+      yield* Effect.annotateCurrentSpan(
+        "model_ts.deferred_until",
+        deferred.timestamp.toISOString(),
+      )
+      yield* schedule(deferred)
     }),
   })
 

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Schema } from "effect"
+import { Field, model } from "../src/index.ts"
 import { Address, encodedUser, User, UserId } from "./fixtures.ts"
 
 const { _tag: _, ...untagged } = encodedUser
@@ -76,6 +77,20 @@ describe("Model.from", () => {
     const user = User.from({ ...rest, visits: 1 })
     expect(user.id.startsWith("user_")).toBe(true)
     expect(user.role).toBe("member")
+  })
+
+  it("applies decoded defaults to transformed fields", () => {
+    class Note extends model<Note>()("Note", {
+      createdAt: Schema.DateFromString.pipe(
+        Field.withDefault(() => new Date(0)),
+      ),
+    }) {}
+    expect(new Note({}).createdAt).toEqual(new Date(0))
+    expect(Note.from({}).createdAt).toEqual(new Date(0))
+    expect(Note.from({}).encode()).toEqual({
+      _tag: "Note",
+      createdAt: "1970-01-01T00:00:00.000Z",
+    })
   })
 
   it("throws a SchemaError for invalid input", () => {

@@ -42,6 +42,20 @@ import {
 
 type Fields = Schema.Struct.Fields
 
+/**
+ * The fields a model accepts: Schemas that decode and encode without Effect
+ * services. Construction, `from` and `encode` run synchronously, so a field
+ * whose transformation or default needs a service could not run there.
+ *
+ * @since 7.0.0
+ */
+export type ModelFields = {
+  readonly [name: string]: Schema.Top & {
+    readonly DecodingServices: never
+    readonly EncodingServices: never
+  }
+}
+
 const modelTag = <Tag extends string>(tag: Tag) =>
   Schema.tag(tag).pipe(Schema.withDecodingDefaultKey(Effect.succeed(tag)))
 
@@ -117,7 +131,7 @@ export type Model<
  */
 export interface ModelFactory<Self> {
   /** A model without providers. */
-  <const Tag extends string, const F extends Fields>(
+  <const Tag extends string, const F extends ModelFields>(
     tag: Tag,
     fields: F,
   ): Model<Self, Tag, F, Provider<NoMembers>>
@@ -125,7 +139,7 @@ export interface ModelFactory<Self> {
   <
     const Tag extends string,
     const P extends ProviderInput,
-    const F extends Fields,
+    const F extends ModelFields,
   >(
     tag: Tag,
     provider: P,

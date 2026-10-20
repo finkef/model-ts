@@ -42,6 +42,15 @@ describe("Deferrer.layerMemory", () => {
       expect(error).toBeInstanceOf(EventEncodeError)
       expect(yield* DeferredEvents.use((events) => events.all)).toEqual([])
     }))
+
+  it("fails with EventEncodeError for an invalid timestamp", () =>
+    Effect.gen(function* () {
+      const error = yield* Effect.flip(postPublished(1).defer(new Date(NaN)))
+      expect(error).toBeInstanceOf(EventEncodeError)
+      expect(error.message).toBe(
+        "Cannot encode blog.post.published: The timestamp is an invalid Date",
+      )
+    }))
 })
 
 describe("Deferrer.layerEventBridge", () => {

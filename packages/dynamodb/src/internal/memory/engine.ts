@@ -15,7 +15,7 @@ import {
   isGSI,
 } from "./store.ts"
 import { IN_MEMORY_SPEC, type InMemoryIndexName } from "./spec.ts"
-import { cloneItem, encodeItemKey } from "./utils.ts"
+import { cloneItem, encodeCompositeKey, encodeItemKey } from "./utils.ts"
 
 type AnyParams = { [key: string]: any }
 
@@ -373,7 +373,7 @@ class MemoryEngineImpl implements MemoryEngine {
 
       for (const key of keys) {
         const parsedKey = this.getRequiredKey({ Key: key }, "Key")
-        const dedupKey = `${parsedKey.PK}::${parsedKey.SK}`
+        const dedupKey = encodeItemKey(parsedKey.PK, parsedKey.SK)
         if (unique.has(dedupKey)) {
           throw this.validationError(
             "Provided list of item keys contains duplicates",
@@ -486,7 +486,7 @@ class MemoryEngineImpl implements MemoryEngine {
       key: { PK: string; SK: string },
       before: any | undefined,
     ) => {
-      const marker = `${tableName}::${key.PK}::${key.SK}`
+      const marker = encodeCompositeKey(tableName, key.PK, key.SK)
       if (!journal.has(marker)) {
         journal.set(marker, {
           tableName,
@@ -500,7 +500,7 @@ class MemoryEngineImpl implements MemoryEngine {
       tableName: string,
       key: { PK: string; SK: string },
     ) => {
-      const marker = `${tableName}::${key.PK}::${key.SK}`
+      const marker = encodeCompositeKey(tableName, key.PK, key.SK)
       if (touched.has(marker)) {
         throw this.validationError(
           "Transaction request cannot include multiple operations on one item",

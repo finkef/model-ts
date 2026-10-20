@@ -1,6 +1,7 @@
 import { describe, expect } from "@effect/vitest"
+import { GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb"
 import { Effect } from "effect"
-import { docVersion, RaceConditionError } from "../src/index.ts"
+import { docVersion, DynamoDB, RaceConditionError } from "../src/index.ts"
 import { Sandbox } from "../src/sandbox.ts"
 import { makePost, Post, PostId, Slug } from "./fixtures.ts"
 import { it } from "./utils.ts"
@@ -358,5 +359,34 @@ describe("softDelete", () => {
             : []
         expect(codes).toEqual(["None", "ConditionalCheckFailed"])
       }),
+  )
+})
+
+describe("attribute types", () => {
+  it.effect("round-trips binary values and sets, also when nested", () =>
+    Effect.gen(function* () {
+      const db = yield* DynamoDB
+      const Item = {
+        PK: "TYPES",
+        SK: "1",
+        bytes: new Uint8Array([1, 2, 3]),
+        byteSet: new Set([new Uint8Array([4]), new Uint8Array([5])]),
+        strings: new Set(["a", "b"]),
+        numbers: new Set([1, 2]),
+        nested: { list: [new Uint8Array([6]), { bytes: new Uint8Array([7]) }] },
+      }
+      yield* db.send(
+        "PutItem",
+        new PutCommand({ TableName: db.tableName, Item }),
+      )
+      const output = yield* db.send(
+        "GetItem",
+        new GetCommand({
+          TableName: db.tableName,
+          Key: { PK: "TYPES", SK: "1" },
+        }),
+      )
+      expect(output.Item).toEqual(Item)
+    }),
   )
 })

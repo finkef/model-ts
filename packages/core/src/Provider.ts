@@ -81,6 +81,22 @@ type Implementation<M extends ProviderMembers> = M & {
 }
 
 /**
+ * `{ [K]: T }`, with the key optional only when `T` has no required
+ * members, so an implementation cannot leave out a declared method.
+ */
+type Group<K extends string, T> = {} extends T
+  ? { readonly [P in K]?: T }
+  : { readonly [P in K]: T }
+
+/** The implementation `makeProvider` expects for members `M`. */
+type ProviderImplementation<M extends ProviderMembers> = Group<
+  "instanceProps",
+  Implementation<M>["instance"]
+> &
+  Group<"classProps", Implementation<M>["static"]> &
+  Group<"unionProps", Implementation<M>["union"]>
+
+/**
  * Builds a provider from its declared members and their implementation.
  * Getters and other property descriptors are kept as written.
  *
@@ -102,11 +118,7 @@ type Implementation<M extends ProviderMembers> = M & {
  */
 export const makeProvider =
   <M extends ProviderMembers>() =>
-  (implementation: {
-    readonly instanceProps?: Implementation<M>["instance"]
-    readonly classProps?: Implementation<M>["static"]
-    readonly unionProps?: Implementation<M>["union"]
-  }): Provider<M> => ({
+  (implementation: ProviderImplementation<M>): Provider<M> => ({
     instanceProps: implementation.instanceProps ?? {},
     classProps: implementation.classProps ?? {},
     unionProps: implementation.unionProps ?? {},

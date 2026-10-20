@@ -2,8 +2,8 @@ import { describe, expect } from "@effect/vitest"
 import { Cause, Effect, Exit } from "effect"
 import { Dynamo, Operation } from "../src/index.ts"
 import { Sandbox } from "../src/sandbox.ts"
-import { makePost, Post } from "./fixtures.ts"
-import { it } from "./utils.ts"
+import { makePost, Post, Slug } from "./fixtures.ts"
+import { it, recordSpans } from "./utils.ts"
 
 describe("bulk", () => {
   it.effect("runs operations of different kinds in one transaction", () =>
@@ -85,6 +85,59 @@ describe("bulk", () => {
     }),
   )
 
+  it.effect("rolls back later transactions first", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(0))
+      const before = yield* sandbox.snapshot
+      const posts = (from: number, count: number) =>
+        Array.from({ length: count }, (_, i) =>
+          makePost(from + i).operation("put"),
+        )
+      const slug = new Slug({ slug: "a", postId: makePost(1).id })
+
+      // 1: creates the slug. 2: moves it. 3: conflicts. Undoing 1 before 2
+      // would leave the slug behind at its first key.
+      const error = yield* Effect.flip(
+        Dynamo.bulk([
+          ...posts(1, 99),
+          slug.operation("put"),
+          slug.operation("update", { slug: "b" }),
+          ...posts(100, 98),
+          makePost(0).operation("put"),
+        ]),
+      )
+
+      expect(error._tag).toBe("TransactionCanceledError")
+      expect(yield* sandbox.diff(before)).toBe("")
+    }),
+  )
+
+  it.effect("rolls back committed transactions when a later one dies", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      const before = yield* sandbox.snapshot
+      class Exploding extends Post {
+        override get GSI2PK(): string {
+          throw new Error("boom")
+        }
+      }
+      const exploding = new Exploding(makePost(101).values())
+
+      const exit = yield* Effect.exit(
+        Dynamo.bulk([
+          ...Array.from({ length: 100 }, (_, i) =>
+            makePost(i + 1).operation("put"),
+          ),
+          exploding.operation("put"),
+        ]),
+      )
+
+      expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
+      expect(yield* sandbox.diff(before)).toBe("")
+    }),
+  )
+
   it.effect("rolls back committed transactions when a later one fails", () =>
     Effect.gen(function* () {
       const sandbox = yield* Sandbox
@@ -115,12 +168,7 @@ describe("bulk", () => {
         makePost(101).operation("put"),
       ]
 
-      const { spans } = yield* Effect.gen(function* () {
-        const { recordSpans } = yield* Effect.promise(
-          () => import("./utils.ts"),
-        )
-        return yield* recordSpans(Dynamo.bulk([...puts, group]))
-      })
+      const { spans } = yield* recordSpans(Dynamo.bulk([...puts, group]))
 
       const transactions = spans.filter(
         (span) => span.name === "DynamoDB.TransactWriteItems",

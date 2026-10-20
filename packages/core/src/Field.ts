@@ -45,19 +45,20 @@ export const nullish = <S extends Schema.Top>(
  * A default for both `new Model({...})` and decoding, computed on each use.
  * Use it for ids, timestamps and other values a new instance should get when
  * the caller leaves them out, and for stored rows that predate the field.
+ * The default is a decoded value, so it works for transformed fields too.
  *
  * ```ts
- * createdAt: Schema.Date.pipe(Field.withDefault(() => new Date()))
+ * createdAt: Schema.DateFromString.pipe(Field.withDefault(() => new Date()))
  * ```
  *
  * @since 7.0.0
  */
 export const withDefault =
   <S extends Schema.Top & Schema.WithoutConstructorDefault>(
-    makeDefault: () => S["Encoded"] & S["~type.make.in"],
+    makeDefault: () => S["Type"] & S["~type.make.in"],
   ) =>
   (schema: S) =>
     schema.pipe(
+      Schema.withDecodingDefaultTypeKey(Effect.sync(makeDefault)),
       Schema.withConstructorDefault(Effect.sync(makeDefault)),
-      Schema.withDecodingDefaultKey(Effect.sync(makeDefault)),
     )

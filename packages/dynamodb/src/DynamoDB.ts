@@ -225,7 +225,8 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
       return [...items, ...(yield* fetchBatch(unprocessed, consistentRead))]
     })
 
-  // Every GetItemRequest issued in the same tick reaches one runAll call.
+  // Every GetItemRequest issued in the same tick reaches one runAll call. The
+  // batch span links to the span of every load it serves.
   const resolver = RequestResolver.make<GetItemRequest>((entries) =>
     Effect.gen(function* () {
       const unique = new Map<string, Key>()
@@ -245,7 +246,10 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
         )
       }
     }),
-  ).pipe(RequestResolver.batchN(options.maxBatchSize ?? 100))
+  ).pipe(
+    RequestResolver.batchN(options.maxBatchSize ?? 100),
+    RequestResolver.withSpan("Dynamo.batchGet"),
+  )
 
   return DynamoDB.of({
     tableName,
@@ -257,7 +261,8 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
   })
 })
 
-const identify = (key: Key) => `${key.PK}::${key.SK}`
+/** A string that identifies a key; unambiguous whatever PK and SK contain. */
+const identify = (key: Key) => JSON.stringify([key.PK, key.SK])
 
 const definedOnly = (attributes: Record<string, unknown>) =>
   Object.fromEntries(

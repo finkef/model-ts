@@ -174,8 +174,22 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
         new EventEncodeError({ detailType: event.detailType, cause }),
     })
 
+  /**
+   * One PutEvents call. Rejected entries fail the call's span with a
+   * `PublishError` for that call; `publish` collects them across calls.
+   */
   const send = (entries: ReadonlyArray<PutEventsRequestEntry>) =>
     putEvents(entries).pipe(
+      Effect.flatMap(({ FailedEntryCount = 0, Entries = [] }) =>
+        FailedEntryCount > 0
+          ? Effect.fail(
+              new PublishError({
+                failedEntryCount: FailedEntryCount,
+                entries: Entries,
+              }),
+            )
+          : Effect.succeed(Entries),
+      ),
       Effect.withSpan("EventBridge.PutEvents", {
         kind: "producer",
         attributes: {
@@ -204,9 +218,14 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
     const results: Array<ResultEntry> = []
     let failedEntryCount = 0
     for (let i = 0; i < entries.length; i += MAX_ENTRIES) {
-      const output = yield* send(entries.slice(i, i + MAX_ENTRIES))
-      failedEntryCount += output.FailedEntryCount ?? 0
-      results.push(...(output.Entries ?? []))
+      // Keep sending after a rejection, so every result is known.
+      const sent = yield* send(entries.slice(i, i + MAX_ENTRIES)).pipe(
+        Effect.catchTag("PublishError", (error) => {
+          failedEntryCount += error.failedEntryCount
+          return Effect.succeed(error.entries)
+        }),
+      )
+      results.push(...sent)
     }
     if (failedEntryCount > 0) {
       return yield* new PublishError({ failedEntryCount, entries: results })

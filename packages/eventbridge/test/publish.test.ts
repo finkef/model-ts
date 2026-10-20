@@ -1,4 +1,4 @@
-import { describe, expect } from "@effect/vitest"
+import { assert, describe, expect } from "@effect/vitest"
 import { Config, ConfigProvider, Effect, Layer, Option } from "effect"
 import {
   EventBridge,
@@ -69,7 +69,9 @@ describe("EventBridge.layer", () => {
       const fake = yield* FakeBus
       fake.rejectDetailTypes.add("blog.post.published")
 
-      const error = yield* Effect.flip(postPublished(1).publish())
+      const { spans, value: error } = yield* recordSpans(
+        Effect.flip(postPublished(1).publish()),
+      )
       expect(error).toBeInstanceOf(PublishError)
       expect(error).toMatchObject({
         _tag: "PublishError",
@@ -79,6 +81,26 @@ describe("EventBridge.layer", () => {
         ],
         message: "EventBridge rejected 1 of 1 events",
       })
+      // The call that was rejected fails its own span.
+      const putEvents = spans.find(
+        (span) => span.name === "EventBridge.PutEvents",
+      )!
+      expect(
+        putEvents.status._tag === "Ended" && putEvents.status.exit._tag,
+      ).toBe("Failure")
+    }))
+
+  it("sends every batch and reports every result when some are rejected", () =>
+    Effect.gen(function* () {
+      const fake = yield* FakeBus
+      fake.rejectDetailTypes.add("blog.post.published")
+      const events = Array.from({ length: 12 }, (_, i) => postPublished(i))
+
+      const error = yield* Effect.flip(publish(...events))
+      expect(fake.requests).toHaveLength(2)
+      assert.instanceOf(error, PublishError)
+      expect(error.failedEntryCount).toBe(12)
+      expect(error.entries).toHaveLength(12)
     }))
 
   it("sends nothing when one event cannot be encoded", () =>
