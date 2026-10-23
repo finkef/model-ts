@@ -28,6 +28,7 @@ import {
 } from "@aws-sdk/lib-dynamodb"
 import { makeMemoryEngine } from "../src/internal/memory/engine.ts"
 import { memoryClientConfig } from "../src/internal/memory/handler.ts"
+import { snapshotKey } from "../src/internal/snapshot.ts"
 import { createTableCommand } from "../src/internal/table.ts"
 
 export type Engine = "local" | "memory"
@@ -116,7 +117,7 @@ const scan = async (documents: DocumentClient, TableName: string) => {
     const page = await documents
       .scan({ TableName, ExclusiveStartKey })
       .promise()
-    for (const item of page.Items ?? []) table[`${item.PK}__${item.SK}`] = item
+    for (const item of page.Items ?? []) table[snapshotKey(item)] = item
     ExclusiveStartKey = page.LastEvaluatedKey
   } while (ExclusiveStartKey)
   return table
