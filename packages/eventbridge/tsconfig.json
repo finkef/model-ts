@@ -1,22 +1,14 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist/cjs",
-    "paths": {
-      "@model-ts/core": [
-        "../core"
-      ]
-    }
+    "rootDir": "src",
+    "outDir": "dist",
+    "tsBuildInfoFile": "dist/.tsbuildinfo"
   },
+  "include": ["src"],
   "references": [
     {
       "path": "../core"
     }
-  ],
-  "exclude": [
-    "dist",
-    "__test__",
-    "test-utils"
   ]
 }

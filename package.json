@@ -1,33 +1,42 @@
 {
   "name": "model-ts",
-  "repository": "git@github.com:finkef/model-ts.git",
-  "author": "Fabian Finke <finkef@icloud.com>",
-  "license": "MIT",
   "private": true,
-  "engines": {
-    "node": ">=20"
-  },
+  "license": "MIT",
+  "author": "Fabian Finke <finkef@icloud.com>",
+  "repository": "git@github.com:finkef/model-ts.git",
   "workspaces": [
     "packages/*"
   ],
-  "resolutions": {
-    "typescript": "4.5.5"
-  },
+  "type": "module",
   "scripts": {
-    "build": "yarn tsc -b",
-    "clean": "yarn tsc -b --clean",
-    "release": "yarn build && yarn changeset publish"
+    "build": "tsc -b tsconfig.build.json",
+    "clean": "tsc -b tsconfig.build.json --clean && node -e \"for (const name of ['core', 'dynamodb', 'eventbridge']) require('node:fs').rmSync('packages/' + name + '/dist', { recursive: true, force: true })\"",
+    "typecheck": "tsc -b tsconfig.json",
+    "test": "vitest run --project core --project eventbridge --project dynamodb:memory",
+    "test:local": "vitest run --project dynamodb:local",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
+    "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
+    "dynamodb:stop": "docker stop dynamodb",
+    "release": "bun run clean && bun run build && changeset publish"
   },
-  "dependencies": {},
   "devDependencies": {
-    "@aws-sdk/client-dynamodb": "^3.0.0",
-    "@aws-sdk/client-eventbridge": "^3.0.0",
-    "@aws-sdk/lib-dynamodb": "^3.0.0",
-    "@changesets/cli": "^2.16.0",
-    "@types/jest": "^29.5.0",
-    "@types/node": "20.11.0",
-    "fp-ts": "^2.6.7",
-    "io-ts": "^2.2.16",
-    "typescript": "~4.5.5"
-  }
+    "@aws-sdk/client-dynamodb": "^3.1079.0",
+    "@aws-sdk/client-eventbridge": "^3.1079.0",
+    "@aws-sdk/lib-dynamodb": "^3.1079.0",
+    "@aws-sdk/util-dynamodb": "^3.996.9",
+    "@changesets/cli": "^2.29.0",
+    "@effect/vitest": "4.0.5",
+    "@types/node": "^22.0.0",
+    "effect": "4.0.5",
+    "oxfmt": "0.74.0",
+    "oxlint": "1.89.0",
+    "typescript": "7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "bun@1.3.14"
 }
