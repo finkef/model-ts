@@ -1008,15 +1008,12 @@ class MemoryEngineImpl implements MemoryEngine {
       )
     }
 
-    // DynamoDB only resumes a query from a key the query itself could return.
-    if (hashKey !== hashValue) {
-      throw this.validationError(
-        "The provided starting key is outside query boundaries based on provided conditions",
-      )
-    }
+    // DynamoDB only resumes a query from a key the query itself could return,
+    // and reports a wrong partition and a wrong sort key the same way.
     if (
-      rangeCondition !== undefined &&
-      !matchesRangeCondition(rangeKey, rangeCondition)
+      hashKey !== hashValue ||
+      (rangeCondition !== undefined &&
+        !matchesRangeCondition(rangeKey, rangeCondition))
     ) {
       throw this.validationError(
         "The provided starting key does not match the range key predicate",
