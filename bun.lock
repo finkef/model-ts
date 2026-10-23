@@ -77,9 +77,9 @@
       "version": "6.0.0",
       "devDependencies": {
         "@aws-sdk/client-apigatewaymanagementapi": "^3.1079.0",
-        "@model-ts/core": "workspace:*",
-        "@model-ts/dynamodb": "workspace:*",
-        "@model-ts/graphql": "workspace:*",
+        "@model-ts/core": "*",
+        "@model-ts/dynamodb": "*",
+        "@model-ts/graphql": "*",
         "effect": "4.0.5",
         "graphql": "^16.11.0",
       },
