@@ -1,7 +1,7 @@
 import { expect, it } from "@effect/vitest"
 import { Effect, Schema, Stream } from "effect"
 import { parse } from "graphql"
-import * as GraphQL from "../src/GraphQL.ts"
+import { createBuilder, executor, type Register } from "../src/GraphQL.ts"
 
 class Payload extends Schema.TaggedClass<Payload>()("Payload", {
   text: Schema.String,
@@ -10,25 +10,25 @@ class Payload extends Schema.TaggedClass<Payload>()("Payload", {
 
 function fixture() {
   let sources = 0
-  const builder = GraphQL.createBuilder<GraphQL.Register<typeof Payload>>()
+  const GraphQL = createBuilder<Register<typeof Payload>>()
   const events = () =>
-    builder.events("Payload", {
+    GraphQL.events("Payload", {
       subscribe: () => {
         sources++
         return Stream.succeed(new Payload({ text: "hello", extra: "world" }))
       },
     })
-  const schema = builder.schema({
-    payload: builder.object(Payload, {
-      text: builder.string(),
-      extra: builder.string(),
+  const schema = GraphQL.schema({
+    payload: GraphQL.object(Payload, {
+      text: GraphQL.string(),
+      extra: GraphQL.string(),
     }),
-    query: builder.query({
-      ping: builder.field("String", () => "pong"),
+    query: GraphQL.query({
+      ping: GraphQL.field("String", () => "pong"),
     }),
-    subscription: builder.subscription({ event: events(), other: events() }),
+    subscription: GraphQL.subscription({ event: events(), other: events() }),
   })
-  return { adapter: GraphQL.executor(schema), sources: () => sources }
+  return { adapter: executor(schema), sources: () => sources }
 }
 
 const merged = {

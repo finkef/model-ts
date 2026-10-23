@@ -1,7 +1,15 @@
 import { expect, it } from "@effect/vitest"
 import { Cause, Deferred, Effect, Fiber, Schema, Stream } from "effect"
 import { GraphQLError, GraphQLScalarType, Kind, parse } from "graphql"
-import * as G from "../src/GraphQL.ts"
+import {
+  createBuilder,
+  ErrorReporter,
+  execute,
+  executor,
+  subscribe,
+  type ErrorReport,
+  type Register,
+} from "../src/GraphQL.ts"
 
 class PublicInput extends Schema.TaggedError<PublicInput>()("PublicInput", {
   message: Schema.String,
@@ -41,35 +49,35 @@ for (const operation of ["query", "subscription"] as const) {
     () =>
       Effect.gen(function* () {
         const scalarSchema = Schema.String
-        const builder = G.createBuilder<
-          G.Register<typeof scalarSchema, "Custom">
+        const GraphQL = createBuilder<
+          Register<typeof scalarSchema, "Custom">
         >().withErrorPolicy({
           public: [PublicInput],
           publicCodes: { PublicInput: "BAD_USER_INPUT" },
         })
         const custom = throwingScalar()
-        const scalar = builder.scalar("Custom", scalarSchema, custom)
-        const query = builder.query({
-          ping: builder.field("String", () => "ok"),
+        const scalar = GraphQL.scalar("Custom", scalarSchema, custom)
+        const query = GraphQL.query({
+          ping: GraphQL.field("String", () => "ok"),
         })
         const field = { args: { value: scalar.schema } }
-        const built = builder.schema({
+        const built = GraphQL.schema({
           scalar,
           query,
-          echo: builder.query({
-            echo: builder.field("String", {
+          echo: GraphQL.query({
+            echo: GraphQL.field("String", {
               ...field,
               resolve: () => "ok",
             }),
           }),
-          events: builder.subscription({
-            echo: builder.events("String", {
+          events: GraphQL.subscription({
+            echo: GraphQL.events("String", {
               ...field,
               subscribe: () => Stream.succeed("ok"),
             }),
           }),
         })
-        const reports: G.ErrorReport[] = []
+        const reports: ErrorReport[] = []
         for (const variables of [false, true]) {
           for (const value of ["raw", "graphql", "public"]) {
             const source = variables
@@ -78,12 +86,12 @@ for (const operation of ["query", "subscription"] as const) {
             const request = { source, variableValues: { value } }
             const result = yield* (
               operation === "query"
-                ? G.execute(built, request)
-                : Stream.runCollect(G.subscribe(built, request)).pipe(
+                ? execute(built, request)
+                : Stream.runCollect(subscribe(built, request)).pipe(
                     Effect.map((results) => results[0]!),
                   )
             ).pipe(
-              Effect.provideService(G.ErrorReporter, {
+              Effect.provideService(ErrorReporter, {
                 report: (event) =>
                   Effect.sync(() => {
                     reports.push(event)
@@ -119,10 +127,10 @@ it.effect(
   "ordinary document and built-in input diagnostics remain useful",
   () =>
     Effect.gen(function* () {
-      const builder = G.createBuilder<{}>()
-      const schema = builder.schema({
-        query: builder.query({
-          echo: builder.field("String", {
+      const GraphQL = createBuilder<{}>()
+      const schema = GraphQL.schema({
+        query: GraphQL.query({
+          echo: GraphQL.field("String", {
             args: { value: Schema.String },
             resolve: (_, { value }) => value,
           }),
@@ -142,7 +150,7 @@ it.effect(
         { source: "{", message: "Syntax Error" },
       ]) {
         expect(
-          (yield* G.execute(schema, request)).errors?.[0]?.message,
+          (yield* execute(schema, request)).errors?.[0]?.message,
         ).toContain(request.message)
       }
     }),
@@ -161,22 +169,22 @@ it.effect(
       const abstract = Schema.Union([Node, Other])
       const output = Schema.String
       for (const error of [prelocated(), publicInput]) {
-        const builder = G.createBuilder<
-          G.Register<typeof Node> &
-            G.Register<typeof Other> &
-            G.Register<typeof abstract, "Abstract"> &
-            G.Register<typeof output, "Output">
+        const GraphQL = createBuilder<
+          Register<typeof Node> &
+            Register<typeof Other> &
+            Register<typeof abstract, "Abstract"> &
+            Register<typeof output, "Output">
         >().withErrorPolicy({ public: [PublicInput] })
-        const schema = builder.schema({
-          node: builder.object(Node, { id: builder.id() }),
-          other: builder.object(Other, { id: builder.id() }),
-          abstract: builder.union("Abstract", abstract, {
+        const schema = GraphQL.schema({
+          node: GraphQL.object(Node, { id: GraphQL.id() }),
+          other: GraphQL.object(Other, { id: GraphQL.id() }),
+          abstract: GraphQL.union("Abstract", abstract, {
             members: ["Node", "Other"],
             resolveType: () => {
               throw error
             },
           }),
-          output: builder.scalar(
+          output: GraphQL.scalar(
             "Output",
             output,
             new GraphQLScalarType({
@@ -186,18 +194,18 @@ it.effect(
               },
             }),
           ),
-          query: builder.query({
-            leak: builder.nullable("String", () => {
+          query: GraphQL.query({
+            leak: GraphQL.nullable("String", () => {
               throw error
             }),
-            abstract: builder.nullable(
+            abstract: GraphQL.nullable(
               "Abstract",
               () => new Node({ id: "id" }),
             ),
-            scalar: builder.nullable("Output", () => "value"),
+            scalar: GraphQL.nullable("Output", () => "value"),
           }),
         })
-        const result = yield* G.execute(schema, {
+        const result = yield* execute(schema, {
           source: "{leak abstract{__typename} scalar}",
         })
         expect(result.errors).toHaveLength(3)
@@ -224,25 +232,25 @@ it.effect(
   "executor formats public query and subscription errors for an independent transport",
   () =>
     Effect.gen(function* () {
-      const builder = G.createBuilder<{}>().withErrorPolicy({
+      const GraphQL = createBuilder<{}>().withErrorPolicy({
         public: [PublicInput],
         publicCodes: { PublicInput: "SAFE_INPUT" },
       })
-      const adapter = G.executor(
-        builder.schema({
-          query: builder.query({
-            denied: builder.nullable("String", {
+      const adapter = executor(
+        GraphQL.schema({
+          query: GraphQL.query({
+            denied: GraphQL.nullable("String", {
               authorize: () => false,
               resolve: () => "no",
             }),
-            public: builder.nullable("String", () => Effect.fail(publicInput)),
-            json: builder.field("JSON", () => ({
+            public: GraphQL.nullable("String", () => Effect.fail(publicInput)),
+            json: GraphQL.field("JSON", () => ({
               at: new Date("2026-10-23T00:00:00Z"),
               omitted: undefined,
             })),
           }),
-          subscription: builder.subscription({
-            public: builder.events("String", {
+          subscription: GraphQL.subscription({
+            public: GraphQL.events("String", {
               subscribe: () => Stream.fail(publicInput),
             }),
           }),
@@ -288,17 +296,17 @@ it.effect(
   "executor masks and reports values that cannot be serialized as JSON",
   () =>
     Effect.gen(function* () {
-      const builder = G.createBuilder<{}>()
+      const GraphQL = createBuilder<{}>()
       const cycle: { self?: unknown } = {}
       cycle.self = cycle
       for (const value of [1n, cycle]) {
-        const adapter = G.executor(
-          builder.schema({
-            query: builder.query({
-              value: builder.field("JSON", () => value),
+        const adapter = executor(
+          GraphQL.schema({
+            query: GraphQL.query({
+              value: GraphQL.field("JSON", () => value),
             }),
-            subscription: builder.subscription({
-              value: builder.events("JSON", {
+            subscription: GraphQL.subscription({
+              value: GraphQL.events("JSON", {
                 subscribe: () => Stream.succeed(value),
               }),
             }),
@@ -311,7 +319,7 @@ it.effect(
             request: { query: source },
             context: {},
           }
-          const reports: G.ErrorReport[] = []
+          const reports: ErrorReport[] = []
           const result = yield* (
             operation === "query"
               ? adapter.execute(input)
@@ -319,7 +327,7 @@ it.effect(
                   Effect.map((events) => events[0]!),
                 )
           ).pipe(
-            Effect.provideService(G.ErrorReporter, {
+            Effect.provideService(ErrorReporter, {
               report: (event) =>
                 Effect.sync(() => {
                   reports.push(event)
@@ -349,7 +357,7 @@ for (const phase of ["authorize", "resolve"] as const) {
         class Node extends Schema.TaggedClass<Node>()("Node", {
           id: Schema.String,
         }) {}
-        const builder = G.createBuilder<G.Register<typeof Node>>()
+        const GraphQL = createBuilder<Register<typeof Node>>()
         const entered = yield* Deferred.make<void>()
         const finalizing = yield* Deferred.make<void>()
         const release = yield* Deferred.make<void>()
@@ -367,17 +375,17 @@ for (const phase of ["authorize", "resolve"] as const) {
             }),
           ),
         )
-        const schema = builder.schema({
-          node: builder.object(Node, {
-            id: builder.field("String", () =>
+        const schema = GraphQL.schema({
+          node: GraphQL.object(Node, {
+            id: GraphQL.field("String", () =>
               phase === "resolve" ? blocked : "id",
             ),
           }),
-          query: builder.query({
-            ping: builder.field("String", () => "ok"),
+          query: GraphQL.query({
+            ping: GraphQL.field("String", () => "ok"),
           }),
-          subscription: builder.subscription({
-            event: builder.events("Node", {
+          subscription: GraphQL.subscription({
+            event: GraphQL.events("Node", {
               subscribe: () =>
                 Stream.succeed(new Node({ id: "id" })).pipe(
                   Stream.ensuring(
@@ -390,7 +398,7 @@ for (const phase of ["authorize", "resolve"] as const) {
             }),
           }),
         })
-        const fiber = yield* G.subscribe(schema, {
+        const fiber = yield* subscribe(schema, {
           source: "subscription{event{id}}",
         }).pipe(Stream.runDrain, Effect.forkChild)
         yield* Deferred.await(entered)
@@ -426,16 +434,16 @@ it.effect(
           }),
         ),
       )
-      const builder = G.createBuilder<{}>()
-      const schema = builder.schema({
-        query: builder.query({
-          ping: builder.field("String", () => "ok"),
+      const GraphQL = createBuilder<{}>()
+      const schema = GraphQL.schema({
+        query: GraphQL.query({
+          ping: GraphQL.field("String", () => "ok"),
         }),
-        subscription: builder.subscription({
-          event: builder.events("String", { subscribe: () => source }),
+        subscription: GraphQL.subscription({
+          event: GraphQL.events("String", { subscribe: () => source }),
         }),
       })
-      const fiber = yield* G.subscribe(schema, {
+      const fiber = yield* subscribe(schema, {
         source: "subscription{event}",
       }).pipe(Stream.runDrain, Effect.forkChild)
       yield* Deferred.await(entered)
@@ -473,27 +481,27 @@ it.effect(
         secret: "private-field",
         cause: new Error("private-cause"),
       })
-      const builder = G.createBuilder<
-        G.Register<typeof Problem> & G.Register<typeof Node>
+      const GraphQL = createBuilder<
+        Register<typeof Problem> & Register<typeof Node>
       >()
-      const schema = builder.schema({
-        node: builder.object(Node, { id: builder.id() }),
-        problem: builder.object(Problem, {
-          message: builder.string(),
-          display: builder.string(),
-          label: builder.field("String", {
+      const schema = GraphQL.schema({
+        node: GraphQL.object(Node, { id: GraphQL.id() }),
+        problem: GraphQL.object(Problem, {
+          message: GraphQL.string(),
+          display: GraphQL.string(),
+          label: GraphQL.field("String", {
             authorize: (parent) => parent === problem,
             resolve: (parent) => parent.label(),
           }),
         }),
-        query: builder.query({
-          result: builder.field("Node", {
+        query: GraphQL.query({
+          result: GraphQL.field("Node", {
             errors: [Problem],
             resolve: () => Effect.fail(problem),
           }),
         }),
       })
-      const result = yield* G.execute(schema, {
+      const result = yield* execute(schema, {
         source: "{result{__typename ...on Problem{message label display}}}",
       })
       expect(result).toEqual({
@@ -523,14 +531,14 @@ it.effect(
           return value === "valid"
         }),
       )
-      const builder = G.createBuilder<
-        G.Register<typeof custom, "Checked">
+      const GraphQL = createBuilder<
+        Register<typeof custom, "Checked">
       >().withErrorPolicy({ public: [PublicInput] })
-      const scalar = builder.scalar("Checked", custom)
-      const schema = builder.schema({
+      const scalar = GraphQL.scalar("Checked", custom)
+      const schema = GraphQL.schema({
         scalar,
-        query: builder.query({
-          echo: builder.field("String", {
+        query: GraphQL.query({
+          echo: GraphQL.field("String", {
             args: { value: scalar.schema },
             resolve: (_, { value }) => value,
           }),
@@ -538,14 +546,14 @@ it.effect(
       })
       for (const variables of [false, true]) {
         for (const value of ["raw", "public", "invalid"]) {
-          const reports: G.ErrorReport[] = []
-          const result = yield* G.execute(schema, {
+          const reports: ErrorReport[] = []
+          const result = yield* execute(schema, {
             source: variables
               ? "query($value:Checked!){echo(value:$value)}"
               : `{echo(value:"${value}")}`,
             variableValues: { value },
           }).pipe(
-            Effect.provideService(G.ErrorReporter, {
+            Effect.provideService(ErrorReporter, {
               report: (event) =>
                 Effect.sync(() => {
                   reports.push(event)
