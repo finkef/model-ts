@@ -4,48 +4,8 @@
  * so code under test sends exactly what it would send to AWS.
  */
 import type { DynamoDBClientConfig } from "@aws-sdk/client-dynamodb"
-import { marshall, unmarshall } from "@aws-sdk/util-dynamodb"
+import { type Doc, toDoc, toWire } from "../wire.ts"
 import type { MemoryEngine } from "./engine.ts"
-
-type Doc = Record<string, any>
-
-const mapValues = (doc: Doc, f: (value: Doc) => Doc): Doc =>
-  Object.fromEntries(Object.entries(doc).map(([key, value]) => [key, f(value)]))
-
-/** JSON carries binary attribute values as base64; the engine stores bytes. */
-const bytesFromWire = (value: Doc): Doc =>
-  "B" in value
-    ? { B: Buffer.from(value.B, "base64") }
-    : "BS" in value
-      ? { BS: value.BS.map((b: string) => Buffer.from(b, "base64")) }
-      : "L" in value
-        ? { L: value.L.map(bytesFromWire) }
-        : "M" in value
-          ? { M: mapValues(value.M, bytesFromWire) }
-          : value
-
-const bytesToWire = (value: Doc): Doc =>
-  "B" in value
-    ? { B: Buffer.from(value.B).toString("base64") }
-    : "BS" in value
-      ? {
-          BS: value.BS.map((b: Uint8Array) =>
-            Buffer.from(b).toString("base64"),
-          ),
-        }
-      : "L" in value
-        ? { L: value.L.map(bytesToWire) }
-        : "M" in value
-          ? { M: mapValues(value.M, bytesToWire) }
-          : value
-
-const toDoc = (value: Doc | undefined) =>
-  value === undefined ? undefined : unmarshall(mapValues(value, bytesFromWire))
-
-const toWire = (value: Doc | undefined) =>
-  value === undefined
-    ? undefined
-    : mapValues(marshall(value, { removeUndefinedValues: true }), bytesToWire)
 
 /** Converts the attribute-value parts of a request to plain documents. */
 const docParams = (params: Doc): Doc => ({

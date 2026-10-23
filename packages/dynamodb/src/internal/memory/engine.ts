@@ -21,6 +21,8 @@ import {
   compareStrings,
   encodeCompositeKey,
   encodeItemKey,
+  type InMemoryItem,
+  sameItem,
 } from "./utils.ts"
 
 type AnyParams = { [key: string]: any }
@@ -53,8 +55,29 @@ export interface MemoryEngine {
   resetTable(tableName: string): void
 }
 
+/**
+ * An item a committed write changed. `before` is missing for a new item and
+ * `after` for a deleted one.
+ */
+export interface ItemChange {
+  readonly tableName: string
+  readonly before: InMemoryItem | undefined
+  readonly after: InMemoryItem | undefined
+}
+
+export interface MemoryEngineOptions {
+  /**
+   * Called after every committed write with the items it changed, in commit
+   * order. Like DynamoDB Streams, it leaves out writes that change nothing,
+   * and a cancelled transaction changes nothing.
+   */
+  readonly onChange?: ((changes: ReadonlyArray<ItemChange>) => void) | undefined
+}
+
 class MemoryEngineImpl implements MemoryEngine {
   private readonly tables = new Map<string, InMemoryTableState>()
+
+  constructor(private readonly options: MemoryEngineOptions) {}
 
   async get(params: AnyParams): Promise<{ Item?: any }> {
     this.assertSupportedParams("get", params)
@@ -88,6 +111,7 @@ class MemoryEngineImpl implements MemoryEngine {
     this.assertCondition("put", params, existing)
 
     table.put(item)
+    this.commit([{ tableName, before: existing, after: cloneItem(item) }])
 
     return {}
   }
@@ -137,6 +161,7 @@ class MemoryEngineImpl implements MemoryEngine {
 
     this.assertPrimaryKey(next)
     table.put(next)
+    this.commit([{ tableName, before: existing, after: cloneItem(next) }])
 
     if (returnValues === "ALL_NEW") {
       return { Attributes: cloneItem(next) }
@@ -157,6 +182,7 @@ class MemoryEngineImpl implements MemoryEngine {
     this.assertCondition("delete", params, existing)
 
     table.deleteByKey(key)
+    this.commit([{ tableName, before: existing, after: undefined }])
     return {}
   }
 
@@ -411,9 +437,19 @@ class MemoryEngineImpl implements MemoryEngine {
       })
     }
 
-    for (const [tableName, requests] of Object.entries<any[]>(
-      params.RequestItems,
-    )) {
+    // A batch is not atomic: whatever it wrote before a failure stays written.
+    const changes: Array<ItemChange> = []
+    try {
+      this.batchWriteInto(params.RequestItems, changes)
+    } finally {
+      this.commit(changes)
+    }
+
+    return { UnprocessedItems: {} }
+  }
+
+  private batchWriteInto(requestItems: AnyParams, changes: Array<ItemChange>) {
+    for (const [tableName, requests] of Object.entries<any[]>(requestItems)) {
       if (!Array.isArray(requests)) {
         throw new NotSupportedError({
           method: "batchWrite",
@@ -442,7 +478,11 @@ class MemoryEngineImpl implements MemoryEngine {
           }
 
           this.assertPrimaryKey(item)
-          table.put(item)
+          changes.push({
+            tableName,
+            before: table.put(item),
+            after: cloneItem(item),
+          })
           continue
         }
 
@@ -451,7 +491,11 @@ class MemoryEngineImpl implements MemoryEngine {
             { Key: entry.DeleteRequest.Key },
             "DeleteRequest.Key",
           )
-          table.deleteByKey(key)
+          changes.push({
+            tableName,
+            before: table.deleteByKey(key),
+            after: undefined,
+          })
           continue
         }
 
@@ -460,8 +504,6 @@ class MemoryEngineImpl implements MemoryEngine {
         )
       }
     }
-
-    return { UnprocessedItems: {} }
   }
 
   async transactWrite(params: AnyParams): Promise<{}> {
@@ -483,6 +525,7 @@ class MemoryEngineImpl implements MemoryEngine {
     }
 
     const touched = new Set<string>()
+    const changes: Array<ItemChange> = []
     const journal = new Map<
       string,
       { tableName: string; key: { PK: string; SK: string }; before: any | null }
@@ -572,6 +615,7 @@ class MemoryEngineImpl implements MemoryEngine {
 
           remember(tableName, key, existing)
           table.put(item)
+          changes.push({ tableName, before: existing, after: cloneItem(item) })
 
           continue
         }
@@ -617,6 +661,7 @@ class MemoryEngineImpl implements MemoryEngine {
 
           remember(tableName, key, existing)
           table.put(next)
+          changes.push({ tableName, before: existing, after: cloneItem(next) })
 
           continue
         }
@@ -634,6 +679,7 @@ class MemoryEngineImpl implements MemoryEngine {
           remember(tableName, key, existing)
 
           table.deleteByKey(key)
+          changes.push({ tableName, before: existing, after: undefined })
           continue
         }
 
@@ -696,6 +742,7 @@ class MemoryEngineImpl implements MemoryEngine {
       )
     }
 
+    this.commit(changes)
     return {}
   }
 
@@ -705,6 +752,13 @@ class MemoryEngineImpl implements MemoryEngine {
 
   resetTable(tableName: string): void {
     this.getTable(tableName).clear()
+  }
+
+  private commit(changes: ReadonlyArray<ItemChange>) {
+    const changed = changes.filter(
+      ({ before, after }) => !sameItem(before, after),
+    )
+    if (changed.length > 0) this.options.onChange?.(changed)
   }
 
   private getTable(tableName: string): InMemoryTableState {
@@ -1267,7 +1321,9 @@ class MemoryEngineImpl implements MemoryEngine {
 }
 
 /** An in-process DynamoDB table engine, used by the sandbox's request handler. */
-export const makeMemoryEngine = (): MemoryEngine => new MemoryEngineImpl()
+export const makeMemoryEngine = (
+  options: MemoryEngineOptions = {},
+): MemoryEngine => new MemoryEngineImpl(options)
 
 /** The path of the list or map that holds the last element of `path`. */
 const parentPathKey = (path: ReadonlyArray<DocumentPathPart>) =>

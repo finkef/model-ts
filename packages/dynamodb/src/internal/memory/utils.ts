@@ -40,6 +40,38 @@ const cloneValue = (value: unknown): unknown => {
   return value
 }
 
+/**
+ * Whether two stored items hold the same attributes. Sets compare by their
+ * members, as DynamoDB sets are unordered.
+ */
+export const sameItem = (
+  left: InMemoryItem | undefined,
+  right: InMemoryItem | undefined,
+) => canonical(left) === canonical(right)
+
+const canonical = (value: unknown): string => {
+  if (value === undefined) return "undefined"
+  if (value instanceof Uint8Array) {
+    return `bytes(${Buffer.from(value).toString("base64")})`
+  }
+  if (value instanceof Set) {
+    return `set(${[...value].map(canonical).toSorted().join(",")})`
+  }
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
+  if (value !== null && typeof value === "object") {
+    const entries = Object.entries(value)
+      .filter(([, entry]) => isDefined(entry))
+      .toSorted(([left], [right]) => compareStrings(left, right))
+      .map(([key, entry]) => `${JSON.stringify(key)}:${canonical(entry)}`)
+    return `{${entries.join(",")}}`
+  }
+  // DynamoDB numbers compare by value, whichever type they decoded to.
+  if (typeof value === "number" || typeof value === "bigint") {
+    return `number(${value})`
+  }
+  return JSON.stringify(value)
+}
+
 export const stablePriority = (
   indexName: string,
   hashKey: string,

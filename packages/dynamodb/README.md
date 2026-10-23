@@ -449,13 +449,14 @@ instead of the network. Options are the `DynamoDB.layer` options without
 cursors with a fixed test key, so the same items get the same cursors on every
 run and cursors can go into snapshots. Pass `cursors: "plain"` to read them.
 
-| `Sandbox` member | Does                                                              |
-| ---------------- | ----------------------------------------------------------------- |
-| `tableName`      | The generated table name.                                         |
-| `seed(...items)` | Writes model instances or raw items directly, without conditions. |
-| `snapshot`       | Every item in the table, keyed by `JSON.stringify([PK, SK])`.     |
-| `diff(before)`   | A readable diff between `before` and now, for snapshot tests.     |
-| `get(key)`       | The raw stored item, or `undefined`.                              |
+| `Sandbox` member | Does                                                                     |
+| ---------------- | ------------------------------------------------------------------------ |
+| `tableName`      | The generated table name.                                                |
+| `seed(...items)` | Writes model instances or raw items directly, without conditions.        |
+| `snapshot`       | Every item in the table, keyed by `JSON.stringify([PK, SK])`.            |
+| `diff(before)`   | A readable diff between `before` and now, for snapshot tests.            |
+| `get(key)`       | The raw stored item, or `undefined`.                                     |
+| `changes`        | Subscribes to the table's stream. See [Change streams](#change-streams). |
 
 ```ts
 import { expect, layer } from "@effect/vitest"
@@ -489,3 +490,46 @@ same requests against it and DynamoDB Local. It does not support:
 
 A request that uses one of these fails with a `DynamoDBError` that names the
 missing feature. Tests that need them use `Sandbox.layerLocal()`.
+
+### Change streams
+
+Both sandboxes emit the records a DynamoDB stream with the
+`NEW_AND_OLD_IMAGES` view would carry, shaped as AWS Lambda receives them.
+Stream handlers can therefore run against a sandbox unchanged, in tests and in
+local development. `yield* sandbox.changes` subscribes and returns the stream
+of records for writes committed from then on. The subscription ends with the
+scope.
+
+```ts
+import { Sandbox } from "@model-ts/dynamodb/Sandbox"
+import type { StreamRecord } from "@model-ts/dynamodb/Stream"
+
+it.effect("emits the rename", () =>
+  Effect.gen(function* () {
+    const changes = yield* (yield* Sandbox).changes
+
+    yield* (yield* Post.load(post)).update({ title: "Renamed" })
+
+    const [record] = yield* changes.pipe(Stream.take(1), Stream.runCollect)
+    expect(record.eventName).toBe("MODIFY")
+    expect(record.dynamodb.NewImage?.title).toEqual({ S: "Renamed" })
+  }),
+)
+```
+
+The records follow DynamoDB's rules:
+
+- A put of a new item is an `INSERT`, any other change a `MODIFY`, and a
+  delete a `REMOVE`. `OldImage` and `NewImage` hold the whole item before and
+  after.
+- A write that leaves the item unchanged emits nothing, and neither does a
+  cancelled transaction.
+- Records arrive in commit order and their `SequenceNumber`s increase.
+- Attribute values are wire JSON, with binary values as base64 strings. The
+  `StreamRecord` and `StreamEvent` types in `@model-ts/dynamodb/Stream`
+  describe them.
+
+On DynamoDB Local, `changes` reads the table's real stream, which needs the
+optional peer dependency `@aws-sdk/client-dynamodb-streams`. The memory
+sandbox needs nothing extra. TTL deletions are not emitted: neither sandbox
+expires items.
