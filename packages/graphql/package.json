@@ -42,8 +42,8 @@
     "test:types": "vitest run --project graphql:types --root ../.."
   },
   "devDependencies": {
-    "@model-ts/core": "workspace:*",
-    "@model-ts/dynamodb": "workspace:*",
+    "@model-ts/core": "*",
+    "@model-ts/dynamodb": "*",
     "effect": "4.0.5",
     "graphql": "16.11.0"
   },

@@ -62,8 +62,8 @@
       "name": "@model-ts/graphql",
       "version": "6.0.0",
       "devDependencies": {
-        "@model-ts/core": "workspace:*",
-        "@model-ts/dynamodb": "workspace:*",
+        "@model-ts/core": "*",
+        "@model-ts/dynamodb": "*",
         "effect": "4.0.5",
         "graphql": "16.11.0",
       },
