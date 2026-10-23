@@ -24,7 +24,7 @@
  *
  * @since 7.0.0
  */
-import { randomBytes } from "node:crypto"
+import { createHash, randomBytes } from "node:crypto"
 import {
   DeleteTableCommand,
   DynamoDBClient,
@@ -35,11 +35,13 @@ import {
   DynamoDBDocumentClient,
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Schema } from "effect"
 import { DynamoDB, type DynamoDBOptions } from "./DynamoDB.ts"
 import type { ItemEncodeError } from "./Errors.ts"
-import { encodeItem, type RawItem } from "./Item.ts"
+import { encodeItem } from "./internal/item.ts"
+import type { RawItem } from "./Item.ts"
 import type { Key } from "./Keys.ts"
+import type { CursorOptions } from "./Pagination.ts"
 import { formatSnapshotDiff } from "./internal/diff.ts"
 import {
   makeMemoryEngine,
@@ -47,9 +49,11 @@ import {
 } from "./internal/memory/engine.ts"
 import { memoryClientConfig } from "./internal/memory/handler.ts"
 import { createTableCommand } from "./internal/table.ts"
+import { snapshotKey } from "./internal/snapshot.ts"
 
 /**
- * Every item of a table, keyed by `"PK__SK"`.
+ * Every item of a table, keyed by `JSON.stringify([PK, SK])`. Use
+ * `Sandbox.get` to read one item.
  *
  * @since 7.0.0
  */
@@ -79,11 +83,19 @@ export interface SandboxService {
 }
 
 /**
- * Options for the table's `DynamoDB` service.
+ * Options for the table's `DynamoDB` service. `cursors` defaults to
+ * encryption with a fixed test key, so the same items get the same cursors on
+ * every run and cursors can appear in snapshots. Pass `cursors: "plain"` for
+ * readable ones.
  *
  * @since 7.0.0
  */
-export type SandboxOptions = Omit<DynamoDBOptions, "tableName" | "client">
+export interface SandboxOptions extends Omit<
+  DynamoDBOptions,
+  "tableName" | "client" | "cursors"
+> {
+  readonly cursors?: CursorOptions | undefined
+}
 
 /**
  * @since 7.0.0
@@ -118,7 +130,7 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
               read: async () => structuredClone(engine.snapshot(tableName)),
             }),
           ),
-          DynamoDB.layer({ ...options, tableName, client }),
+          DynamoDB.layer({ ...withCursors(options), tableName, client }),
         )
       }),
     )
@@ -168,11 +180,24 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
               read: () => scan(documents, tableName),
             }),
           ),
-          DynamoDB.layer({ ...rest, tableName, client }),
+          DynamoDB.layer({ ...withCursors(rest), tableName, client }),
         )
       }),
     )
 }
+
+/**
+ * The cursor key of every sandbox. It is public, which is fine for test
+ * tables and keeps cursors identical across runs and machines.
+ */
+const SANDBOX_CURSOR_KEY = createHash("sha256")
+  .update("@model-ts/dynamodb sandbox cursors")
+  .digest()
+
+const withCursors = <O extends SandboxOptions>(options: O) => ({
+  ...options,
+  cursors: options.cursors ?? { encryptionKey: SANDBOX_CURSOR_KEY },
+})
 
 interface Backend {
   readonly write: (items: ReadonlyArray<RawItem>) => Promise<void>
@@ -185,9 +210,7 @@ const make = (tableName: string, backend: Backend) => {
     tableName,
     seed: (...items) =>
       Effect.forEach(items, (item) =>
-        isModelInstance(item)
-          ? encodeItem(item)
-          : Effect.succeed(item as RawItem),
+        isModelInstance(item) ? encodeItem(item) : Effect.succeed(item),
       ).pipe(
         Effect.flatMap((encoded) =>
           Effect.promise(() => backend.write(encoded)),
@@ -196,15 +219,14 @@ const make = (tableName: string, backend: Backend) => {
     snapshot,
     diff: (before) =>
       Effect.map(snapshot, (after) => formatSnapshotDiff(before, after)),
-    get: (key) =>
-      Effect.map(snapshot, (table) => table[`${key.PK}__${key.SK}`]),
+    get: (key) => Effect.map(snapshot, (table) => table[snapshotKey(key)]),
   })
 }
 
 const newTableName = () => `sandbox-${randomBytes(8).toString("hex")}`
 
-const isModelInstance = (item: object): item is Key =>
-  typeof (item.constructor as { identifier?: unknown }).identifier === "string"
+const isModelInstance = (item: Key | RawItem): item is Key =>
+  Schema.isSchema(item.constructor)
 
 const writeItems = async (
   engine: MemoryEngine,
@@ -239,8 +261,8 @@ const scan = async (documents: DynamoDBDocumentClient, tableName: string) => {
     const page = await documents.send(
       new ScanCommand({ TableName: tableName, ExclusiveStartKey }),
     )
-    for (const item of (page.Items ?? []) as Array<RawItem>) {
-      table[`${item.PK}__${item.SK}`] = item
+    for (const item of page.Items ?? []) {
+      table[snapshotKey({ PK: String(item.PK), SK: String(item.SK) })] = item
     }
     ExclusiveStartKey = page.LastEvaluatedKey
   } while (ExclusiveStartKey)

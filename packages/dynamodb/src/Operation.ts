@@ -1,10 +1,10 @@
 /**
- * Write operations as data, for `Dynamo.bulk`. Building an operation does
+ * Write operations as data, for `DynamoDB.bulk`. Building an operation does
  * not touch the table; `bulk` runs them in transactions of up to 100 and
  * rolls back committed transactions when a later one fails.
  *
  * ```ts
- * yield* Dynamo.bulk([
+ * yield* DynamoDB.bulk([
  *   organization.operation("put"),
  *   membership.operation("put"),
  *   oldSlug.operation("delete"),
@@ -13,9 +13,15 @@
  *
  * @since 7.0.0
  */
-import { docVersion, setDocVersion, modelOf, type TableModel } from "./Item.ts"
-import { type GSIKeys, type Key, keyOf } from "./Keys.ts"
-import { deletedKey } from "./Item.ts"
+import {
+  deletedKey,
+  docVersion,
+  modelOf,
+  setDocVersion,
+} from "./internal/item.ts"
+import type { TableItem, TableModel } from "./Item.ts"
+import type { GSIKeys, Key } from "./Keys.ts"
+import { keyOf } from "./internal/keys.ts"
 
 /**
  * Condition parameters shared by write operations.
@@ -67,7 +73,7 @@ export type UpdateRawAttributes<Values> = Partial<Values> & {
 /** @since 7.0.0 */
 export interface PutOperation extends PutOptions {
   readonly _tag: "Put"
-  readonly item: Key
+  readonly item: TableItem
   /** Write the item to its soft-deleted location. */
   readonly softDeleted?: boolean | undefined
 }
@@ -142,40 +148,56 @@ export const isTransactionOperation = (
 
 /**
  * Creates `item`, failing the transaction when its key exists. Rolled back
- * by deleting it.
+ * by deleting it, if it still has the version this write gave it.
+ *
+ * With `IgnoreExistence` or a condition of your own the put may replace an
+ * existing item, which a rollback could not restore, so it has no rollback:
+ * it stays applied when a later transaction of the same `bulk` call fails.
  *
  * @since 7.0.0
  */
-export const put = (item: Key, options?: PutOptions): TransactionOperation => ({
+export const put = (
+  item: TableItem,
+  options?: PutOptions,
+): TransactionOperation => ({
   action: { _tag: "Put", item, ...options },
-  rollback: { _tag: "Delete", key: keyOf(item) },
+  rollback:
+    options?.IgnoreExistence || options?.ConditionExpression !== undefined
+      ? undefined
+      : undoCreate(item, docVersion(item) ?? 0),
 })
+
+/** Deletes the item a write created, unless it has changed since. */
+const undoCreate = (key: Key, version: number): DeleteOperation =>
+  remove(key, versionGuard(version))
 
 /**
  * Applies `patch` to `item`. Returns the updated instance and the operation
- * that stores it, guarded by the version `item` was read with.
+ * that stores it, guarded by the version `item` was read with: the write
+ * fails when the stored item changed or was deleted since. An instance that
+ * was never stored has no version, so its update is unconditional.
  *
  * @since 7.0.0
  */
-export const update = <A extends Key>(
+export const update = <A extends TableItem>(
   item: A,
-  patch: Partial<Omit<A, "_tag">>,
+  patch: Partial<ReturnType<A["values"]>>,
 ): readonly [A, UpdateOperation] => {
   const model = modelOf(item)
   const previous = docVersion(item)
-  const next = new model({ ...valuesOf(item), ...withoutUndefined(patch) })
-  setDocVersion(next, (previous ?? 0) + 1)
+  const version = (previous ?? 0) + 1
+  // Construction skips filters and brands, like `new`.
+  const next = model.make(
+    { ...item.values(), ...withoutUndefined(patch) },
+    { disableChecks: true },
+  )
+  setDocVersion(next, version)
 
   if (next.PK === item.PK && next.SK === item.SK) {
     const guard: ConditionParams =
       previous === undefined
         ? { ConditionExpression: undefined }
-        : {
-            ConditionExpression:
-              "attribute_not_exists(#docVersion) OR #docVersion = :docVersion",
-            ExpressionAttributeNames: { "#docVersion": "_docVersion" },
-            ExpressionAttributeValues: { ":docVersion": previous },
-          }
+        : versionGuard(previous)
     return [next, { _tag: "Put", item: next, ...guard }]
   }
 
@@ -188,10 +210,10 @@ export const update = <A extends Key>(
           item: next,
           ConditionExpression: "attribute_not_exists(PK)",
         },
-        rollback: { _tag: "Delete", key: keyOf(next) },
+        rollback: undoCreate(next, version),
       },
       {
-        action: { _tag: "Delete", key: keyOf(item) },
+        action: deleteItem(item),
         rollback: { _tag: "Put", item },
       },
     ],
@@ -204,10 +226,10 @@ export const update = <A extends Key>(
  *
  * @since 7.0.0
  */
-export const updateRaw = <Values>(
-  model: TableModel,
+export const updateRaw = <A extends TableItem>(
+  model: TableModel<A>,
   key: Key,
-  attributes: UpdateRawAttributes<Values>,
+  attributes: UpdateRawAttributes<ReturnType<A["values"]>>,
   params?: UpdateRawParams,
 ): UpdateRawOperation => ({
   _tag: "UpdateRaw",
@@ -241,20 +263,26 @@ export {
  * @since 7.0.0
  */
 export const deleteItem = (
-  item: Key,
+  item: TableItem,
   options?: DeleteOptions,
 ): DeleteOperation => {
   const version = docVersion(item)
   if (options?.ignoreVersion || version === undefined) return remove(item)
-  return remove(item, {
-    ConditionExpression:
-      version === 0
-        ? "attribute_exists(PK) AND (attribute_not_exists(#docVersion) OR #docVersion = :docVersion)"
-        : "attribute_exists(PK) AND #docVersion = :docVersion",
-    ExpressionAttributeNames: { "#docVersion": "_docVersion" },
-    ExpressionAttributeValues: { ":docVersion": version },
-  })
+  return remove(item, versionGuard(version))
 }
+
+/**
+ * The stored item exists and still has `version`. Version 0 also matches an
+ * item written without `_docVersion`.
+ */
+const versionGuard = (version: number): ConditionParams => ({
+  ConditionExpression:
+    version === 0
+      ? "attribute_exists(PK) AND (attribute_not_exists(#docVersion) OR #docVersion = :docVersion)"
+      : "attribute_exists(PK) AND #docVersion = :docVersion",
+  ExpressionAttributeNames: { "#docVersion": "_docVersion" },
+  ExpressionAttributeValues: { ":docVersion": version },
+})
 
 /**
  * Moves `item` to its `$$DELETED$$` keys: deletes it (version-guarded like
@@ -264,7 +292,7 @@ export const deleteItem = (
  * @since 7.0.0
  */
 export const softDelete = (
-  item: Key,
+  item: TableItem,
   options?: DeleteOptions,
 ): readonly [TransactionOperation, TransactionOperation] => [
   {
@@ -273,7 +301,7 @@ export const softDelete = (
   },
   {
     action: { _tag: "Put", item, softDeleted: true },
-    rollback: { _tag: "Delete", key: deletedKey(item) },
+    rollback: undoCreate(deletedKey(item), docVersion(item) ?? 0),
   },
 ]
 
@@ -292,11 +320,9 @@ export const condition = (
   ...params,
 })
 
-const valuesOf = (item: Key): Record<string, unknown> =>
-  (item as unknown as { values(): Record<string, unknown> }).values()
-
-/** @internal */
-export const withoutUndefined = <T extends object>(value: T): T =>
+const withoutUndefined = (
+  value: Readonly<Record<string, unknown>>,
+): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(value).filter(([, entry]) => entry !== undefined),
-  ) as T
+  )

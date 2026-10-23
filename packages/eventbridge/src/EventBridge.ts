@@ -11,7 +11,8 @@ import {
   PutEventsCommand,
   type PutEventsRequestEntry,
 } from "@aws-sdk/client-eventbridge"
-import { type Config, Context, Effect, Layer } from "effect"
+import { Provider } from "@model-ts/core"
+import { Context, Effect, Layer } from "effect"
 import {
   EventBridgeError,
   EventEncodeError,
@@ -19,6 +20,7 @@ import {
   type PublishErrors,
   type ResultEntry,
 } from "./Errors.ts"
+import type { EventBridgeMembers } from "./Provider.ts"
 
 /**
  * Anything that can be published: an address and an encoder. Every model
@@ -80,6 +82,31 @@ export class EventBridge extends Context.Service<
   EventBridge,
   EventBridgeService
 >()("@model-ts/eventbridge/EventBridge") {
+  /**
+   * The model provider: adds `publish()`, which publishes the event now. The
+   * model needs `source` and `detailType` getters or fields.
+   */
+  static readonly provider: Provider.Provider<EventBridgeMembers> =
+    Provider.make<EventBridgeMembers>()({
+      instanceProps: {
+        publish(this: PublishableEvent) {
+          return EventBridge.use((bus) => bus.publish([this]))
+        },
+      },
+    })
+
+  /**
+   * Publishes several events at once, in PutEvents calls of up to 10.
+   *
+   * ```ts
+   * yield* EventBridge.publish(new PostPublished({ post }), new FeedUpdated({ feed }))
+   * ```
+   */
+  static readonly publish = (
+    ...events: ReadonlyArray<PublishableEvent>
+  ): Effect.Effect<ReadonlyArray<ResultEntry>, PublishErrors, EventBridge> =>
+    EventBridge.use((bus) => bus.publish(events))
+
   /** Publishes to `eventBusName`. The client is destroyed when the scope closes. */
   static readonly layer = (
     options: EventBridgeOptions,
@@ -103,16 +130,6 @@ export class EventBridge extends Context.Service<
       }),
     )
 
-  /** Like `layer`, with options read from `Config` when the layer is built. */
-  static readonly layerConfig = (
-    options: Config.Config<EventBridgeOptions>,
-  ): Layer.Layer<EventBridge, Config.ConfigError> =>
-    Layer.unwrap(
-      Effect.gen(function* () {
-        return EventBridge.layer(yield* options)
-      }),
-    )
-
   /**
    * A bus that keeps every event in memory, readable through
    * `PublishedEvents`. Events are encoded and batched exactly as by `layer`.
@@ -126,10 +143,10 @@ export class EventBridge extends Context.Service<
           Effect.sync(() => {
             for (const entry of entries) {
               published.push({
-                eventBusName: entry.EventBusName!,
-                source: entry.Source!,
-                detailType: entry.DetailType!,
-                detail: JSON.parse(entry.Detail!),
+                eventBusName: entry.EventBusName,
+                source: entry.Source,
+                detailType: entry.DetailType,
+                detail: JSON.parse(entry.Detail),
               })
             }
             return {
@@ -151,9 +168,15 @@ export class EventBridge extends Context.Service<
 /** PutEvents accepts at most 10 entries per call. */
 const MAX_ENTRIES = 10
 
-type PutEvents = (
-  entries: ReadonlyArray<PutEventsRequestEntry>,
-) => Effect.Effect<
+/** A PutEvents entry with every field set and `Detail` a JSON object. */
+interface PreparedEntry extends PutEventsRequestEntry {
+  readonly EventBusName: string
+  readonly Source: string
+  readonly DetailType: string
+  readonly Detail: string
+}
+
+type PutEvents = (entries: ReadonlyArray<PreparedEntry>) => Effect.Effect<
   {
     readonly FailedEntryCount?: number | undefined
     readonly Entries?: ReadonlyArray<ResultEntry> | undefined
@@ -164,12 +187,23 @@ type PutEvents = (
 const make = (eventBusName: string, putEvents: PutEvents) => {
   const toEntry = (event: PublishableEvent) =>
     Effect.try({
-      try: (): PutEventsRequestEntry => ({
-        EventBusName: eventBusName,
-        Source: event.source,
-        DetailType: event.detailType,
-        Detail: JSON.stringify(event.encode()),
-      }),
+      try: (): PreparedEntry => {
+        const detail = event.encode()
+        // EventBridge only accepts a JSON object as the detail.
+        if (
+          typeof detail !== "object" ||
+          detail === null ||
+          Array.isArray(detail)
+        ) {
+          throw new TypeError("An event must encode to an object")
+        }
+        return {
+          EventBusName: eventBusName,
+          Source: event.source,
+          DetailType: event.detailType,
+          Detail: JSON.stringify(detail),
+        }
+      },
       catch: (cause) =>
         new EventEncodeError({ detailType: event.detailType, cause }),
     })
@@ -178,7 +212,7 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
    * One PutEvents call. Rejected entries fail the call's span with a
    * `PublishError` for that call; `publish` collects them across calls.
    */
-  const send = (entries: ReadonlyArray<PutEventsRequestEntry>) =>
+  const send = (entries: ReadonlyArray<PreparedEntry>) =>
     putEvents(entries).pipe(
       Effect.flatMap(({ FailedEntryCount = 0, Entries = [] }) =>
         FailedEntryCount > 0
@@ -235,17 +269,3 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
 
   return EventBridge.of({ eventBusName, publish })
 }
-
-/**
- * Publishes several events at once, in PutEvents calls of up to 10.
- *
- * ```ts
- * yield* publish(new PostPublished({ post }), new FeedUpdated({ feed }))
- * ```
- *
- * @since 7.0.0
- */
-export const publish = (
-  ...events: ReadonlyArray<PublishableEvent>
-): Effect.Effect<ReadonlyArray<ResultEntry>, PublishErrors, EventBridge> =>
-  EventBridge.use((bus) => bus.publish(events))

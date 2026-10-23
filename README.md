@@ -6,10 +6,10 @@ your own getters and methods, and gains persistence or messaging methods from
 _providers_ such as DynamoDB and EventBridge.
 
 ```ts
-class Post extends model<Post>()("Post", dynamodb, {
-  id: generated(PostId),
+class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
+  id: Schema.String,
   title: Schema.String,
-  publishedAt: Field.nullable(Schema.DateFromString),
+  publishedAt: Schema.NullOr(Schema.DateFromString),
 }) {
   get PK() {
     return `POST#${this.id}`
@@ -19,7 +19,8 @@ class Post extends model<Post>()("Post", dynamodb, {
   }
 }
 
-const post = yield * new Post({ title: "Hello", publishedAt: null }).put()
+const post =
+  yield * new Post({ id: "1", title: "Hello", publishedAt: null }).put()
 const renamed = yield * post.update({ title: "Hello, world" })
 ```
 
@@ -37,8 +38,7 @@ const renamed = yield * post.update({ title: "Hello, world" })
 - [Installation](#installation)
 - [Quick start](#quick-start)
 - [Models](#models)
-- [Fields, optional values and defaults](#fields-optional-values-and-defaults)
-- [IDs](#ids)
+- [Fields and defaults](#fields-and-defaults)
 - [Unions](#unions)
 - [Providers](#providers)
 - [Services and layers](#services-and-layers)
@@ -53,7 +53,7 @@ const renamed = yield * post.update({ title: "Hello, world" })
 
 | Package                                                   | What it does                                                               |
 | --------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`@model-ts/core`](packages/core/README.md)               | `model()`, fields, IDs, unions and the provider API.                       |
+| [`@model-ts/core`](packages/core/README.md)               | `Model.Class`, `Model.Union` and the provider API.                         |
 | [`@model-ts/dynamodb`](packages/dynamodb/README.md)       | Single-table DynamoDB: reads, writes, transactions, pagination, sandboxes. |
 | [`@model-ts/eventbridge`](packages/eventbridge/README.md) | Publishing models as EventBridge events, now or later.                     |
 
@@ -82,21 +82,21 @@ The packages are ESM only and need Node.js 22 or later. They require
 
 ## Quick start
 
-Define a model, give it the `dynamodb` provider and table keys, then run an
+Define a model, give it `DynamoDB.provider` and table keys, then run an
 Effect program with a `DynamoDB` layer.
 
 ```ts
-import { Field, generated, Id, model } from "@model-ts/core"
-import { DynamoDB, dynamodb } from "@model-ts/dynamodb"
+import { Model } from "@model-ts/core"
+import { DynamoDB } from "@model-ts/dynamodb"
 import { Effect, Schema } from "effect"
 
-const PostId = Id("post_", "PostId")
+const PostId = Schema.String.pipe(Schema.brand("PostId"))
 type PostId = typeof PostId.Type
 
-class Post extends model<Post>()("Post", dynamodb, {
-  id: generated(PostId),
+class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
+  id: PostId,
   title: Schema.String,
-  publishedAt: Field.nullable(Schema.DateFromString),
+  publishedAt: Schema.NullOr(Schema.DateFromString),
 }) {
   get PK() {
     return `POST#${this.id}`
@@ -111,13 +111,19 @@ class Post extends model<Post>()("Post", dynamodb, {
 }
 
 const program = Effect.gen(function* () {
-  const post = yield* new Post({ title: "Hello", publishedAt: null }).put()
+  const post = yield* new Post({
+    id: PostId.make("post_001"),
+    title: "Hello",
+    publishedAt: null,
+  }).put()
   const loaded = yield* Post.load(Post.key(post.id))
   return yield* loaded.update({ publishedAt: new Date() })
 })
 
 await Effect.runPromise(
-  program.pipe(Effect.provide(DynamoDB.layer({ tableName: "app" }))),
+  program.pipe(
+    Effect.provide(DynamoDB.layer({ tableName: "app", cursors: "plain" })),
+  ),
 )
 ```
 
@@ -134,14 +140,14 @@ Effect.Effect<
 
 ## Models
 
-`model<Self>()(tag, fields)` returns a class to extend. Pass the class itself
+`Model.Class<Self>()(tag, fields)` returns a class to extend. Pass the class itself
 as `Self` so that decoders and provider methods return your subclass, getters
 and methods included. With providers, they go between the tag and the fields:
-`model<Self>()(tag, provider, fields)` or `model<Self>()(tag, [a, b], fields)`.
+`Model.Class<Self>()(tag, provider, fields)` or `Model.Class<Self>()(tag, [a, b], fields)`.
 
 ```ts
-class User extends model<User>()("User", {
-  id: generated(UserId),
+class User extends Model.Class<User>()("User", {
+  id: Schema.String,
   email: Email,
   firstName: Schema.String,
   lastName: Schema.String,
@@ -155,20 +161,26 @@ class User extends model<User>()("User", {
 A model class is a real `Schema.Class`, so it works with every Schema API and
 nests in other schemas and models. On top of that it has:
 
-| Member               | Does                                                                           |
-| -------------------- | ------------------------------------------------------------------------------ |
-| `new User({...})`    | Builds an instance from typed values. Fills in defaults and does not validate. |
-| `User.make({...})`   | Like `new`, but validates and throws on invalid input.                         |
-| `User.from(input)`   | Decodes untrusted input and throws a `SchemaError` when it does not match.     |
-| `User.decode(input)` | Decodes untrusted input as an `Effect<User, SchemaError>`.                     |
-| `user.encode()`      | The encoded form, for JSON APIs, events and storage.                           |
-| `user.values()`      | The field values as a plain object, without `_tag` or getters.                 |
+| Member               | Does                                                                                  |
+| -------------------- | ------------------------------------------------------------------------------------- |
+| `new User({...})`    | Builds an instance from typed values. Fills in defaults and skips filters and brands. |
+| `User.make({...})`   | Like `new`, but runs every check and throws on invalid input.                         |
+| `User.from(input)`   | Decodes untrusted input and throws a `SchemaError` when it does not match.            |
+| `User.decode(input)` | Decodes untrusted input as an `Effect<User, SchemaError>`.                            |
+| `user.encode()`      | The encoded form, for JSON APIs, events and storage.                                  |
+| `user.values()`      | The field values as a plain object, without `_tag` or getters.                        |
+
+`from` and `decode` are shorthands: `Schema.decodeUnknownSync(User)` and every
+other Schema decoder return `User` instances too, getters and methods included.
 
 **Construction trusts its input.** The constructor's parameter is already
-typed, brands included, so `new User({...})` only fills in defaults. Validation
-happens where data enters your program: `from`, `decode` or any Schema decoder.
-A value that slipped past the types (an `as` cast, say) is caught when it is
-encoded, for example as an `ItemEncodeError` before a DynamoDB write.
+typed, brands included, so `new User({...})` passes Effect's
+`disableChecks`: it fills in defaults and checks the shape, but skips filters
+and brands. Pass `{ disableChecks: false }` as the second argument, or use
+`User.make`, to run every check. Validation happens where data enters your
+program: `from`, `decode` or any Schema decoder. A value that slipped past a
+filter is caught when it is encoded, for example as an `ItemEncodeError`
+before a DynamoDB write.
 
 **`_tag` is handled for you.** Every model has a `_tag` equal to its name. You
 never pass it to the constructor, `from` or `decode`; it is optional when
@@ -185,66 +197,40 @@ user.fullName // "Ada Lovelace"
 user.encode() // { _tag: "User", id: "user_01J...", email: "ada@example.com", ... }
 ```
 
-## Fields, optional values and defaults
+## Fields and defaults
 
-Fields are ordinary Schemas. `Field` adds short names for the shapes models use
-most:
+Fields are ordinary Schemas, so optional and nullable fields, brands and
+defaults use Effect's own combinators:
 
-| Field                                                  | Type                   | Encoded                                       |
-| ------------------------------------------------------ | ---------------------- | --------------------------------------------- |
-| `Field.optional(Schema.String)`                        | `bio?: string`         | key left out when missing                     |
-| `Field.nullable(Schema.String)`                        | `bio: string \| null`  | always present, may be `null`                 |
-| `Field.nullish(Schema.String)`                         | `bio?: string \| null` | may be missing or `null`                      |
-| `Schema.String.pipe(Field.withDefault(() => "light"))` | `theme: string`        | optional in the constructor and when decoding |
+| Field                                                                        | Type                               |
+| ---------------------------------------------------------------------------- | ---------------------------------- |
+| `Schema.optional(Schema.String)`                                             | `bio?: string`                     |
+| `Schema.NullOr(Schema.String)`                                               | `bio: string \| null`              |
+| `Schema.optional(Schema.NullOr(Schema.String))`                              | `bio?: string \| null`             |
+| `Schema.String.pipe(Schema.withConstructorDefault(Effect.succeed("light")))` | `theme: string`, optional in `new` |
 
-`Field.withDefault` computes the default on each use and applies it both when
-constructing (`new Settings({})`) and when decoding a stored row that predates
-the field. For a constructor-only default, use
-`Schema.withConstructorDefault`; for a decode-only default, use
-`Schema.withDecodingDefaultKey`.
-
-## IDs
-
-`Id(prefix, brand)` makes one nominal type per ID. Each is a string with a
-fixed prefix and its own brand, so a `UserId` is never accepted where a
-`PostId` is expected.
-
-```ts
-const UserId = Id("user_", "UserId")
-type UserId = typeof UserId.Type
-
-UserId.make("user_01J...") // UserId
-UserId.make("post_01J...") // type error: wrong prefix
-UserId.generate() // a new ULID-based id from the system clock
-const id = yield * UserId.create // a new id from Effect's Clock and Random
-
-class User extends model<User>()("User", {
-  id: generated(UserId), // filled in when left out
-  invitedBy: Field.nullable(UserId),
-}) {}
-```
-
-`UserId.create` reads Effect's `Clock` and `Random`, so tests get repeatable
-IDs with `TestClock` and `Random.withSeed`.
+`Schema.withConstructorDefault` fills a field the constructor leaves out;
+`Schema.withDecodingDefaultKey` fills a key that stored data lacks, for
+example rows written before the field existed.
 
 ## Unions
 
-`union(members)` is a `Schema.Union` of models with `from` and `decode`. It
+`Model.Union(members)` is a `Schema.Union` of models with `from` and `decode`. It
 picks the member by `_tag` when the input has one and tries each member in
 order when it does not.
 
 ```ts
-const Shape = union([Circle, Square])
+const Shape = Model.Union([Circle, Square])
 type Shape = typeof Shape.Type // Circle | Square
 
 Shape.from({ _tag: "Circle", radius: 1 }) // Circle
 ```
 
-A provider can add members to unions too. With `dynamodb`, a union reads mixed
-items, for example a post and its comments in one partition:
+A provider can add members to unions too. With `DynamoDB.provider`, a union
+reads mixed items, for example a post and its comments in one partition:
 
 ```ts
-const PostContent = union([Post, Comment], dynamodb)
+const PostContent = Model.Union([Post, Comment], DynamoDB.provider)
 const items =
   yield *
   PostContent.query({
@@ -256,17 +242,22 @@ const items =
 ## Providers
 
 A provider adds members to models: instance methods, getters, statics and
-union members. `dynamodb` adds `put`, `load`, `query` and the rest;
-`eventBridge` adds `publish`; `defer` adds `defer`. Pass several as an array;
-they merge left to right, and a later member replaces an earlier one with the
-same name.
+union members. `DynamoDB.provider` adds `put`, `load`, `query` and the rest;
+`EventBridge.provider` adds `publish`. Pass several as an array; they merge left to right, and a later member replaces an
+earlier one with the same name.
 
 ```ts
-class InvoiceSent extends model<InvoiceSent>()(
+class InvoiceSent extends Model.Class<InvoiceSent>()(
   "InvoiceSent",
-  [eventBridge, defer],
+  [DynamoDB.provider, EventBridge.provider],
   { invoiceId: InvoiceId },
 ) {
+  get PK() {
+    return `INVOICE#${this.invoiceId}`
+  }
+  get SK() {
+    return "SENT"
+  }
   get source() {
     return "billing"
   }
@@ -275,8 +266,8 @@ class InvoiceSent extends model<InvoiceSent>()(
   }
 }
 
-yield * new InvoiceSent({ invoiceId }).publish()
-yield * new InvoiceSent({ invoiceId }).defer(tomorrow)
+const sent = yield * new InvoiceSent({ invoiceId }).put()
+yield * sent.publish()
 ```
 
 Providers are constant values. They never hold a client or configuration;
@@ -285,22 +276,22 @@ their methods return Effects that ask for a service, such as `DynamoDB` or
 [Services and layers](#services-and-layers)).
 
 Writing your own takes two steps: declare the members as a type lambda, then
-implement them with `makeProvider`. The members can refer to the model through
+implement them with `Provider.make`. The members can refer to the model through
 `this["Self"]` and `this["Fields"]`:
 
 ```ts
-import { makeProvider, type ProviderMembers } from "@model-ts/core"
+import { Provider } from "@model-ts/core"
 
 interface AuditInstance<Self> {
   /** Writes an audit entry for this item. */
   audit(this: Self & { readonly id: string }, action: string): Effect.Effect<void, never, AuditLog>
 }
 
-interface AuditMembers extends ProviderMembers {
+interface AuditMembers extends Provider.Members {
   readonly instance: AuditInstance<this["Self"]>
 }
 
-export const audited = makeProvider<AuditMembers>()({
+export const audited = Provider.make<AuditMembers>()({
   instanceProps: {
     audit(action) {
       return AuditLog.use((log) => log.write(this.id, action))
@@ -308,27 +299,26 @@ export const audited = makeProvider<AuditMembers>()({
   },
 })
 
-class Invoice extends model<Invoice>()("Invoice", [dynamodb, audited], { ... }) {}
+class Invoice extends Model.Class<Invoice>()("Invoice", [DynamoDB.provider, audited], { ... }) {}
 ```
 
 A `this` parameter such as `this: Self & { readonly id: string }` states what
 the model must have. Calling `audit` on a model without an `id` is a type
-error. The `dynamodb` provider uses this to require `PK` and `SK`, and
-`eventBridge` to require `source` and `detailType`.
+error. `DynamoDB.provider` uses this to require `PK` and `SK`, and
+`EventBridge.provider` to require `source` and `detailType`.
 
 The [core README](packages/core/README.md#providers) covers statics, union
-members and `mergeProviders`.
+members and `Provider.merge`.
 
 ## Services and layers
 
 Every model method that talks to AWS returns an `Effect` that requires a
 service:
 
-| Service       | Required by                            | Layers                                                                                |
-| ------------- | -------------------------------------- | ------------------------------------------------------------------------------------- |
-| `DynamoDB`    | the `dynamodb` provider and `Dynamo.*` | `DynamoDB.layer`, `DynamoDB.layerConfig`, `Sandbox.layerMemory`, `Sandbox.layerLocal` |
-| `EventBridge` | `publish`                              | `EventBridge.layer`, `EventBridge.layerConfig`, `EventBridge.layerMemory`             |
-| `Deferrer`    | `defer`                                | `Deferrer.layerEventBridge`, `Deferrer.layerMemory`                                   |
+| Service       | Required by                                              | Layers                                                        |
+| ------------- | -------------------------------------------------------- | ------------------------------------------------------------- |
+| `DynamoDB`    | `DynamoDB.provider` members and `DynamoDB.*`             | `DynamoDB.layer`, `Sandbox.layerMemory`, `Sandbox.layerLocal` |
+| `EventBridge` | `EventBridge.provider` members and `EventBridge.publish` | `EventBridge.layer`, `EventBridge.layerMemory`                |
 
 Programs say what they need in their type and get it once, at the edge, from a
 layer. Production, tests and local development differ only in the layers they
@@ -336,11 +326,17 @@ provide, and nothing reads a global client or an environment variable behind
 your back.
 
 ```ts
-const AppLayer = Layer.mergeAll(
-  DynamoDB.layerConfig(Config.all({ tableName: Config.String("TABLE_NAME") })),
-  EventBridge.layerConfig(
-    Config.all({ eventBusName: Config.String("EVENT_BUS_NAME") }),
-  ),
+// Options from Config, read when the layer is built
+const AppLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const tableName = yield* Config.String("TABLE_NAME")
+    const encryptionKey = yield* Config.Redacted("CURSOR_KEY")
+    const eventBusName = yield* Config.String("EVENT_BUS_NAME")
+    return Layer.mergeAll(
+      DynamoDB.layer({ tableName, cursors: { encryptionKey } }),
+      EventBridge.layer({ eventBusName }),
+    )
+  }),
 )
 ```
 
@@ -361,24 +357,24 @@ const post =
   )
 ```
 
-| Error                         | Raised when                                                                       |
-| ----------------------------- | --------------------------------------------------------------------------------- |
-| `ItemNotFoundError`           | No item is stored under the key.                                                  |
-| `KeyExistsError`              | `put` found an item at the key (pass `IgnoreExistence: true` to overwrite).       |
-| `ConditionalCheckFailedError` | A condition you passed was false.                                                 |
-| `RaceConditionError`          | The stored item changed since it was read (optimistic locking).                   |
-| `TransactionCanceledError`    | DynamoDB cancelled a transaction; `cancellationReasons` says why.                 |
-| `BulkWriteRollbackError`      | A bulk write failed and could not be fully rolled back.                           |
-| `PaginationError`             | Invalid pagination arguments or an unreadable cursor.                             |
-| `ItemDecodeError`             | A stored item does not match the model's schema.                                  |
-| `ItemEncodeError`             | An instance holds a value its schema cannot encode.                               |
-| `DynamoDBError`               | Any other AWS failure: throttling, permissions, network. `code` has the AWS name. |
-| `PublishError`                | EventBridge rejected some entries; `entries` has one result per event.            |
-| `EventEncodeError`            | An event could not be encoded, so nothing was sent.                               |
-| `EventBridgeError`            | The PutEvents call itself failed.                                                 |
+| Error                         | Raised when                                                                         |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `ItemNotFoundError`           | No item is stored under the key.                                                    |
+| `KeyExistsError`              | `put` found an item at the key (pass `IgnoreExistence: true` to overwrite).         |
+| `ConditionalCheckFailedError` | A condition you passed was false.                                                   |
+| `RaceConditionError`          | The stored item changed since it was read (optimistic locking).                     |
+| `TransactionCanceledError`    | DynamoDB cancelled a transaction; `cancellationReasons` says why.                   |
+| `BulkWriteRollbackError`      | A bulk write failed and could not be fully rolled back.                             |
+| `PaginationError`             | Invalid pagination arguments, or a cursor that is unreadable or from another query. |
+| `ItemDecodeError`             | A stored item does not match the model's schema.                                    |
+| `ItemEncodeError`             | An instance holds a value its schema cannot encode.                                 |
+| `DynamoDBError`               | Any other AWS failure: throttling, permissions, network. `code` has the AWS name.   |
+| `PublishError`                | EventBridge rejected some entries; `entries` has one result per event.              |
+| `EventEncodeError`            | An event could not be encoded, so nothing was sent.                                 |
+| `EventBridgeError`            | The PutEvents call itself failed.                                                   |
 
-Each operation's error union is exported as a type, such as `Dynamo.GetError`
-or `Dynamo.UpdateError`, for use in your own signatures. Defects (bugs, such
+Each operation's error union is exported as a type, such as `DynamoDB.GetError`
+or `DynamoDB.UpdateError`, for use in your own signatures. Defects (bugs, such
 as a transaction group of more than 100 operations) are not in the error
 channel.
 
@@ -388,8 +384,8 @@ Every operation runs in a span, and every AWS call in a client span inside it,
 so a trace shows both what your code asked for and what it sent:
 
 ```text
-Dynamo.update              model_ts.model=Post  model_ts.key=POST#post_01J... / POST
-└─ Dynamo.put
+DynamoDB.update              model_ts.model=Post  model_ts.key=POST#post_01J... / POST
+└─ DynamoDB.put
    └─ DynamoDB.PutItem     db.system.name=aws.dynamodb  aws.dynamodb.table_names=[app]
 EventBridge.publish        messaging.batch.message_count=23
 ├─ EventBridge.PutEvents   messaging.destination.name=orders  messaging.batch.message_count=10
@@ -429,7 +425,6 @@ mocked, and no environment variable switches implementations.
 | `Sandbox.layerMemory()`   | A fresh in-memory DynamoDB table. Fast; nothing to start.                                              |
 | `Sandbox.layerLocal()`    | A fresh table on [DynamoDB Local](https://hub.docker.com/r/amazon/dynamodb-local), deleted afterwards. |
 | `EventBridge.layerMemory` | A bus that records events; read them through `PublishedEvents`.                                        |
-| `Deferrer.layerMemory`    | A deferrer that records events; read them through `DeferredEvents`.                                    |
 
 Both sandbox layers also provide `DynamoDB`, run the real AWS SDK client and
 send the same requests; only the endpoint differs. The in-memory engine is
@@ -441,7 +436,7 @@ changed item with all of its attributes, and marks the ones that changed:
 
 ```ts
 import { describe, expect, layer } from "@effect/vitest"
-import { Sandbox } from "@model-ts/dynamodb/sandbox"
+import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 
 describe("Post", () => {
   layer(Sandbox.layerMemory())((it) => {
@@ -479,7 +474,7 @@ each test provides the layer itself:
 ```ts
 import { it as vitest } from "@effect/vitest"
 import type { DynamoDB } from "@model-ts/dynamodb"
-import { Sandbox } from "@model-ts/dynamodb/sandbox"
+import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Effect, type Scope } from "effect"
 
 export const it = {
@@ -505,16 +500,19 @@ invocation on it. Clients and connections are reused across warm invocations.
 ```ts
 import { Config, Effect, Layer, ManagedRuntime } from "effect"
 import { DynamoDB } from "@model-ts/dynamodb"
-import { Deferrer, EventBridge } from "@model-ts/eventbridge"
+import { EventBridge } from "@model-ts/eventbridge"
 
-const Bus = EventBridge.layerConfig(
-  Config.all({ eventBusName: Config.String("EVENT_BUS_NAME") }),
+const AppLayer = Layer.unwrap(
+  Effect.gen(function* () {
+    const tableName = yield* Config.String("TABLE_NAME")
+    const encryptionKey = yield* Config.Redacted("CURSOR_KEY")
+    const eventBusName = yield* Config.String("EVENT_BUS_NAME")
+    return Layer.mergeAll(
+      DynamoDB.layer({ tableName, cursors: { encryptionKey } }),
+      EventBridge.layer({ eventBusName }),
+    )
+  }),
 )
-
-const AppLayer = Layer.mergeAll(
-  DynamoDB.layerConfig(Config.all({ tableName: Config.String("TABLE_NAME") })),
-  Deferrer.layerEventBridge((deferred) => new DeferredEvent(deferred)),
-).pipe(Layer.provideMerge(Bus))
 
 const runtime = ManagedRuntime.make(AppLayer)
 
@@ -535,28 +533,57 @@ call site.
 | io-ts versions                                        | Version 7                                                                                                                                                 |
 | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `t.type({...})` codecs                                | `Schema` fields: `Schema.String`, `Schema.Struct`, `Schema.DateFromString` …                                                                              |
-| `class X extends model("X", t.type({...}), provider)` | `class X extends model<X>()("X", provider, {...})`                                                                                                        |
+| `class X extends model("X", t.type({...}), provider)` | `class X extends Model.Class<X>()("X", provider, {...})`                                                                                                  |
 | `X.from(input)` / `X.decodeOrThrow(input)`            | `X.from(input)`                                                                                                                                           |
 | `X.decode(input)` returns an `Either`                 | `X.decode(input)` returns an `Effect`                                                                                                                     |
-| `getProvider(client)`                                 | the constant `dynamodb` provider plus a `DynamoDB` layer                                                                                                  |
-| `new Client({ tableName })`                           | `DynamoDB.layer({ tableName })`                                                                                                                           |
+| `getProvider(client)`                                 | the constant `DynamoDB.provider` plus a `DynamoDB` layer                                                                                                  |
+| `new Client({ tableName })`                           | `DynamoDB.layer({ tableName, cursors })`; `cursors` is required (`{ encryptionKey }` or `"plain"`)                                                        |
 | `Promise` results, thrown errors                      | `Effect` results, typed errors (see [Errors](#errors))                                                                                                    |
-| `X.load(key, { null: true })`                         | `X.loadOption(key)`, returning an `Option`                                                                                                                |
+| `X.load(key, { null: true })`                         | `X.load(key).pipe(Effect.catchTag("ItemNotFoundError", () => Effect.succeed(null)))`                                                                      |
 | `X.loadMany(keys)` with a result or error per key     | `X.loadMany(keys)` fails on the first error; for per-key results, `Effect.forEach(keys, (key) => Effect.exit(X.load(key)), { concurrency: "unbounded" })` |
 | `X.iterator(...)` / async iteration                   | `X.stream(...)`, an Effect `Stream`                                                                                                                       |
-| `client.bulk([...])`                                  | `Dynamo.bulk([...])`                                                                                                                                      |
+| `encodeDDBCursor(item, key)` / `decodeDDBCursor(...)` | `item.cursor()` or `DynamoDB.cursor(item)`; only `paginate` reads cursors                                                                                 |
+| `client.bulk([...])`                                  | `DynamoDB.bulk([...])`                                                                                                                                    |
 | `item._docVersion`                                    | `docVersion(item)`                                                                                                                                        |
 | `createSandbox(client)`, `startTracking`, `rollback`  | `Sandbox.layerMemory()` / `Sandbox.layerLocal()`, `snapshot`, `diff`                                                                                      |
 | `EXPERIMENTAL_DYNAMODB_IN_MEMORY`                     | `Sandbox.layerMemory()`                                                                                                                                   |
-| `getProvider(eventBridgeClient)`, `stubEventBus`      | the `eventBridge` provider plus `EventBridge.layer` / `EventBridge.layerMemory`                                                                           |
+| `getProvider(eventBridgeClient)`, `stubEventBus`      | `EventBridge.provider` plus `EventBridge.layer` / `EventBridge.layerMemory`                                                                               |
 | CommonJS                                              | ESM only, Node.js 22+                                                                                                                                     |
+| `GSI1` inverts the primary key (`SK`/`PK`)            | `GSI1` is keyed by `GSI1PK`/`GSI1SK`, like `GSI2` to `GSI19`                                                                                              |
+| queries and updates skip items with `dynamotorLegacy` | no such filter or condition                                                                                                                               |
 
-Stored data is compatible: the table layout (`PK`/`SK`, `GSI1` to `GSI19`),
-the item format including `_tag` and `_docVersion`, soft-deleted keys and
-pagination cursors are unchanged. Both versions read and write the same items,
-so they can share a table during a migration, and each operation sends the
-same requests as before. A few behaviours changed:
+Stored items are compatible: the item format including `_tag` and
+`_docVersion`, soft-deleted keys, unencrypted cursors and the `PK`/`SK` and
+`GSI2` to `GSI19` indexes are unchanged, so both versions can share a table
+during a migration. Two changes affect existing tables:
 
+- `GSI1` is a regular index keyed by `GSI1PK`/`GSI1SK`. The io-ts versions
+  defined it as the inverted primary index (`SK`/`PK`). DynamoDB can't change
+  an index's keys, so a table that has the old `GSI1` needs it deleted and
+  created again with the new keys. For the old lookup, a model can return its
+  `SK` from `GSI1PK` and its `PK` from `GSI1SK`. Cursors from GSI1 queries
+  made by the io-ts versions don't carry these keys and can't be resumed.
+- Queries and updates no longer skip items that carry a `dynamotorLegacy`
+  attribute. Queries send no default `FilterExpression`, and updates use
+  `attribute_exists(PK)` as their condition. Delete or migrate such items
+  before switching.
+
+A few behaviours changed:
+
+- Encrypted cursors use AES-256-GCM, so clients can no longer read or forge
+  them. The io-ts versions used AES-256-CTR with a fixed IV. Encrypted
+  cursors issued before the upgrade fail with `PaginationError`; unencrypted
+  cursors keep working with `cursors: "plain"`.
+- `update` fails with `RaceConditionError` when the item was deleted since
+  it was read, where it used to write the item again. Its condition now
+  includes `attribute_exists(PK)`.
+- An `update` that changes the key checks the version of the old item
+  before deleting it, and fails with `RaceConditionError` (old item changed)
+  or `KeyExistsError` (new key taken).
+- Queries fail with `ItemDecodeError` when an item tagged with a requested
+  model doesn't decode, where they used to leave it out.
+- Keys that `BatchGetItem` leaves unprocessed are read again with
+  exponential backoff, up to five times.
 - `paginate` keeps querying when a filter or items of other models leave a
   page short, where it used to return a short page that claimed to be the last.
 - `bulk` rolls back committed transactions last to first, also after a

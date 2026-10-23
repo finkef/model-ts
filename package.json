@@ -14,7 +14,7 @@
   ],
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
-    "clean": "tsc -b tsconfig.build.json --clean",
+    "clean": "tsc -b tsconfig.build.json --clean && node -e \"for (const name of ['core', 'dynamodb', 'eventbridge']) require('node:fs').rmSync('packages/' + name + '/dist', { recursive: true, force: true })\"",
     "typecheck": "tsc -b tsconfig.json",
     "test": "vitest run --project core --project eventbridge --project dynamodb:memory",
     "test:local": "vitest run --project dynamodb:local",
@@ -22,7 +22,7 @@
     "format:check": "prettier --check .",
     "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
     "dynamodb:stop": "docker stop dynamodb",
-    "release": "bun run build && changeset publish"
+    "release": "bun run clean && bun run build && changeset publish"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1079.0",

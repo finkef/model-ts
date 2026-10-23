@@ -1,14 +1,12 @@
 /**
- * Relay-style cursor pagination. A cursor is the base64-encoded key of an
- * item, encrypted with AES-256-CTR when the table has a
- * `cursorEncryptionKey`. Cursors are opaque to clients.
+ * Relay-style cursor pagination types. A cursor is the base64-encoded key of
+ * an item. With an `encryptionKey` (see `CursorOptions`), the key is encrypted
+ * and authenticated with AES-256-GCM, so clients can neither read nor forge
+ * cursors.
  *
  * @since 7.0.0
  */
-import { createCipheriv, createDecipheriv } from "node:crypto"
-import { Effect } from "effect"
-import { PaginationError } from "./Errors.ts"
-import { GSI_NAMES, type GSI, type ItemKeys } from "./Keys.ts"
+import type { Redacted } from "effect"
 
 /** @since 7.0.0 */
 export interface PageInfo {
@@ -51,110 +49,34 @@ export interface PaginationOptions {
   readonly default?: number | undefined
 }
 
-/** @internal */
-export interface Page {
-  readonly cursor: string | undefined
-  readonly limit: number
-  readonly direction: "forward" | "backward"
-}
-
-/** @internal Validates connection arguments and resolves the page size. */
-export const decodePagination = (
-  input: PaginationInput,
-  options: Required<PaginationOptions>,
-): Effect.Effect<Page, PaginationError> => {
-  const { after, before, first, last } = input
-  const conflict = (a: string, b: string) =>
-    Effect.fail(
-      new PaginationError({
-        message: `Only one of "${a}" and "${b}" can be specified`,
-      }),
-    )
-  if (before && after) return conflict("before", "after")
-  if (first && last) return conflict("first", "last")
-  if (before && first) return conflict("before", "first")
-  if (last && after) return conflict("last", "after")
-  if (first && first < 0) {
-    return Effect.fail(
-      new PaginationError({ message: '"first" must be positive' }),
-    )
-  }
-  if (last && last < 0) {
-    return Effect.fail(
-      new PaginationError({ message: '"last" must be positive' }),
-    )
-  }
-  return Effect.succeed({
-    cursor: before ?? after ?? undefined,
-    limit: Math.min(first ?? last ?? options.default, options.limit),
-    direction: before || last ? "backward" : "forward",
-  })
-}
-
-// A fixed IV keeps cursors stable: the same item always has the same cursor.
-const IV = Buffer.from("Q05yyCR+0tyWl6glrZhlNw==", "base64")
-const ALGORITHM = "aes-256-ctr"
-
-const encrypt = (key: Uint8Array, cursor: string) => {
-  const cipher = createCipheriv(ALGORITHM, key, IV)
-  return Buffer.concat([cipher.update(cursor), cipher.final()]).toString(
-    "base64",
-  )
-}
-
-const decrypt = (key: Uint8Array, encrypted: string) => {
-  const decipher = createDecipheriv(ALGORITHM, key, IV)
-  return Buffer.concat([
-    decipher.update(Buffer.from(encrypted, "base64")),
-    decipher.final(),
-  ]).toString()
-}
-
 /**
- * The cursor of an item: its primary key and GSI attributes.
+ * A cursor encryption key: 32 bytes, as a `Uint8Array` or a base64 string,
+ * optionally `Redacted` (as `Config.Redacted` returns it). Generate one with
+ * `openssl rand -base64 32`.
  *
  * @since 7.0.0
  */
-export const encodeCursor = (
-  item: ItemKeys,
-  encryptionKey?: Uint8Array,
-): string => {
-  const keys: Record<string, string | undefined> = { PK: item.PK, SK: item.SK }
-  for (const gsi of GSI_NAMES) {
-    keys[`${gsi}PK`] = item[`${gsi}PK`]
-    keys[`${gsi}SK`] = item[`${gsi}SK`]
-  }
-  const cursor = Buffer.from(JSON.stringify(keys)).toString("base64")
-  return encryptionKey ? encrypt(encryptionKey, cursor) : cursor
-}
+export type CursorKey =
+  Uint8Array | string | Redacted.Redacted<Uint8Array | string>
 
 /**
- * The `ExclusiveStartKey` a cursor stands for on the given index.
+ * How pagination cursors are written. A cursor holds the item's `PK`, `SK`
+ * and every GSI attribute, so the same cursor works in every connection the
+ * item appears in.
+ *
+ * - `{ encryptionKey }`: cursors are encrypted and authenticated with
+ *   AES-256-GCM. Clients can't read the keys, and an altered or forged cursor
+ *   fails with `PaginationError`. `previousKeys` still decrypt cursors after
+ *   the key is rotated.
+ * - `"plain"`: cursors are base64-encoded JSON, so clients can read every key
+ *   attribute of the item, GSI keys included. Choose it only when no key
+ *   holds anything clients shouldn't see.
  *
  * @since 7.0.0
  */
-export const decodeCursor = (
-  cursor: string,
-  index?: GSI,
-  encryptionKey?: Uint8Array,
-): Effect.Effect<Record<string, string>, PaginationError> =>
-  Effect.try({
-    try: () => {
-      const json = encryptionKey ? decrypt(encryptionKey, cursor) : cursor
-      const { PK, SK, ...rest } = JSON.parse(
-        Buffer.from(json, "base64").toString(),
-      )
-      if (typeof PK !== "string" || typeof SK !== "string") {
-        throw new Error("Cursor has no PK and SK")
-      }
-      return index
-        ? {
-            PK,
-            SK,
-            [`${index}PK`]: rest[`${index}PK`],
-            [`${index}SK`]: rest[`${index}SK`],
-          }
-        : { PK, SK }
-    },
-    catch: () => new PaginationError({ message: "Couldn't decode cursor" }),
-  })
+export type CursorOptions =
+  | "plain"
+  | {
+      readonly encryptionKey: CursorKey
+      readonly previousKeys?: ReadonlyArray<CursorKey> | undefined
+    }

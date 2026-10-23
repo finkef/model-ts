@@ -25,10 +25,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./sandbox": {
-      "types": "./dist/sandbox.d.ts",
-      "default": "./dist/sandbox.js"
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
     },
+    "./internal/*": null,
     "./package.json": "./package.json"
   },
   "files": [

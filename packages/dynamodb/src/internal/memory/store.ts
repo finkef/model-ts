@@ -1,14 +1,16 @@
-import { type GSI, GSI_NAMES } from "../../Keys.ts"
+import type { GSI } from "../../Keys.ts"
+import { GSI_NAMES, isGSI as isTableGSI } from "../keys.ts"
 import {
   type ParsedKeyCondition,
   type RangeCondition,
-  compareValues,
   matchesRangeCondition,
 } from "./expression.ts"
+import { snapshotKey } from "../snapshot.ts"
 import { DeterministicTreap, type TreapBounds } from "./treap.ts"
 import {
   type InMemoryItem,
   cloneItem,
+  compareStrings,
   encodeIndexEntryKey,
   encodeItemKey,
   stablePriority,
@@ -127,11 +129,12 @@ export class InMemoryTableState {
     function* generate(): IterableIterator<QueryCandidate> {
       for (const { key: entryKey, value: itemKey } of iterator) {
         if (exclusiveStartEntryKey) {
-          if (direction === "asc" && entryKey <= exclusiveStartEntryKey) {
+          const order = compareStrings(entryKey, exclusiveStartEntryKey)
+          if (direction === "asc" && order <= 0) {
             continue
           }
 
-          if (direction === "desc" && entryKey >= exclusiveStartEntryKey) {
+          if (direction === "desc" && order >= 0) {
             continue
           }
         }
@@ -166,23 +169,9 @@ export class InMemoryTableState {
       const pk = String(item.PK)
       const sk = String(item.SK)
 
-      if (pk > startPK) return true
-      if (pk < startPK) return false
-
-      return sk > startSK
+      const order = compareStrings(pk, startPK)
+      return order === 0 ? compareStrings(sk, startSK) > 0 : order > 0
     })
-  }
-
-  createQueryCursor(
-    indexName: InMemoryIndexName,
-    item: InMemoryItem,
-  ): QueryCursor {
-    const descriptor = INDEX_BY_NAME[indexName]
-
-    return {
-      itemKey: encodeItemKey(String(item.PK), String(item.SK)),
-      rangeKey: String(item[descriptor.rangeAttribute]),
-    }
   }
 
   getIndexKeyFromItem(
@@ -206,15 +195,14 @@ export class InMemoryTableState {
     return INDEX_BY_NAME[indexName]
   }
 
-  hasItem(key: { PK: string; SK: string }): boolean {
-    return this.itemStore.has(encodeItemKey(key.PK, key.SK))
-  }
-
   snapshot(): { [key: string]: any } {
     const entries = sortItemsByPKSK([...this.itemStore.values()]).map(cloneItem)
 
     return Object.fromEntries(
-      entries.map((item) => [`${item.PK}__${item.SK}`, item]),
+      entries.map((item) => [
+        snapshotKey({ PK: String(item.PK), SK: String(item.SK) }),
+        item,
+      ]),
     )
   }
 
@@ -347,13 +335,10 @@ export class InMemoryTableState {
 export const isGSI = (indexName: InMemoryIndexName): indexName is GSI =>
   indexName !== PRIMARY_INDEX_NAME
 
-export const parseIndexName = (indexName?: string): InMemoryIndexName =>
-  (indexName ?? PRIMARY_INDEX_NAME) as InMemoryIndexName
-
 export const isSupportedIndexName = (
   indexName: string,
 ): indexName is InMemoryIndexName =>
-  indexName === PRIMARY_INDEX_NAME || GSI_NAMES.includes(indexName as GSI)
+  indexName === PRIMARY_INDEX_NAME || isTableGSI(indexName)
 
 export const matchesKeyConditionDescriptor = (
   indexName: InMemoryIndexName,
@@ -365,13 +350,4 @@ export const matchesKeyConditionDescriptor = (
   if (!condition.range) return true
 
   return condition.range.attribute === descriptor.rangeAttribute
-}
-
-export const compareItemKey = (
-  left: { PK: string; SK: string },
-  right: { PK: string; SK: string },
-): number => {
-  const pkCmp = compareValues(left.PK, right.PK)
-  if (pkCmp !== 0) return pkCmp
-  return compareValues(left.SK, right.SK)
 }

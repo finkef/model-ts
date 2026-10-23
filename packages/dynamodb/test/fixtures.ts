@@ -1,16 +1,19 @@
-import { Field, Id, model, union } from "@model-ts/core"
-import { Schema } from "effect"
-import { dynamodb } from "../src/index.ts"
+import { Model } from "@model-ts/core"
+import { Effect, Schema } from "effect"
+import { DynamoDB } from "../src/index.ts"
 
-export const PostId = Id("post_", "PostId")
+export const PostId = Schema.String.pipe(Schema.brand("PostId"))
 export type PostId = typeof PostId.Type
 
-export class Post extends model<Post>()("Post", dynamodb, {
+export class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
   id: PostId,
   authorId: Schema.String,
   title: Schema.String,
-  publishedAt: Field.nullable(Schema.DateFromString),
-  views: Schema.Number.pipe(Field.withDefault(() => 0)),
+  publishedAt: Schema.NullOr(Schema.DateFromString),
+  views: Schema.Number.pipe(
+    Schema.withDecodingDefaultKey(Effect.succeed(0)),
+    Schema.withConstructorDefault(Effect.succeed(0)),
+  ),
 }) {
   get PK() {
     return `POST#${this.id}`
@@ -30,11 +33,15 @@ export class Post extends model<Post>()("Post", dynamodb, {
   }
 }
 
-export class Comment extends model<Comment>()("Comment", dynamodb, {
-  postId: PostId,
-  id: Schema.String,
-  body: Schema.String,
-}) {
+export class Comment extends Model.Class<Comment>()(
+  "Comment",
+  DynamoDB.provider,
+  {
+    postId: PostId,
+    id: Schema.String,
+    body: Schema.String,
+  },
+) {
   get PK() {
     return `POST#${this.postId}`
   }
@@ -44,10 +51,10 @@ export class Comment extends model<Comment>()("Comment", dynamodb, {
 }
 
 /** A post and its comments share a partition. */
-export const PostContent = union([Post, Comment], dynamodb)
+export const PostContent = Model.Union([Post, Comment], DynamoDB.provider)
 
 /** A model that keys itself by a field, so updates can move it. */
-export class Slug extends model<Slug>()("Slug", dynamodb, {
+export class Slug extends Model.Class<Slug>()("Slug", DynamoDB.provider, {
   slug: Schema.String,
   postId: PostId,
 }) {

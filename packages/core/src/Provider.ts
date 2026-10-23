@@ -5,7 +5,7 @@
  *
  * A provider describes its members as a type lambda: an interface that reads
  * `this["Self"]` (the model instance type) and `this["Fields"]` (the model's
- * Schema fields). `model()` fills both in for every class, so a provider
+ * Schema fields). `Model.Class` fills both in for every class, so a provider
  * method can return the concrete model type. `this` is only available at
  * the top level of the interface, so pass it on to a generic interface:
  *
@@ -13,13 +13,14 @@
  * interface TimestampsInstance<Self> {
  *   touch(this: Self): Self
  * }
- * interface TimestampsMembers extends ProviderMembers {
+ * interface TimestampsMembers extends Provider.Members {
  *   readonly instance: TimestampsInstance<this["Self"]>
  * }
  * ```
  *
  * @since 7.0.0
  */
+import { mergeAll } from "./internal/provider.ts"
 
 /**
  * The type lambda every provider extends. Leave `Self` and `Fields` as they
@@ -27,11 +28,11 @@
  *
  * @since 7.0.0
  */
-export interface ProviderMembers {
-  /** Filled in by `model()`: the model instance type. */
+export interface Members {
+  /** Filled in by `Model.Class`: the model instance type. */
   readonly Self: unknown
   /**
-   * Filled in by `model()`: the model's Schema fields. Typed `unknown`, like
+   * Filled in by `Model.Class`: the model's Schema fields. Typed `unknown`, like
    * Effect's own type lambdas, so that the real fields are not widened by the
    * index signature of `Schema.Struct.Fields`.
    */
@@ -40,17 +41,17 @@ export interface ProviderMembers {
   readonly instance: unknown
   /** Members added to the model class. */
   readonly static: unknown
-  /** Members added to unions built with `union(members, provider)`. */
+  /** Members added to unions built with `Model.Union(members, provider)`. */
   readonly union: unknown
 }
 
 /**
- * A provider value. Create one with {@link makeProvider} and combine several
- * with {@link mergeProviders}, or pass an array to `model()`.
+ * A provider value. Create one with {@link make} and combine several
+ * with {@link merge}, or pass an array to `Model.Class`.
  *
  * @since 7.0.0
  */
-export interface Provider<M extends ProviderMembers = ProviderMembers> {
+export interface Provider<M extends Members = Members> {
   /** Phantom field that carries the member types; never set at runtime. */
   readonly "~members"?: M
   readonly instanceProps: object
@@ -72,12 +73,15 @@ export type UnionMembers<P, Self> = Apply<P, Self, never>["union"]
 
 /**
  * The implementation is checked against the declared members with `Self`
- * and `Fields` left open, so a provider cannot miss a member or change a
- * signature.
+ * and `Fields` unknown. A provider cannot miss a member, change its
+ * parameters or assume more about the model than its `this` parameters
+ * state. What a member returns where the declaration says `Self` is not
+ * checked: `unknown` accepts anything, so the implementation is trusted to
+ * return the model it was called on.
  */
-type Implementation<M extends ProviderMembers> = M & {
-  readonly Self: any
-  readonly Fields: any
+type Implementation<M extends Members> = M & {
+  readonly Self: unknown
+  readonly Fields: unknown
 }
 
 /**
@@ -88,8 +92,8 @@ type Group<K extends string, T> = {} extends T
   ? { readonly [P in K]?: T }
   : { readonly [P in K]: T }
 
-/** The implementation `makeProvider` expects for members `M`. */
-type ProviderImplementation<M extends ProviderMembers> = Group<
+/** The implementation `make` expects for members `M`. */
+type ImplementationOf<M extends Members> = Group<
   "instanceProps",
   Implementation<M>["instance"]
 > &
@@ -101,11 +105,11 @@ type ProviderImplementation<M extends ProviderMembers> = Group<
  * Getters and other property descriptors are kept as written.
  *
  * ```ts
- * interface GreeterMembers extends ProviderMembers {
+ * interface GreeterMembers extends Provider.Members {
  *   readonly instance: { greet(this: { readonly name: string }): string }
  * }
  *
- * const greeter = makeProvider<GreeterMembers>()({
+ * const greeter = Provider.make<GreeterMembers>()({
  *   instanceProps: {
  *     greet() {
  *       return `Hello, ${this.name}`
@@ -116,9 +120,9 @@ type ProviderImplementation<M extends ProviderMembers> = Group<
  *
  * @since 7.0.0
  */
-export const makeProvider =
-  <M extends ProviderMembers>() =>
-  (implementation: ProviderImplementation<M>): Provider<M> => ({
+export const make =
+  <M extends Members>() =>
+  (implementation: ImplementationOf<M>): Provider<M> => ({
     instanceProps: implementation.instanceProps ?? {},
     classProps: implementation.classProps ?? {},
     unionProps: implementation.unionProps ?? {},
@@ -139,7 +143,7 @@ type Override<
  */
 export interface MergedMembers<
   Ps extends ReadonlyArray<Provider>,
-> extends ProviderMembers {
+> extends Members {
   readonly instance: Override<{
     [K in keyof Ps]: InstanceMembers<Ps[K], this["Self"], this["Fields"]>
   }>
@@ -156,60 +160,37 @@ export interface MergedMembers<
  * the same name, the later one wins, both in the types and at runtime.
  *
  * ```ts
- * const store = mergeProviders([dynamodb, softDeleteFlag])
+ * const store = Provider.merge([DynamoDB.provider, softDeleteFlag])
  * ```
  *
  * @since 7.0.0
  */
-export const mergeProviders = <const Ps extends ReadonlyArray<Provider>>(
+export const merge = <const Ps extends ReadonlyArray<Provider>>(
   providers: Ps,
-): Provider<MergedMembers<Ps>> => ({
-  instanceProps: mergeDescriptors(providers.map((p) => p.instanceProps)),
-  classProps: mergeDescriptors(providers.map((p) => p.classProps)),
-  unionProps: mergeDescriptors(providers.map((p) => p.unionProps)),
-})
+): Provider<MergedMembers<Ps>> => mergeAll(providers)
 
 /**
  * The members of a model without a provider.
  *
  * @since 7.0.0
  */
-export interface NoMembers extends ProviderMembers {
+export interface NoMembers extends Members {
   readonly instance: {}
   readonly static: {}
   readonly union: {}
 }
 
-/** @internal */
-export const noProvider: Provider<NoMembers> = {
-  instanceProps: {},
-  classProps: {},
-  unionProps: {},
-}
+/**
+ * One provider, or several that are merged left to right.
+ *
+ * @since 7.0.0
+ */
+export type Input = Provider | ReadonlyArray<Provider>
 
-/** One provider, or several that are merged left to right. */
-export type ProviderInput = Provider | ReadonlyArray<Provider>
-
-/** The provider that a {@link ProviderInput} stands for. */
-export type AsProvider<P extends ProviderInput> =
+/**
+ * The provider that an {@link Input} stands for.
+ *
+ * @since 7.0.0
+ */
+export type AsProvider<P extends Input> =
   P extends ReadonlyArray<Provider> ? Provider<MergedMembers<P>> : P
-
-/** @internal */
-export const toProvider = (input: ProviderInput): Provider =>
-  isProviderList(input) ? mergeProviders(input) : input
-
-const isProviderList = (
-  input: ProviderInput,
-): input is ReadonlyArray<Provider> => Array.isArray(input)
-
-const mergeDescriptors = (sources: ReadonlyArray<object>): object => {
-  const target = {}
-  for (const source of sources) {
-    Object.defineProperties(target, Object.getOwnPropertyDescriptors(source))
-  }
-  return target
-}
-
-/** @internal Copies provider members onto a target and its prototype. */
-export const defineMembers = (target: object, members: object) =>
-  Object.defineProperties(target, Object.getOwnPropertyDescriptors(members))

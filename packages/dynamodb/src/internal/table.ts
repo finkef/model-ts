@@ -1,7 +1,7 @@
 import { CreateTableCommand } from "@aws-sdk/client-dynamodb"
-import { GSI_NAMES } from "../Keys.ts"
+import { GSI_NAMES } from "./keys.ts"
 
-/** The table layout this library expects: PK/SK, GSI1 (SK/PK) and GSI2 to GSI19. */
+/** The table layout this library expects: PK/SK and GSI1 to GSI19. */
 export const createTableCommand = (TableName: string) =>
   new CreateTableCommand({
     TableName,
@@ -19,14 +19,6 @@ export const createTableCommand = (TableName: string) =>
       { AttributeName: "SK", KeyType: "RANGE" },
     ],
     GlobalSecondaryIndexes: [
-      {
-        IndexName: "GSI1",
-        KeySchema: [
-          { AttributeName: "SK", KeyType: "HASH" },
-          { AttributeName: "PK", KeyType: "RANGE" },
-        ],
-        Projection: { ProjectionType: "ALL" },
-      },
       ...GSI_NAMES.map((gsi) => ({
         IndexName: gsi,
         KeySchema: [

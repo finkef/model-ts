@@ -1,8 +1,9 @@
 import { describe, expect } from "@effect/vitest"
 import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb"
-import { Effect } from "effect"
+import { Model } from "@model-ts/core"
+import { Effect, Schema } from "effect"
 import { docVersion, DynamoDB, RaceConditionError } from "../src/index.ts"
-import { Sandbox } from "../src/sandbox.ts"
+import { Sandbox } from "../src/Sandbox.ts"
 import { makePost, Post, PostId, Slug } from "./fixtures.ts"
 import { it } from "./utils.ts"
 
@@ -64,10 +65,20 @@ describe("put", () => {
       }),
   )
 
-  it.effect("fails with ItemEncodeError for a value the schema rejects", () =>
+  it.effect("fails with ItemEncodeError for a value a filter rejects", () =>
     Effect.gen(function* () {
-      const post = makePost(1, { publishedAt: "yesterday" as never })
-      const error = yield* Effect.flip(post.put())
+      // Construction skips filters, so the pattern is first checked on write.
+      class Code extends Model.Class<Code>()("Code", DynamoDB.provider, {
+        code: Schema.String.pipe(Schema.check(Schema.isPattern(/^[A-Z]+$/))),
+      }) {
+        get PK() {
+          return `CODE#${this.code}`
+        }
+        get SK() {
+          return "CODE"
+        }
+      }
+      const error = yield* Effect.flip(new Code({ code: "lower" }).put())
       expect(error._tag).toBe("ItemEncodeError")
     }),
   )
@@ -121,6 +132,55 @@ describe("update", () => {
     }),
   )
 
+  it.effect(
+    "fails with RaceConditionError instead of recreating a deleted item",
+    () =>
+      Effect.gen(function* () {
+        const sandbox = yield* Sandbox
+        yield* sandbox.seed(makePost(1))
+        const post = yield* Post.load(makePost(1))
+        yield* Post.delete(post)
+
+        const error = yield* Effect.flip(post.update({ title: "Renamed" }))
+
+        expect(error).toBeInstanceOf(RaceConditionError)
+        expect(yield* sandbox.get(post)).toBeUndefined()
+      }),
+  )
+
+  it.effect("checks the version of the old item when the key changes", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(
+        new Slug({ slug: "hello", postId: PostId.make("post_001") }),
+      )
+      const stale = yield* Slug.load({ PK: "SLUG#hello", SK: "SLUG" })
+      yield* stale.update({ postId: PostId.make("post_002") })
+
+      const error = yield* Effect.flip(stale.update({ slug: "hello-world" }))
+
+      expect(error).toBeInstanceOf(RaceConditionError)
+      expect(
+        yield* sandbox.get({ PK: "SLUG#hello-world", SK: "SLUG" }),
+      ).toBeUndefined()
+    }),
+  )
+
+  it.effect("fails with KeyExistsError when the new key is taken", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(
+        new Slug({ slug: "hello", postId: PostId.make("post_001") }),
+        new Slug({ slug: "taken", postId: PostId.make("post_002") }),
+      )
+      const slug = yield* Slug.load({ PK: "SLUG#hello", SK: "SLUG" })
+
+      const error = yield* Effect.flip(slug.update({ slug: "taken" }))
+
+      expect(error._tag).toBe("KeyExistsError")
+    }),
+  )
+
   it.effect("moves the item when the update changes its key", () =>
     Effect.gen(function* () {
       const sandbox = yield* Sandbox
@@ -165,7 +225,7 @@ describe("update", () => {
       expect(operation).toMatchObject({
         _tag: "Put",
         ConditionExpression:
-          "attribute_not_exists(#docVersion) OR #docVersion = :docVersion",
+          "attribute_exists(PK) AND (attribute_not_exists(#docVersion) OR #docVersion = :docVersion)",
         ExpressionAttributeValues: { ":docVersion": 0 },
       })
     }),
@@ -192,7 +252,8 @@ describe("updateRaw", () => {
             SK: "POST"
         -   GSI2PK: "AUTHOR#ada"
         -   GSI2SK: "POST#post_001"
-            _docVersion: 0
+        -   _docVersion: 0
+        +   _docVersion: 1
             _tag: "Post"
             authorId: "ada"
             id: "post_001"
@@ -232,6 +293,65 @@ describe("updateRaw", () => {
         )
         expect(error._tag).toBe("ConditionalCheckFailedError")
       }),
+  )
+
+  it.effect("bumps the version, so instances read before fail to update", () =>
+    Effect.gen(function* () {
+      const post = yield* makePost(1).put()
+      const counted = yield* Post.updateRaw(post, { views: 10 })
+      expect(docVersion(counted)).toBe(1)
+      const error = yield* Effect.flip(post.update({ title: "Changed" }))
+      expect(error._tag).toBe("RaceConditionError")
+      expect((yield* Post.load(post)).views).toBe(10)
+    }),
+  )
+
+  it.effect("bumps the version with a caller's UpdateExpression too", () =>
+    Effect.gen(function* () {
+      const post = yield* makePost(1).put()
+      const counted = yield* Post.updateRaw(
+        post,
+        {},
+        {
+          UpdateExpression: "SET #views = #views + :one",
+          ExpressionAttributeNames: { "#views": "views" },
+          ExpressionAttributeValues: { ":one": 1 },
+        },
+      )
+      expect(counted.views).toBe(1)
+      expect(docVersion(counted)).toBe(1)
+    }),
+  )
+
+  it.effect("keeps the caller's placeholders apart from its own", () =>
+    Effect.gen(function* () {
+      const post = yield* makePost(1).put()
+      const renamed = yield* Post.updateRaw(
+        post,
+        { title: "Renamed" },
+        {
+          ConditionExpression: "#title = :title",
+          ExpressionAttributeNames: { "#title": "title" },
+          ExpressionAttributeValues: { ":title": "Post 1" },
+        },
+      )
+      expect(renamed.title).toBe("Renamed")
+    }),
+  )
+
+  it.effect("still requires the item to exist with a caller's condition", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      const error = yield* Effect.flip(
+        Post.updateRaw(
+          makePost(1),
+          { title: "x" },
+          { ConditionExpression: "attribute_not_exists(PK)" },
+        ),
+      )
+      expect(error._tag).toBe("ConditionalCheckFailedError")
+      expect(yield* sandbox.get(makePost(1))).toBeUndefined()
+    }),
   )
 })
 
@@ -473,6 +593,20 @@ describe("attribute types", () => {
         betweenAndMore: false,
         bigNotEqual: false,
       })
+    }),
+  )
+})
+
+describe("Sandbox", () => {
+  it.effect("keeps keys apart whatever characters they contain", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(
+        { PK: "a__b", SK: "c", n: 1 },
+        { PK: "a", SK: "b__c", n: 2 },
+      )
+      expect(Object.keys(yield* sandbox.snapshot)).toHaveLength(2)
+      expect((yield* sandbox.get({ PK: "a", SK: "b__c" }))?.n).toBe(2)
     }),
   )
 })

@@ -1,7 +1,7 @@
 import { Effect, Schema } from "effect"
-import { Field, generated, Id, model } from "../src/index.ts"
+import { Model } from "../src/index.ts"
 
-export const UserId = Id("user_", "UserId")
+export const UserId = Schema.String.pipe(Schema.brand("UserId"))
 export type UserId = typeof UserId.Type
 
 export const Email = Schema.String.pipe(
@@ -9,21 +9,22 @@ export const Email = Schema.String.pipe(
   Schema.brand("Email"),
 )
 
-export class Address extends model<Address>()("Address", {
+export class Address extends Model.Class<Address>()("Address", {
   city: Schema.String,
-  zip: Field.optional(Schema.String),
+  zip: Schema.optional(Schema.String),
 }) {}
 
-export class User extends model<User>()("User", {
-  id: generated(UserId),
+export class User extends Model.Class<User>()("User", {
+  id: UserId,
   email: Email,
   firstName: Schema.String,
   lastName: Schema.String,
-  nickname: Field.nullish(Schema.String),
-  address: Field.nullable(Address),
+  nickname: Schema.optional(Schema.NullOr(Schema.String)),
+  address: Schema.NullOr(Address),
   createdAt: Schema.DateFromString,
   role: Schema.Literals(["admin", "member"]).pipe(
-    Field.withDefault(() => "member" as const),
+    Schema.withDecodingDefaultKey(Effect.succeed("member" as const)),
+    Schema.withConstructorDefault(Effect.succeed("member" as const)),
   ),
   visits: Schema.Number.pipe(Schema.withConstructorDefault(Effect.succeed(0))),
 }) {

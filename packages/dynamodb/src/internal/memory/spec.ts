@@ -1,4 +1,5 @@
-import { GSI_NAMES, type GSI } from "../../Keys.ts"
+import type { GSI } from "../../Keys.ts"
+import { GSI_NAMES } from "../keys.ts"
 
 export type InMemoryIndexName = "primary" | GSI
 
@@ -11,7 +12,6 @@ export interface InMemorySpec {
   version: string
   scope: string
   projection: "ALL"
-  excludedIndexes: string[]
   indexes: InMemoryIndexName[]
   methods: {
     [method: string]: InMemoryMethodSpec
@@ -25,7 +25,6 @@ export const IN_MEMORY_SPEC: InMemorySpec = {
   version: "2026-02-09",
   scope: "model-ts/dynamodb",
   projection: "ALL",
-  excludedIndexes: ["GSI1"],
   indexes: IN_MEMORY_INDEXES,
   methods: {
     get: {
@@ -152,10 +151,4 @@ export const IN_MEMORY_SPEC: InMemorySpec = {
     "queryItems",
     "scanItems",
   ],
-}
-
-export const IN_MEMORY_CONDITIONS = {
-  excludedGSI: "GSI1 is intentionally excluded from in-memory mode.",
-  gsiProjection:
-    "All GSIs are treated as full projection for in-scope behavior.",
 }

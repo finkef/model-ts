@@ -1,7 +1,7 @@
 import { describe, expect } from "@effect/vitest"
 import { Cause, Effect, Exit } from "effect"
-import { Dynamo, Operation } from "../src/index.ts"
-import { Sandbox } from "../src/sandbox.ts"
+import { docVersion, DynamoDB, Operation } from "../src/index.ts"
+import { Sandbox } from "../src/Sandbox.ts"
 import { makePost, Post, Slug } from "./fixtures.ts"
 import { it, recordSpans } from "./utils.ts"
 
@@ -13,7 +13,7 @@ describe("bulk", () => {
       const before = yield* sandbox.snapshot
       const second = yield* Post.load(makePost(2))
 
-      yield* Dynamo.bulk([
+      yield* DynamoDB.bulk([
         makePost(3).operation("put"),
         Post.operation("delete", makePost(1)),
         second.operation("update", { title: "Renamed" }),
@@ -74,7 +74,7 @@ describe("bulk", () => {
       const before = yield* sandbox.snapshot
 
       const error = yield* Effect.flip(
-        Dynamo.bulk([
+        DynamoDB.bulk([
           makePost(2).operation("put"),
           makePost(1).operation("put"),
         ]),
@@ -99,7 +99,7 @@ describe("bulk", () => {
       // 1: creates the slug. 2: moves it. 3: conflicts. Undoing 1 before 2
       // would leave the slug behind at its first key.
       const error = yield* Effect.flip(
-        Dynamo.bulk([
+        DynamoDB.bulk([
           ...posts(1, 99),
           slug.operation("put"),
           slug.operation("update", { slug: "b" }),
@@ -125,7 +125,7 @@ describe("bulk", () => {
       const exploding = new Exploding(makePost(101).values())
 
       const exit = yield* Effect.exit(
-        Dynamo.bulk([
+        DynamoDB.bulk([
           ...Array.from({ length: 100 }, (_, i) =>
             makePost(i + 1).operation("put"),
           ),
@@ -154,7 +154,7 @@ describe("bulk", () => {
       }
 
       const error = yield* Effect.flip(
-        Dynamo.bulk([
+        DynamoDB.bulk([
           unrecoverable,
           ...Array.from({ length: 99 }, (_, i) =>
             makePost(i + 2).operation("put"),
@@ -184,7 +184,7 @@ describe("bulk", () => {
         makePost(i + 1).operation("put"),
       )
       const error = yield* Effect.flip(
-        Dynamo.bulk([...puts, makePost(0).operation("put")]),
+        DynamoDB.bulk([...puts, makePost(0).operation("put")]),
       )
 
       expect(error._tag).toBe("TransactionCanceledError")
@@ -203,7 +203,7 @@ describe("bulk", () => {
         makePost(101).operation("put"),
       ]
 
-      const { spans } = yield* recordSpans(Dynamo.bulk([...puts, group]))
+      const { spans } = yield* recordSpans(DynamoDB.bulk([...puts, group]))
 
       const transactions = spans.filter(
         (span) => span.name === "DynamoDB.TransactWriteItems",
@@ -222,8 +222,44 @@ describe("bulk", () => {
       const group = Array.from({ length: 101 }, (_, i) =>
         makePost(i).operation("put"),
       )
-      const exit = yield* Effect.exit(Dynamo.bulk([group]))
+      const exit = yield* Effect.exit(DynamoDB.bulk([group]))
       expect(Exit.isFailure(exit) && Cause.hasDies(exit.cause)).toBe(true)
+    }),
+  )
+
+  it.effect("keeps an item that an overwriting put replaced", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(0), makePost(1))
+
+      const error = yield* Effect.flip(
+        DynamoDB.bulk([
+          ...Array.from({ length: 99 }, (_, i) =>
+            makePost(i + 2).operation("put"),
+          ),
+          makePost(1, { title: "Overwritten" }).operation("put", {
+            IgnoreExistence: true,
+          }),
+          makePost(0).operation("put"),
+        ]),
+      )
+
+      expect(error._tag).toBe("TransactionCanceledError")
+      // The overwrite stays; deleting it would lose the item it replaced.
+      expect((yield* Post.load(makePost(1))).title).toBe("Overwritten")
+      expect(yield* sandbox.get(makePost(2))).toBeUndefined()
+    }),
+  )
+
+  it.effect("gives stored instances their version", () =>
+    Effect.gen(function* () {
+      const post = makePost(1)
+      yield* DynamoDB.bulk([post.operation("put")])
+      expect(docVersion(post)).toBe(0)
+
+      yield* (yield* Post.load(post)).update({ title: "Elsewhere" })
+      const error = yield* Effect.flip(post.update({ title: "Stale" }))
+      expect(error._tag).toBe("RaceConditionError")
     }),
   )
 })

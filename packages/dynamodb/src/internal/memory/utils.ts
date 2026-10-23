@@ -54,14 +54,29 @@ export const stablePriority = (
 }
 
 export const sortItemsByPKSK = (items: InMemoryItem[]): InMemoryItem[] =>
-  [...items].sort((a, b) => {
-    const pkA = String(a.PK ?? "")
-    const pkB = String(b.PK ?? "")
-    if (pkA !== pkB) return pkA < pkB ? -1 : 1
+  [...items].sort(
+    (a, b) =>
+      compareStrings(String(a.PK ?? ""), String(b.PK ?? "")) ||
+      compareStrings(String(a.SK ?? ""), String(b.SK ?? "")),
+  )
 
-    const skA = String(a.SK ?? "")
-    const skB = String(b.SK ?? "")
-    if (skA !== skB) return skA < skB ? -1 : 1
+const isSurrogate = (unit: number) => unit >= 0xd800 && unit <= 0xdfff
 
-    return 0
-  })
+/**
+ * Orders strings like DynamoDB, by their UTF-8 bytes, which is code point
+ * order. JavaScript compares UTF-16 code units, which puts characters above
+ * U+FFFF (stored as surrogate pairs, U+D800 to U+DFFF) before U+E000 to
+ * U+FFFF. Where the first difference is a surrogate against a character
+ * below U+10000, the surrogate's character is the larger one.
+ */
+export const compareStrings = (left: string, right: string): number => {
+  const length = Math.min(left.length, right.length)
+  for (let index = 0; index < length; index += 1) {
+    const a = left.charCodeAt(index)
+    const b = right.charCodeAt(index)
+    if (a === b) continue
+    if (isSurrogate(a) !== isSurrogate(b)) return isSurrogate(a) ? 1 : -1
+    return a < b ? -1 : 1
+  }
+  return left.length === right.length ? 0 : left.length < right.length ? -1 : 1
+}

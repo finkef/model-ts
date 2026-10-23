@@ -1,7 +1,7 @@
 {
   "name": "@model-ts/eventbridge",
   "version": "3.0.0",
-  "description": "Publish and defer @model-ts/core models as EventBridge events, built on Effect.",
+  "description": "Publish @model-ts/core models as EventBridge events, built on Effect.",
   "license": "MIT",
   "author": "Fabian Finke <finkef@icloud.com>",
   "repository": {
@@ -25,6 +25,11 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./internal/*": null,
     "./package.json": "./package.json"
   },
   "files": [

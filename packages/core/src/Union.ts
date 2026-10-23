@@ -1,9 +1,9 @@
 /**
- * `union()` combines models into one schema that decodes to whichever model
+ * `Model.Union` combines models into one schema that decodes to whichever model
  * matches, using the stored `_tag` when there is one.
  *
  * ```ts
- * const Shape = union([Circle, Square])
+ * const Shape = Model.Union([Circle, Square])
  * type Shape = typeof Shape.Type // Circle | Square
  *
  * Shape.from({ _tag: "Circle", radius: 1 }) // Circle
@@ -12,25 +12,25 @@
  * @since 7.0.0
  */
 import { type Effect, Schema } from "effect"
-import {
-  defineMembers,
-  type NoMembers,
-  noProvider,
-  type Provider,
-  type ProviderInput,
-  type AsProvider,
-  toProvider,
-  type UnionMembers,
+import { defineMembers, noProvider, toProvider } from "./internal/provider.ts"
+import type {
+  AsProvider,
+  Input,
+  NoMembers,
+  Provider,
+  UnionMembers,
 } from "./Provider.ts"
 
 /**
- * Any model class (or other Schema class) that can be a union member.
+ * Any model class (or other Schema class) that can be a union member: a
+ * schema with an identifier whose decoding and encoding need no services.
  *
  * @since 7.0.0
  */
-export interface AnyModel extends Schema.Codec<any, any> {
+export interface Any extends Schema.Top {
   readonly identifier: string
-  new (...args: ReadonlyArray<any>): any
+  readonly DecodingServices: never
+  readonly EncodingServices: never
 }
 
 /**
@@ -38,7 +38,7 @@ export interface AnyModel extends Schema.Codec<any, any> {
  *
  * @since 7.0.0
  */
-export interface UnionStatics<Members extends ReadonlyArray<AnyModel>> {
+export interface UnionStatics<Members extends ReadonlyArray<Any>> {
   /**
    * Decodes untrusted input into one of the members.
    *
@@ -52,12 +52,12 @@ export interface UnionStatics<Members extends ReadonlyArray<AnyModel>> {
 }
 
 /**
- * The schema `union()` returns.
+ * The schema `Model.Union` returns.
  *
  * @since 7.0.0
  */
 export type Union<
-  Members extends ReadonlyArray<AnyModel>,
+  Members extends ReadonlyArray<Any>,
   P extends Provider = Provider<NoMembers>,
 > = Schema.Union<Members> &
   UnionStatics<Members> &
@@ -67,22 +67,22 @@ export type Union<
  * Builds a union of models, optionally with the union members of providers.
  *
  * ```ts
- * const Content = union([Post, Comment], dynamodb)
+ * const Content = Model.Union([Post, Comment], DynamoDB.provider)
  * const items = yield* Content.query({ KeyConditionExpression: "PK = :pk", ... })
  * ```
  *
  * @since 7.0.0
  */
-export function union<const Members extends ReadonlyArray<AnyModel>>(
+export function Union<const Members extends ReadonlyArray<Any>>(
   members: Members,
 ): Union<Members>
-export function union<
-  const Members extends ReadonlyArray<AnyModel>,
-  const P extends ProviderInput,
+export function Union<
+  const Members extends ReadonlyArray<Any>,
+  const P extends Input,
 >(members: Members, provider: P): Union<Members, AsProvider<P>>
-export function union(
-  members: ReadonlyArray<AnyModel>,
-  provider: ProviderInput = noProvider,
+export function Union(
+  members: ReadonlyArray<Any>,
+  provider: Input = noProvider,
 ): unknown {
   const schema = Schema.Union(members)
   defineMembers(schema, {

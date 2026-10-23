@@ -715,6 +715,41 @@ const baseVectorsByMethod: {
           .promise(),
     },
     {
+      id: "query.gsi1",
+      method: "query",
+      setup: async ({ client, tableName }) => {
+        await client.documentClient
+          .batchWrite({
+            RequestItems: {
+              [tableName]: ["1", "2", "3"].map((id) => ({
+                PutRequest: {
+                  Item: {
+                    PK: `USER#${id}`,
+                    SK: "FOLLOWS#9",
+                    GSI1PK: "FOLLOWERS#9",
+                    GSI1SK: `USER#${id}`,
+                  },
+                },
+              })),
+            },
+          })
+          .promise()
+      },
+      execute: ({ client, tableName }) =>
+        client.documentClient
+          .query({
+            TableName: tableName,
+            IndexName: "GSI1",
+            KeyConditionExpression: "GSI1PK = :pk and GSI1SK > :sk",
+            ExpressionAttributeValues: {
+              ":pk": "FOLLOWERS#9",
+              ":sk": "USER#1",
+            },
+            ScanIndexForward: false,
+          })
+          .promise(),
+    },
+    {
       id: "query.gsi-consistent-read-error",
       method: "query",
       setup: createSeed,
@@ -1240,6 +1275,34 @@ const additionalDifferentialVectors: Vector[] = [
           KeyConditionExpression: "GSI2PK = :pk",
           ExpressionAttributeValues: { ":pk": "ORDER#OPEN" },
           ExclusiveStartKey: { PK: "USER#1", SK: "ORDER#001" },
+        })
+        .promise(),
+  },
+  {
+    id: "query.exclusive-start-key-other-partition",
+    method: "query",
+    setup: createSeed,
+    execute: ({ client, tableName }) =>
+      client.documentClient
+        .query({
+          TableName: tableName,
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "USER#1" },
+          ExclusiveStartKey: { PK: "USER#2", SK: "ORDER#001" },
+        })
+        .promise(),
+  },
+  {
+    id: "query.exclusive-start-key-outside-sort-condition",
+    method: "query",
+    setup: createSeed,
+    execute: ({ client, tableName }) =>
+      client.documentClient
+        .query({
+          TableName: tableName,
+          KeyConditionExpression: "PK = :pk AND begins_with(SK, :prefix)",
+          ExpressionAttributeValues: { ":pk": "USER#1", ":prefix": "ORDER#" },
+          ExclusiveStartKey: { PK: "USER#1", SK: "PROFILE" },
         })
         .promise(),
   },

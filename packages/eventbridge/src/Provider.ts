@@ -1,11 +1,10 @@
 /**
- * Providers for event models: `eventBridge` adds `publish()`, `defer` adds
- * `defer(timestamp)`. Use one or both:
+ * The member types of `EventBridge.provider`, which adds `publish()`:
  *
  * ```ts
- * class PostPublished extends model<PostPublished>()(
+ * class PostPublished extends Model.Class<PostPublished>()(
  *   "PostPublished",
- *   [eventBridge, defer],
+ *   EventBridge.provider,
  *   { post: Post },
  * ) {
  *   get source() { return "blog" }
@@ -17,11 +16,10 @@
  *
  * @since 7.0.0
  */
-import { makeProvider, type ProviderMembers } from "@model-ts/core"
+import type { Provider } from "@model-ts/core"
 import type { Effect } from "effect"
-import { Deferrer } from "./Deferrer.ts"
 import type { PublishErrors, ResultEntry } from "./Errors.ts"
-import { EventBridge, type PublishableEvent } from "./EventBridge.ts"
+import type { EventBridge } from "./EventBridge.ts"
 
 /**
  * What a model needs before it can be published: getters (or fields) for
@@ -43,40 +41,6 @@ export interface EventBridgeInstance<Self> {
 }
 
 /** @since 7.0.0 */
-export interface EventBridgeMembers extends ProviderMembers {
+export interface EventBridgeMembers extends Provider.Members {
   readonly instance: EventBridgeInstance<this["Self"]>
 }
-
-/** @since 7.0.0 */
-export const eventBridge = makeProvider<EventBridgeMembers>()({
-  instanceProps: {
-    publish() {
-      const event = this as PublishableEvent
-      return EventBridge.use((bus) => bus.publish([event]))
-    },
-  },
-})
-
-/** @since 7.0.0 */
-export interface DeferInstance<Self> {
-  /** Publishes this event at `timestamp`, through the `Deferrer` service. */
-  defer(
-    this: Self & EventAddress,
-    timestamp: Date,
-  ): Effect.Effect<void, PublishErrors, Deferrer>
-}
-
-/** @since 7.0.0 */
-export interface DeferMembers extends ProviderMembers {
-  readonly instance: DeferInstance<this["Self"]>
-}
-
-/** @since 7.0.0 */
-export const defer = makeProvider<DeferMembers>()({
-  instanceProps: {
-    defer(timestamp) {
-      const event = this as PublishableEvent
-      return Deferrer.use((deferrer) => deferrer.defer(event, timestamp))
-    },
-  },
-})

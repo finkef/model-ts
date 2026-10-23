@@ -1,3 +1,5 @@
+import { parseSnapshotKey } from "./snapshot.ts"
+
 const INDENT_SIZE = 2
 const ITEM_FIELD_INDENT = 4
 const PRIORITY_FIELDS = ["PK", "SK"]
@@ -83,10 +85,10 @@ const parseItemKey = (key: string, item?: Record<string, any>) => {
 
   if (pk && sk) return { pk, sk }
 
-  const [rawPk, rawSk] = key.split("__")
+  const parsed = parseSnapshotKey(key)
   return {
-    pk: pk ?? rawPk ?? "?",
-    sk: sk ?? rawSk ?? "?",
+    pk: pk ?? parsed?.PK ?? "?",
+    sk: sk ?? parsed?.SK ?? "?",
   }
 }
 

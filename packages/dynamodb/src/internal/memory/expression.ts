@@ -1,5 +1,5 @@
 import { NotSupportedError } from "./errors.ts"
-import type { InMemoryItem } from "./utils.ts"
+import { compareStrings, type InMemoryItem } from "./utils.ts"
 
 const MISSING = Symbol("missing")
 
@@ -193,10 +193,17 @@ export const parseUpdateExpression = (
   let setClause = ""
   let removeClause = ""
 
-  if (setStart >= 0) {
-    const setBodyStart = setStart + setMatch![0].length
-    const setBodyEnd = removeStart >= 0 ? removeStart : normalized.length
-    setClause = normalized.slice(setBodyStart, setBodyEnd).trim()
+  // A clause runs until the next clause keyword, in whichever order the
+  // clauses are written.
+  const clauseEnd = (start: number) =>
+    Math.min(
+      ...[setStart, removeStart].filter((other) => other > start),
+      normalized.length,
+    )
+
+  if (setMatch && setStart >= 0) {
+    const setBodyStart = setStart + setMatch[0].length
+    setClause = normalized.slice(setBodyStart, clauseEnd(setStart)).trim()
     if (!setClause) {
       throw new NotSupportedError({
         method: context.method,
@@ -206,9 +213,11 @@ export const parseUpdateExpression = (
     }
   }
 
-  if (removeStart >= 0) {
-    const removeBodyStart = removeStart + removeMatch![0].length
-    removeClause = normalized.slice(removeBodyStart).trim()
+  if (removeMatch && removeStart >= 0) {
+    const removeBodyStart = removeStart + removeMatch[0].length
+    removeClause = normalized
+      .slice(removeBodyStart, clauseEnd(removeStart))
+      .trim()
     if (!removeClause) {
       throw new NotSupportedError({
         method: context.method,
@@ -316,17 +325,12 @@ const compareNumbers = (left: number | bigint, right: number | bigint) => {
   return x < y ? -1 : x > y ? 1 : 0
 }
 
-/** Numbers by value, binary byte by byte, everything else as strings. */
+/** Numbers by value, binary byte by byte, everything else as UTF-8 strings. */
 export const compareValues = (left: any, right: any): number => {
   if (isNumber(left) && isNumber(right)) return compareNumbers(left, right)
   if (isBytes(left) && isBytes(right)) return Buffer.compare(left, right)
 
-  const leftString = String(left)
-  const rightString = String(right)
-
-  if (leftString < rightString) return -1
-  if (leftString > rightString) return 1
-  return 0
+  return compareStrings(String(left), String(right))
 }
 
 /** `<`, `<=`, `>` and `>=` hold only between two numbers, strings or binaries. */

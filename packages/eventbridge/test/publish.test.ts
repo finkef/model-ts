@@ -1,10 +1,9 @@
 import { assert, describe, expect } from "@effect/vitest"
-import { Config, ConfigProvider, Effect, Layer, Option } from "effect"
+import { Effect, Option } from "effect"
 import {
   EventBridge,
   EventBridgeError,
   EventEncodeError,
-  publish,
   PublishedEvents,
   PublishError,
 } from "../src/index.ts"
@@ -18,7 +17,7 @@ describe("EventBridge.layerMemory", () => {
   it("records published events with their encoded detail", () =>
     Effect.gen(function* () {
       yield* postPublished(1).publish()
-      yield* publish(postPublished(2), postPublished(3))
+      yield* EventBridge.publish(postPublished(2), postPublished(3))
 
       const published = yield* PublishedEvents.use((events) => events.all)
       expect(published).toEqual(
@@ -34,7 +33,19 @@ describe("EventBridge.layerMemory", () => {
 
   it("fails like the real bus when an event cannot be encoded", () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(publish(postPublished(1), unencodable()))
+      const error = yield* Effect.flip(
+        EventBridge.publish(postPublished(1), unencodable()),
+      )
+      expect(error).toBeInstanceOf(EventEncodeError)
+      expect(yield* PublishedEvents.use((events) => events.all)).toEqual([])
+    }))
+
+  it("refuses an event whose detail is not a JSON object", () =>
+    Effect.gen(function* () {
+      const empty = { source: "s", detailType: "d", encode: () => undefined }
+      const error = yield* Effect.flip(
+        EventBridge.publish(postPublished(1), empty),
+      )
       expect(error).toBeInstanceOf(EventEncodeError)
       expect(yield* PublishedEvents.use((events) => events.all)).toEqual([])
     }))
@@ -46,7 +57,7 @@ describe("EventBridge.layer", () => {
   it("sends PutEvents calls of at most 10 entries, in order", () =>
     Effect.gen(function* () {
       const events = Array.from({ length: 23 }, (_, i) => postPublished(i))
-      const results = yield* publish(...events)
+      const results = yield* EventBridge.publish(...events)
       const fake = yield* FakeBus
 
       expect(fake.requests.map((request) => request.Entries.length)).toEqual([
@@ -96,7 +107,7 @@ describe("EventBridge.layer", () => {
       fake.rejectDetailTypes.add("blog.post.published")
       const events = Array.from({ length: 12 }, (_, i) => postPublished(i))
 
-      const error = yield* Effect.flip(publish(...events))
+      const error = yield* Effect.flip(EventBridge.publish(...events))
       expect(fake.requests).toHaveLength(2)
       assert.instanceOf(error, PublishError)
       expect(error.failedEntryCount).toBe(12)
@@ -105,7 +116,9 @@ describe("EventBridge.layer", () => {
 
   it("sends nothing when one event cannot be encoded", () =>
     Effect.gen(function* () {
-      const error = yield* Effect.flip(publish(postPublished(1), unencodable()))
+      const error = yield* Effect.flip(
+        EventBridge.publish(postPublished(1), unencodable()),
+      )
       expect(error).toBeInstanceOf(EventEncodeError)
       expect(error).toMatchObject({ detailType: "blog.post.published" })
       expect((yield* FakeBus).requests).toEqual([])
@@ -126,7 +139,7 @@ describe("EventBridge.layer", () => {
   it("traces each PutEvents call as a producer span inside the publish span", () =>
     Effect.gen(function* () {
       const events = Array.from({ length: 12 }, (_, i) => postPublished(i))
-      const { spans } = yield* recordSpans(publish(...events))
+      const { spans } = yield* recordSpans(EventBridge.publish(...events))
 
       expect(spans.map((span) => span.name)).toEqual([
         "EventBridge.publish",
@@ -152,24 +165,5 @@ describe("EventBridge.layer", () => {
         "model_ts.detail_types": ["blog.post.published"],
       })
       expect(second!.attributes.get("messaging.batch.message_count")).toBe(2)
-    }))
-})
-
-describe("EventBridge.layerConfig", () => {
-  const it = testEffect(
-    EventBridge.layerConfig(
-      Config.all({ eventBusName: Config.String("EVENT_BUS_NAME") }),
-    ).pipe(
-      Layer.provide(
-        ConfigProvider.layer(
-          ConfigProvider.fromUnknown({ EVENT_BUS_NAME: "orders" }),
-        ),
-      ),
-    ),
-  )
-
-  it("reads its options from Config", () =>
-    Effect.gen(function* () {
-      expect((yield* EventBridge).eventBusName).toBe("orders")
     }))
 })

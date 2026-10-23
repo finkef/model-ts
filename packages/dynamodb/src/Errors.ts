@@ -12,7 +12,8 @@
  * @since 7.0.0
  */
 import { Predicate, Schema } from "effect"
-import { formatKey, Key } from "./Keys.ts"
+import { Key } from "./Keys.ts"
+import { formatKey } from "./internal/keys.ts"
 import type { BulkOperation } from "./Operation.ts"
 
 const describe = (cause: unknown) =>
@@ -175,7 +176,8 @@ export class PaginationError extends Schema.TaggedError<PaginationError>()(
 ) {}
 
 /**
- * A stored item does not match the model's schema.
+ * A stored item does not match the model's schema. `key` is the item's
+ * primary key, when it has one.
  *
  * @since 7.0.0
  */
@@ -183,11 +185,13 @@ export class ItemDecodeError extends Schema.TaggedError<ItemDecodeError>()(
   "ItemDecodeError",
   {
     model: Schema.String,
+    key: Schema.optional(Key),
     cause: Schema.instanceOf(Schema.SchemaError),
   },
 ) {
   override get message() {
-    return `Stored item does not match ${this.model}: ${this.cause.message}`
+    const at = this.key ? ` at ${formatKey(this.key)}` : ""
+    return `Stored item${at} does not match ${this.model}: ${this.cause.message}`
   }
 }
 

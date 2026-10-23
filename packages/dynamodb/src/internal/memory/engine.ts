@@ -2,20 +2,26 @@ import { NotSupportedError } from "./errors.ts"
 import {
   type DocumentPathPart,
   evaluateConditionExpression,
+  matchesRangeCondition,
   parseKeyConditionExpression,
   type ParsedUpdateExpression,
   parseUpdateExpression,
+  type RangeCondition,
 } from "./expression.ts"
 import {
   InMemoryTableState,
   PRIMARY_INDEX_NAME,
   isSupportedIndexName,
   matchesKeyConditionDescriptor,
-  parseIndexName,
   isGSI,
 } from "./store.ts"
 import { IN_MEMORY_SPEC, type InMemoryIndexName } from "./spec.ts"
-import { cloneItem, encodeCompositeKey, encodeItemKey } from "./utils.ts"
+import {
+  cloneItem,
+  compareStrings,
+  encodeCompositeKey,
+  encodeItemKey,
+} from "./utils.ts"
 
 type AnyParams = { [key: string]: any }
 
@@ -217,6 +223,8 @@ class MemoryEngineImpl implements MemoryEngine {
           params.ExclusiveStartKey,
           indexName,
           table,
+          condition.hashValue,
+          condition.range?.condition,
         )
       : undefined
 
@@ -789,12 +797,9 @@ class MemoryEngineImpl implements MemoryEngine {
     parsed: ParsedUpdateExpression,
   ) {
     for (const assignment of parsed.set) {
+      // DynamoDB refuses any SET of a key attribute, even to its own value.
       const keyAttribute = this.getTopLevelKeyAttribute(assignment.path)
-      if (
-        keyAttribute &&
-        (assignment.path.length !== 1 ||
-          assignment.value !== item[keyAttribute])
-      ) {
+      if (keyAttribute) {
         throw this.validationError(
           `One or more parameter values were invalid: Cannot update attribute ${keyAttribute}. This attribute is part of the key`,
         )
@@ -803,7 +808,19 @@ class MemoryEngineImpl implements MemoryEngine {
       this.setValueAtDocumentPath(item, assignment.path, assignment.value)
     }
 
-    for (const removal of parsed.remove) {
+    // Every path names an element of the item as it was before the update,
+    // so list elements are removed from the highest index down: removing
+    // a[0] first would move the element a[1] names.
+    const removals = [...parsed.remove].sort((left, right) => {
+      const parents = compareStrings(
+        parentPathKey(left.path),
+        parentPathKey(right.path),
+      )
+      return parents !== 0
+        ? parents
+        : leafIndex(right.path) - leafIndex(left.path)
+    })
+    for (const removal of removals) {
       const keyAttribute = this.getTopLevelKeyAttribute(removal.path)
       if (keyAttribute) {
         throw this.validationError(
@@ -841,11 +858,13 @@ class MemoryEngineImpl implements MemoryEngine {
       return
     }
 
-    if (!Array.isArray(parent) || leaf.value > parent.length) {
+    if (!Array.isArray(parent)) {
       throw this.invalidUpdatePathValidationError()
     }
 
-    parent[leaf.value] = value
+    // An index past the end of the list appends, as in DynamoDB.
+    if (leaf.value >= parent.length) parent.push(value)
+    else parent[leaf.value] = value
   }
 
   private removeValueAtDocumentPath(item: any, path: DocumentPathPart[]) {
@@ -956,14 +975,6 @@ class MemoryEngineImpl implements MemoryEngine {
 
   private resolveIndexName(indexName?: string): InMemoryIndexName {
     if (!indexName) return PRIMARY_INDEX_NAME
-    if (indexName === "GSI1") {
-      throw new NotSupportedError({
-        method: "query",
-        featurePath: "query.IndexName",
-        reason: "GSI1 is intentionally excluded from in-memory mode.",
-      })
-    }
-
     if (!isSupportedIndexName(indexName)) {
       throw new NotSupportedError({
         method: "query",
@@ -972,13 +983,15 @@ class MemoryEngineImpl implements MemoryEngine {
       })
     }
 
-    return parseIndexName(indexName)
+    return indexName
   }
 
   private resolveExclusiveStartKey(
     startKey: any,
     indexName: InMemoryIndexName,
     table: InMemoryTableState,
+    hashValue: string,
+    rangeCondition: RangeCondition | undefined,
   ) {
     const key = this.getRequiredKey(
       { Key: startKey },
@@ -992,6 +1005,17 @@ class MemoryEngineImpl implements MemoryEngine {
     if (typeof rangeKey !== "string" || typeof hashKey !== "string") {
       throw this.validationError(
         "Exclusive Start Key must have same size as table's key schema",
+      )
+    }
+
+    // DynamoDB only resumes a query from a key the query itself could return.
+    if (
+      hashKey !== hashValue ||
+      (rangeCondition !== undefined &&
+        !matchesRangeCondition(rangeKey, rangeCondition))
+    ) {
+      throw this.validationError(
+        "The provided starting key is outside query boundaries based on provided conditions",
       )
     }
 
@@ -1244,3 +1268,13 @@ class MemoryEngineImpl implements MemoryEngine {
 
 /** An in-process DynamoDB table engine, used by the sandbox's request handler. */
 export const makeMemoryEngine = (): MemoryEngine => new MemoryEngineImpl()
+
+/** The path of the list or map that holds the last element of `path`. */
+const parentPathKey = (path: ReadonlyArray<DocumentPathPart>) =>
+  JSON.stringify(path.slice(0, -1))
+
+/** The list index `path` ends with, or -1 when it ends with an attribute. */
+const leafIndex = (path: ReadonlyArray<DocumentPathPart>) => {
+  const leaf = path[path.length - 1]
+  return leaf?.type === "index" ? leaf.value : -1
+}

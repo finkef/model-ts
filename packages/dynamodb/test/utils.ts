@@ -7,7 +7,7 @@ import { it as vitest } from "@effect/vitest"
 import { Effect, type Layer, type Scope, Tracer } from "effect"
 import { inject } from "vitest"
 import type { DynamoDB } from "../src/index.ts"
-import { Sandbox, type SandboxOptions } from "../src/sandbox.ts"
+import { Sandbox, type SandboxOptions } from "../src/Sandbox.ts"
 
 declare module "vitest" {
   export interface ProvidedContext {

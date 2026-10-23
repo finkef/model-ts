@@ -1,12 +1,12 @@
-import { model } from "@model-ts/core"
+import { Model } from "@model-ts/core"
 import { Schema } from "effect"
-import { defer, type DeferredEvent, eventBridge } from "../src/index.ts"
+import { EventBridge } from "../src/index.ts"
 
-export class PostPublished extends model<PostPublished>()(
+export class PostPublished extends Model.Class<PostPublished>()(
   "PostPublished",
-  [eventBridge, defer],
+  EventBridge.provider,
   {
-    postId: Schema.String,
+    postId: Schema.String.pipe(Schema.check(Schema.isPattern(/^post_/))),
     publishedAt: Schema.DateFromString,
   },
 ) {
@@ -24,32 +24,12 @@ export const postPublished = (n: number) =>
     publishedAt: new Date("2026-01-01T00:00:00.000Z"),
   })
 
-/** An event whose `postId` cannot be encoded, built past the type system. */
+/**
+ * An event whose `postId` fails its pattern. Construction skips filters, so
+ * the event is first checked when it is encoded.
+ */
 export const unencodable = () =>
   new PostPublished({
-    postId: 42 as unknown as string,
+    postId: "42",
     publishedAt: new Date("2026-01-01T00:00:00.000Z"),
   })
-
-/** The envelope a scheduler would consume to publish deferred events. */
-export class DeferredEnvelope extends model<DeferredEnvelope>()(
-  "DeferredEnvelope",
-  {
-    timestamp: Schema.DateFromString,
-    event: Schema.Struct({
-      source: Schema.String,
-      detailType: Schema.String,
-      detail: Schema.Unknown,
-    }),
-  },
-) {
-  get source() {
-    return "scheduler"
-  }
-  get detailType() {
-    return "scheduler.deferred"
-  }
-}
-
-export const envelope = (deferred: DeferredEvent) =>
-  new DeferredEnvelope(deferred)

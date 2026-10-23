@@ -1,3 +1,5 @@
+import { compareStrings } from "./utils.ts"
+
 interface TreapNode<V> {
   key: string
   priority: number
@@ -41,7 +43,8 @@ export class DeterministicTreap<V> {
     let current = this.root
     while (current) {
       if (key === current.key) return true
-      current = key < current.key ? current.left : current.right
+      current =
+        compareStrings(key, current.key) < 0 ? current.left : current.right
     }
     return false
   }
@@ -105,7 +108,7 @@ export class DeterministicTreap<V> {
       return [node, false]
     }
 
-    if (key < node.key) {
+    if (compareStrings(key, node.key) < 0) {
       const [next, inserted] = this.insertNode(node.left, key, value, priority)
       node.left = next
 
@@ -132,13 +135,13 @@ export class DeterministicTreap<V> {
   ): [TreapNode<V> | null, boolean] {
     if (!node) return [null, false]
 
-    if (key < node.key) {
+    if (compareStrings(key, node.key) < 0) {
       const [next, removed] = this.removeNode(node.left, key)
       node.left = next
       return [node, removed]
     }
 
-    if (key > node.key) {
+    if (compareStrings(key, node.key) > 0) {
       const [next, removed] = this.removeNode(node.right, key)
       node.right = next
       return [node, removed]
@@ -232,8 +235,8 @@ export class DeterministicTreap<V> {
   ): boolean {
     if (!lower) return false
 
-    if (lower.inclusive) return key < lower.key
-    return key <= lower.key
+    const order = compareStrings(key, lower.key)
+    return lower.inclusive ? order < 0 : order <= 0
   }
 
   private isAboveUpperBound(
@@ -242,7 +245,7 @@ export class DeterministicTreap<V> {
   ): boolean {
     if (!upper) return false
 
-    if (upper.inclusive) return key > upper.key
-    return key >= upper.key
+    const order = compareStrings(key, upper.key)
+    return upper.inclusive ? order > 0 : order >= 0
   }
 }

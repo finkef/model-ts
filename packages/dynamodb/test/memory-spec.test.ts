@@ -24,11 +24,10 @@ const put = (harness: Harness, values: Record<string, unknown>) =>
 describe("in-memory spec", () => {
   test("locks projection and index scope", () => {
     expect(IN_MEMORY_SPEC.projection).toBe("ALL")
-    expect(IN_MEMORY_SPEC.excludedIndexes).toEqual(["GSI1"])
     expect(IN_MEMORY_SPEC.indexes).toContain("primary")
+    expect(IN_MEMORY_SPEC.indexes).toContain("GSI1")
     expect(IN_MEMORY_SPEC.indexes).toContain("GSI2")
     expect(IN_MEMORY_SPEC.indexes).toContain("GSI19")
-    expect(IN_MEMORY_SPEC.indexes).not.toContain("GSI1")
   })
 
   test("rejects an unsupported operation with NotSupportedError", async () => {
@@ -49,16 +48,14 @@ describe("in-memory spec", () => {
     })
   })
 
-  test("rejects GSI1 with NotSupportedError", async () => {
+  test("rejects an unknown index with NotSupportedError", async () => {
     await withMemory(async (harness) => {
-      await put(harness, item("1", "g", 1))
-
       await expect(
         harness.client.documentClient
           .query({
             TableName: harness.tableName,
-            IndexName: "GSI1",
-            KeyConditionExpression: "PK = :pk",
+            IndexName: "GSI20",
+            KeyConditionExpression: "GSI20PK = :pk",
             ExpressionAttributeValues: { ":pk": "PK#g" },
           })
           .promise(),
@@ -283,6 +280,81 @@ describe("in-memory spec", () => {
         ],
       })
       expect(await sandbox.get("middle", "middle")).toBeNull()
+    })
+  })
+})
+
+describe("update expressions, as DynamoDB documents them", () => {
+  const update = (
+    harness: Harness,
+    UpdateExpression: string,
+    ExpressionAttributeValues?: Record<string, unknown>,
+  ) =>
+    harness.client.documentClient
+      .update({
+        TableName: harness.tableName,
+        Key: { PK: "doc", SK: "doc" },
+        UpdateExpression,
+        ExpressionAttributeValues,
+        ReturnValues: "ALL_NEW",
+      })
+      .promise()
+
+  test("removes the list elements the paths named before the update", async () => {
+    await withMemory(async (harness) => {
+      await put(harness, { PK: "doc", SK: "doc", list: ["a", "b", "c", "d"] })
+      const { Attributes } = await update(harness, "REMOVE list[0], list[1]")
+      expect(Attributes?.list).toEqual(["c", "d"])
+    })
+  })
+
+  test("appends when SET names an index past the end of a list", async () => {
+    await withMemory(async (harness) => {
+      await put(harness, { PK: "doc", SK: "doc", list: ["a"] })
+      const { Attributes } = await update(harness, "SET list[5] = :x", {
+        ":x": "b",
+      })
+      expect(Attributes?.list).toEqual(["a", "b"])
+    })
+  })
+
+  test("reads REMOVE before SET", async () => {
+    await withMemory(async (harness) => {
+      await put(harness, { PK: "doc", SK: "doc", a: 1, b: 2 })
+      const { Attributes } = await update(harness, "REMOVE a SET b = :b", {
+        ":b": 3,
+      })
+      expect(Attributes).toEqual({ PK: "doc", SK: "doc", b: 3 })
+    })
+  })
+
+  test("refuses to SET a key attribute, even to its own value", async () => {
+    await withMemory(async (harness) => {
+      await put(harness, { PK: "doc", SK: "doc" })
+      await expect(
+        update(harness, "SET PK = :pk", { ":pk": "doc" }),
+      ).rejects.toMatchObject({ name: "ValidationException" })
+    })
+  })
+})
+
+describe("string order, as DynamoDB compares UTF-8 bytes", () => {
+  test("sorts a character above U+FFFF after U+E000", async () => {
+    await withMemory(async (harness) => {
+      const high = "\u{10000}"
+      const private_ = "\u{E000}"
+      for (const SK of [high, private_]) await put(harness, { PK: "p", SK })
+      const { Items } = await harness.client.documentClient
+        .query({
+          TableName: harness.tableName,
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "p" },
+        })
+        .promise()
+      expect(Items?.map((item: Record<string, unknown>) => item.SK)).toEqual([
+        private_,
+        high,
+      ])
     })
   })
 })

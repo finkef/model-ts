@@ -1,12 +1,12 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Effect, Schema } from "effect"
-import { Field, model } from "../src/index.ts"
+import { Model } from "../src/index.ts"
 import { Address, encodedUser, User, UserId } from "./fixtures.ts"
 
 const { _tag: _, ...untagged } = encodedUser
 
 describe("new Model(...)", () => {
-  it("does not validate its input", () => {
+  it("skips filters and brands", () => {
     // The pattern check on email would reject this when decoding.
     const user = new User({
       id: UserId.make("user_01"),
@@ -19,20 +19,45 @@ describe("new Model(...)", () => {
     expect(user.email).toBe("not an email")
   })
 
-  it("applies constructor defaults, however they were declared", () => {
-    const user = User.make({
+  it("still rejects a value of the wrong type", () => {
+    expect(
+      () =>
+        new User({
+          id: UserId.make("user_01"),
+          email: 1 as never,
+          firstName: "Ada",
+          lastName: "Lovelace",
+          address: null,
+          createdAt: new Date(0),
+        }),
+    ).toThrow()
+  })
+
+  it("validates fully with disableChecks: false", () => {
+    const input = {
+      id: UserId.make("user_01"),
+      email: "not an email" as never,
+      firstName: "Ada",
+      lastName: "Lovelace",
+      address: null,
+      createdAt: new Date(0),
+    }
+    expect(() => new User(input, { disableChecks: false })).toThrow()
+  })
+
+  it("applies constructor defaults", () => {
+    const user = new User({
+      id: UserId.make("user_01"),
       email: Schema.decodeSync(User.fields.email)("ada@example.com"),
       firstName: "Ada",
       lastName: "Lovelace",
       address: null,
       createdAt: new Date(0),
     })
-    const constructed = new User({ ...user.values(), id: undefined as never })
 
-    expect(constructed.id).toMatch(/^user_[0-9A-HJKMNP-TV-Z]{26}$/)
-    expect(constructed.role).toBe("member")
-    expect(constructed.visits).toBe(0)
-    expect(constructed._tag).toBe("User")
+    expect(user.role).toBe("member")
+    expect(user.visits).toBe(0)
+    expect(user._tag).toBe("User")
   })
 
   it("keeps explicit values over defaults", () => {
@@ -47,6 +72,7 @@ describe("Model.make", () => {
   it("validates, for callers that want it", () => {
     expect(() =>
       User.make({
+        id: UserId.make("user_01"),
         email: "not an email" as never,
         firstName: "Ada",
         lastName: "Lovelace",
@@ -73,24 +99,9 @@ describe("Model.from", () => {
   })
 
   it("applies decoding defaults for missing keys", () => {
-    const { id: _id, role: _role, ...rest } = encodedUser
+    const { role: _role, ...rest } = encodedUser
     const user = User.from({ ...rest, visits: 1 })
-    expect(user.id.startsWith("user_")).toBe(true)
     expect(user.role).toBe("member")
-  })
-
-  it("applies decoded defaults to transformed fields", () => {
-    class Note extends model<Note>()("Note", {
-      createdAt: Schema.DateFromString.pipe(
-        Field.withDefault(() => new Date(0)),
-      ),
-    }) {}
-    expect(new Note({}).createdAt).toEqual(new Date(0))
-    expect(Note.from({}).createdAt).toEqual(new Date(0))
-    expect(Note.from({}).encode()).toEqual({
-      _tag: "Note",
-      createdAt: "1970-01-01T00:00:00.000Z",
-    })
   })
 
   it("throws a SchemaError for invalid input", () => {
@@ -161,5 +172,16 @@ describe("a model is a Schema", () => {
   it("works with Schema.is", () => {
     expect(Schema.is(User)(User.from(encodedUser))).toBe(true)
     expect(Schema.is(User)(encodedUser)).toBe(false)
+  })
+})
+
+describe("extend", () => {
+  class Base extends Model.Class<Base>()("Base", { a: Schema.String }) {}
+  class Child extends Base.extend<Child>("Child")({ b: Schema.Number }) {}
+
+  it("encodes and lists the fields the extension adds", () => {
+    const child = new Child({ a: "x", b: 1 })
+    expect(child.encode()).toEqual({ _tag: "Base", a: "x", b: 1 })
+    expect(child.values()).toEqual({ a: "x", b: 1 })
   })
 })

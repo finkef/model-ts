@@ -1,11 +1,6 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Schema } from "effect"
-import {
-  makeProvider,
-  mergeProviders,
-  model,
-  type ProviderMembers,
-} from "../src/index.ts"
+import { Model, Provider } from "../src/index.ts"
 
 interface CounterInstance<Self> {
   readonly doubled: number
@@ -15,12 +10,12 @@ interface CounterStatics<Self> {
   readonly kind: string
   zero(this: new (values: { count: number }) => Self): Self
 }
-interface CounterMembers extends ProviderMembers {
+interface CounterMembers extends Provider.Members {
   readonly instance: CounterInstance<this["Self"]>
   readonly static: CounterStatics<this["Self"]>
 }
 
-const counter = makeProvider<CounterMembers>()({
+const counter = Provider.make<CounterMembers>()({
   instanceProps: {
     get doubled() {
       return (this as unknown as { count: number }).count * 2
@@ -38,7 +33,7 @@ const counter = makeProvider<CounterMembers>()({
   },
 })
 
-class Counter extends model<Counter>()("Counter", counter, {
+class Counter extends Model.Class<Counter>()("Counter", counter, {
   count: Schema.Number,
 }) {}
 
@@ -66,35 +61,35 @@ describe("providers", () => {
   })
 })
 
-interface LabelMembers<Label extends string> extends ProviderMembers {
+interface LabelMembers<Label extends string> extends Provider.Members {
   readonly instance: { label(): Label }
   readonly static: { readonly source: Label }
 }
-const first = makeProvider<LabelMembers<"first">>()({
+const first = Provider.make<LabelMembers<"first">>()({
   instanceProps: { label: () => "first" },
   classProps: { source: "first" },
 })
-const second = makeProvider<LabelMembers<"second">>()({
+const second = Provider.make<LabelMembers<"second">>()({
   instanceProps: { label: () => "second" },
   classProps: { source: "second" },
 })
 
-describe("mergeProviders", () => {
+describe("Provider.merge", () => {
   it("lets the later provider win, at runtime and in the types", () => {
-    class Merged extends model<Merged>()("Merged", [first, second], {}) {}
+    class Merged extends Model.Class<Merged>()("Merged", [first, second], {}) {}
     const label: "second" = new Merged().label()
     expect(label).toBe("second")
     expect(Merged.source).toBe("second")
   })
 
-  it("merges an array the same way as mergeProviders()", () => {
-    const merged = mergeProviders([second, first])
-    class Merged extends model<Merged>()("Merged", merged, {}) {}
+  it("merges an array the same way as Provider.merge()", () => {
+    const merged = Provider.merge([second, first])
+    class Merged extends Model.Class<Merged>()("Merged", merged, {}) {}
     expect(new Merged().label()).toBe("first")
   })
 
   it("combines members from different providers", () => {
-    class Both extends model<Both>()("Both", [counter, first], {
+    class Both extends Model.Class<Both>()("Both", [counter, first], {
       count: Schema.Number,
     }) {}
     const both = new Both({ count: 1 })

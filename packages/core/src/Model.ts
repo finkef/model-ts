@@ -1,11 +1,11 @@
 /**
- * `model()` turns a set of Schema fields into a class. The class is a real
+ * `Model.Class` turns a set of Schema fields into a class. The class is a real
  * `Schema.Class`: it can be nested in other schemas, used in unions and
  * passed to every Schema API. On top of that it has `from`, `decode`,
  * `encode` and `values`, and whatever members its providers add.
  *
  * ```ts
- * class User extends model<User>()("User", {
+ * class User extends Model.Class<User>()("User", {
  *   firstName: Schema.String,
  *   lastName: Schema.String,
  * }) {
@@ -17,30 +17,30 @@
  *
  * Two choices differ from a plain `Schema.TaggedClass`:
  *
- * - `new User({...})` does not validate. The input is already typed (brands
- *   included), so construction only fills in constructor defaults. Data from
- *   outside is validated where it enters: `User.from`, `User.decode` or any
- *   Schema decoder. `User.make` is still there when you want a validating
- *   constructor.
+ * - `new User({...})` skips filters and brands (`disableChecks`). The input
+ *   is already typed, brands included, so construction fills in constructor
+ *   defaults and checks the shape only. Data from outside is validated where
+ *   it enters: `User.from`, `User.decode` or any Schema decoder. `User.make`
+ *   and `new User(input, { disableChecks: false })` validate fully.
  * - `_tag` is optional when decoding, at any depth, and always written when
  *   encoding.
  *
  * @since 7.0.0
  */
-import { Effect, Schema, SchemaAST } from "effect"
-import {
-  type AsProvider,
-  defineMembers,
-  type InstanceMembers,
-  type NoMembers,
-  noProvider,
-  type Provider,
-  type ProviderInput,
-  type StaticMembers,
-  toProvider,
+import { Effect, Schema } from "effect"
+import { defineMembers, noProvider, toProvider } from "./internal/provider.ts"
+import type {
+  AsProvider,
+  Input,
+  InstanceMembers,
+  NoMembers,
+  Provider,
+  StaticMembers,
 } from "./Provider.ts"
 
-type Fields = Schema.Struct.Fields
+export { type Any, Union, type UnionStatics } from "./Union.ts"
+
+type StructFields = Schema.Struct.Fields
 
 /**
  * The fields a model accepts: Schemas that decode and encode without Effect
@@ -49,7 +49,7 @@ type Fields = Schema.Struct.Fields
  *
  * @since 7.0.0
  */
-export type ModelFields = {
+export type Fields = {
   readonly [name: string]: Schema.Top & {
     readonly DecodingServices: never
     readonly EncodingServices: never
@@ -62,7 +62,7 @@ const modelTag = <Tag extends string>(tag: Tag) =>
 type ModelTag<Tag extends string> = ReturnType<typeof modelTag<Tag>>
 
 /** The Struct behind a model: its fields plus `_tag`. */
-export type ModelStruct<Tag extends string, F extends Fields> = Schema.Struct<
+export type Struct<Tag extends string, F extends StructFields> = Schema.Struct<
   { readonly _tag: ModelTag<Tag> } & F
 >
 
@@ -71,7 +71,7 @@ export type ModelStruct<Tag extends string, F extends Fields> = Schema.Struct<
  *
  * @since 7.0.0
  */
-export type Values<F> = F extends Fields
+export type Values<F> = F extends StructFields
   ? Omit<Schema.Struct.Type<F>, "_tag">
   : never
 
@@ -80,7 +80,7 @@ export type Values<F> = F extends Fields
  *
  * @since 7.0.0
  */
-export interface ModelMethods<F extends Fields> {
+export interface Methods<F extends StructFields> {
   /**
    * The encoded form, e.g. for JSON APIs or event payloads.
    *
@@ -96,7 +96,7 @@ export interface ModelMethods<F extends Fields> {
  *
  * @since 7.0.0
  */
-export interface ModelStatics<Self> {
+export interface Statics<Self> {
   /**
    * Decodes untrusted input into an instance.
    *
@@ -108,43 +108,39 @@ export interface ModelStatics<Self> {
 }
 
 /**
- * The class `model()` returns. Model and provider instance members sit next to
+ * The class `Model.Class` returns. Model and provider instance members sit next to
  * the fields; class members are added to the constructor.
  *
  * @since 7.0.0
  */
-export type Model<
+export type Class<
   Self,
   Tag extends string,
-  F extends Fields,
+  F extends StructFields,
   P extends Provider,
 > = Schema.Class<
   Self,
-  ModelStruct<Tag, F>,
-  ModelMethods<ModelStruct<Tag, F>["fields"]> & InstanceMembers<P, Self, F>
+  Struct<Tag, F>,
+  Methods<Struct<Tag, F>["fields"]> & InstanceMembers<P, Self, F>
 > &
-  ModelStatics<Self> &
+  Statics<Self> &
   StaticMembers<P, Self, F>
 
 /**
  * @since 7.0.0
  */
-export interface ModelFactory<Self> {
+export interface Factory<Self> {
   /** A model without providers. */
-  <const Tag extends string, const F extends ModelFields>(
+  <const Tag extends string, const F extends Fields>(
     tag: Tag,
     fields: F,
-  ): Model<Self, Tag, F, Provider<NoMembers>>
+  ): Class<Self, Tag, F, Provider<NoMembers>>
   /** A model with the members of one provider, or of several merged left to right. */
-  <
-    const Tag extends string,
-    const P extends ProviderInput,
-    const F extends ModelFields,
-  >(
+  <const Tag extends string, const P extends Input, const F extends Fields>(
     tag: Tag,
     provider: P,
     fields: F,
-  ): Model<Self, Tag, F, AsProvider<P>>
+  ): Class<Self, Tag, F, AsProvider<P>>
 }
 
 /**
@@ -152,7 +148,7 @@ export interface ModelFactory<Self> {
  * provider members return your subclass, getters included.
  *
  * ```ts
- * class Post extends model<Post>()("Post", dynamodb, {
+ * class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
  *   id: PostId,
  *   title: Schema.String,
  * }) {
@@ -167,73 +163,64 @@ export interface ModelFactory<Self> {
  *
  * @since 7.0.0
  */
-export const model = <Self = never>(): ModelFactory<Self> =>
-  ((tag: string, ...rest: [Fields] | [ProviderInput, Fields]) => {
-    const [provider, fields] =
-      rest.length === 1 ? [noProvider, rest[0]] : [toProvider(rest[0]), rest[1]]
+export const Class = <Self = never>(): Factory<Self> =>
+  // The one cast in this module. `makeModel` builds the class from fields it
+  // only knows as `Fields`; the factory's signature states the precise
+  // class for the fields and providers of each call, which no implementation
+  // can be checked against.
+  ((tag: string, ...rest: [Fields] | [Input, Fields]) =>
+    rest.length === 1
+      ? makeModel(tag, noProvider, rest[0])
+      : makeModel(tag, toProvider(rest[0]), rest[1])) as Factory<Self>
 
-    // TypeScript cannot extend Schema's conditional class type inside a
-    // generic function, so the class is built on `any` and the factory's
-    // return type restores the precise type.
-    const Base: any = Schema.Class<any>(tag)(uncheckedStruct(tag, fields))
-    const fieldNames = Object.keys(fields)
-
-    class Model extends Base {
-      encode() {
-        return Schema.encodeSync(
-          this.constructor as Schema.Codec<unknown, unknown>,
-        )(this)
-      }
-      values() {
-        const values: Record<string, unknown> = {}
-        for (const name of fieldNames) {
-          if (name in this) values[name] = this[name as keyof this]
-        }
-        return values
-      }
-      static from(input: unknown) {
-        return Schema.decodeUnknownSync(
-          this as unknown as Schema.Codec<unknown, unknown>,
-        )(input)
-      }
-      static decode(input: unknown) {
-        return Schema.decodeUnknownEffect(
-          this as unknown as Schema.Codec<unknown, unknown>,
-        )(input)
-      }
-    }
-
-    defineMembers(Model.prototype, provider.instanceProps)
-    defineMembers(Model, provider.classProps)
-    return Model
-  }) as ModelFactory<Self>
-
-/**
- * A Struct whose `make` trusts its input.
- *
- * `Schema.Class` builds each instance through `struct.make(input)`, which
- * validates. Decoding takes a different path (the class AST), so replacing
- * `make` on this private Struct changes construction only: constructor
- * defaults are applied and nothing is checked. The core test suite pins this
- * behaviour, so an Effect upgrade that changes it fails loudly.
- */
-const uncheckedStruct = (tag: string, fields: Fields) => {
+const makeModel = (tag: string, provider: Provider, fields: Fields) => {
   const struct = Schema.Struct({ _tag: modelTag(tag), ...fields })
-  const defaults = constructorDefaults(fields)
-  return Object.defineProperty(struct, "make", {
-    value: (input: Record<string, unknown> = {}) => {
-      const value: Record<string, unknown> = { ...input, _tag: tag }
-      for (const [name, makeDefault] of defaults) {
-        if (value[name] === undefined) value[name] = Effect.runSync(makeDefault)
+  const Base = Schema.Class<unknown>(tag)(struct)
+
+  /**
+   * The class an instance was built with: this model, or a class made from
+   * it with `.extend`, which has more fields.
+   */
+  const schemaOf = (instance: object): ModelSchema =>
+    isModelSchema(instance.constructor) ? instance.constructor : ModelClass
+
+  class ModelClass extends Base {
+    // Fields are read by name below; the factory's type lists the real ones.
+    readonly [field: string]: unknown
+
+    constructor(
+      input?: ConstructorParameters<typeof Base>[0],
+      options?: Schema.MakeOptions,
+    ) {
+      super(input, { disableChecks: true, ...options })
+    }
+    encode() {
+      return Schema.encodeSync(schemaOf(this))(this)
+    }
+    values() {
+      const values: Record<string, unknown> = {}
+      for (const name of Object.keys(schemaOf(this).fields)) {
+        if (name !== "_tag" && name in this) values[name] = this[name]
       }
-      return value
-    },
-  })
+      return values
+    }
+    static from(input: unknown) {
+      return Schema.decodeUnknownSync(this)(input)
+    }
+    static decode(input: unknown) {
+      return Schema.decodeUnknownEffect(this)(input)
+    }
+  }
+
+  defineMembers(ModelClass.prototype, provider.instanceProps)
+  defineMembers(ModelClass, provider.classProps)
+  return ModelClass
 }
 
-/** Every field with a constructor default, however the default was attached. */
-const constructorDefaults = (fields: Fields) =>
-  Object.entries(fields).flatMap(([name, field]) => {
-    const makeDefault = SchemaAST.toType(field.ast).context?.constructorDefault
-    return makeDefault ? [[name, makeDefault] as const] : []
-  })
+/** A Schema class: a codec without service requirements, with its fields. */
+type ModelSchema = Schema.Codec<unknown, unknown> & {
+  readonly fields: Schema.Struct.Fields
+}
+
+const isModelSchema = (value: unknown): value is ModelSchema =>
+  Schema.isSchema(value) && "fields" in value

@@ -1,9 +1,57 @@
-import { describe, expect } from "@effect/vitest"
+import { describe, expect, it as vitest } from "@effect/vitest"
+import { marshall } from "@aws-sdk/util-dynamodb"
 import { Effect, Exit, Option } from "effect"
 import { docVersion, DynamoDB, ItemDecodeError } from "../src/index.ts"
-import { Sandbox } from "../src/sandbox.ts"
+import { Sandbox } from "../src/Sandbox.ts"
 import { makePost, Post, PostId } from "./fixtures.ts"
 import { it, recordSpans } from "./utils.ts"
+
+describe("load with unprocessed keys", () => {
+  vitest.live("reads keys that BatchGetItem left unprocessed again", () =>
+    Effect.gen(function* () {
+      const post = makePost(1)
+      const stored = marshall({ ...post.encode(), PK: post.PK, SK: post.SK })
+      let calls = 0
+      // The first BatchGetItem leaves every key unprocessed, as under throttling.
+      const respond = (body: any) => {
+        calls++
+        const keys = body.RequestItems.posts.Keys
+        return calls === 1
+          ? {
+              Responses: { posts: [] },
+              UnprocessedKeys: { posts: { Keys: keys } },
+            }
+          : { Responses: { posts: [stored] }, UnprocessedKeys: {} }
+      }
+      const table = DynamoDB.layer({
+        tableName: "posts",
+        cursors: "plain",
+        client: {
+          region: "local",
+          credentials: { accessKeyId: "test", secretAccessKey: "test" },
+          endpoint: "http://dynamodb.test",
+          maxAttempts: 1,
+          requestHandler: {
+            handle: async (request: { body?: string }) => ({
+              response: {
+                statusCode: 200,
+                headers: { "content-type": "application/x-amz-json-1.0" },
+                body: new TextEncoder().encode(
+                  JSON.stringify(respond(JSON.parse(request.body ?? "{}"))),
+                ),
+              },
+            }),
+          } as never,
+        },
+      })
+
+      const loaded = yield* Post.load(post).pipe(Effect.provide(table))
+
+      expect(loaded.title).toBe(post.title)
+      expect(calls).toBe(2)
+    }),
+  )
+})
 
 describe("get", () => {
   it.effect("decodes the stored item into the model", () =>
@@ -47,7 +95,9 @@ describe("get", () => {
         )
 
         expect(error).toBeInstanceOf(ItemDecodeError)
-        expect(error.message).toMatch(/^Stored item does not match Post: /)
+        expect(error.message).toContain(
+          "Stored item at POST#post_001 / POST does not match Post: ",
+        )
       }),
   )
 })
@@ -72,13 +122,13 @@ describe("load", () => {
         "post_003",
         "post_001",
       ])
-      const calls = spans.filter((span) => span.name.startsWith("DynamoDB."))
+      const calls = spans.filter((span) => span.kind === "client")
       expect(calls.map((span) => span.name)).toEqual(["DynamoDB.BatchGetItem"])
       expect(calls[0]!.attributes.get("aws.dynamodb.keys_count")).toBe(3)
 
       // The batch span links to every load it served.
-      const batch = spans.find((span) => span.name === "Dynamo.batchGet")!
-      const loads = spans.filter((span) => span.name === "Dynamo.load")
+      const batch = spans.find((span) => span.name === "DynamoDB.batchGet")!
+      const loads = spans.filter((span) => span.name === "DynamoDB.load")
       expect(batch.links.map((link) => link.span.spanId).sort()).toEqual(
         loads.map((span) => span.spanId).sort(),
       )
@@ -131,16 +181,6 @@ describe("load", () => {
       expect(live._tag).toBe("ItemNotFoundError")
       expect(recovered.isDeleted).toBe(true)
       expect(recovered.title).toBe("Post 1")
-    }),
-  )
-
-  it.effect("loadOption returns none for a missing key", () =>
-    Effect.gen(function* () {
-      const sandbox = yield* Sandbox
-      yield* sandbox.seed(makePost(1))
-
-      expect(Option.isSome(yield* Post.loadOption(makePost(1)))).toBe(true)
-      expect(yield* Post.loadOption(makePost(2))).toEqual(Option.none())
     }),
   )
 
