@@ -38,10 +38,10 @@ it.effect(
           httpEvent(
             { query: "mutation { update }" },
             {
+              cookies: ["session=valid"],
               headers: {
-                Origin: "https://attacker.example",
-                Cookie: "session=valid",
-                ...(contentType ? { "Content-Type": contentType } : {}),
+                origin: "https://attacker.example",
+                ...(contentType ? { "content-type": contentType } : {}),
               },
             },
           ),
@@ -62,8 +62,8 @@ it.effect(
           { query: "{ me }" },
           {
             headers: {
-              Origin: "https://attacker.example",
-              "Content-Type": "application/json; charset=utf-8",
+              origin: "https://attacker.example",
+              "content-type": "application/json; charset=utf-8",
             },
           },
         ),
@@ -95,7 +95,7 @@ it.effect(
           httpEvent(
             { query: "{ me }" },
             {
-              headers: { Origin: origin, "Content-Type": "application/json" },
+              headers: { origin: origin, "content-type": "application/json" },
             },
           ),
           {},
@@ -111,9 +111,9 @@ it.effect(
       for (const value of [undefined, "", " "]) {
         const response = yield* handler(
           httpEvent(null, {
-            httpMethod: "GET",
+            requestContext: { http: { method: "GET" } },
             queryStringParameters: { query: "{ me }" },
-            headers: { "Apollo-Require-Preflight": value },
+            headers: { "apollo-require-preflight": value },
           }),
           {},
         )
@@ -122,9 +122,9 @@ it.effect(
       expect(contexts).toBe(0)
       const mutation = yield* handler(
         httpEvent(null, {
-          httpMethod: "GET",
+          requestContext: { http: { method: "GET" } },
           queryStringParameters: { query: "mutation { update }" },
-          headers: { "Apollo-Require-Preflight": "true" },
+          headers: { "apollo-require-preflight": "true" },
         }),
         {},
       )
@@ -132,9 +132,9 @@ it.effect(
       expect(contexts).toBe(0)
       const query = yield* handler(
         httpEvent(null, {
-          httpMethod: "GET",
+          requestContext: { http: { method: "GET" } },
           queryStringParameters: { query: "{ me }" },
-          headers: { "Apollo-Require-Preflight": "true" },
+          headers: { "apollo-require-preflight": "true" },
         }),
         {},
       )

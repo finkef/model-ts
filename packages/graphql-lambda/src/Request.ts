@@ -2,22 +2,26 @@ import type { ValidationRule } from "graphql"
 import type { Connection, JsonObject } from "./Models.ts"
 import type { Source } from "./PubSub.ts"
 
-/** Structural API Gateway payload v1.0 types: real AWS events are assignable. */
+/** HTTP API and Lambda function URL payload format 2.0. */
 export interface HttpEvent {
-  readonly httpMethod: string
-  readonly path: string
-  readonly headers: Readonly<Record<string, string | undefined>> | null
-  readonly multiValueHeaders?: Readonly<
-    Record<string, ReadonlyArray<string> | undefined>
-  > | null
-  readonly queryStringParameters?: Readonly<
-    Record<string, string | undefined>
-  > | null
-  readonly body: string | null
-  readonly isBase64Encoded?: boolean
+  readonly version: "2.0"
+  readonly routeKey: string
+  readonly rawPath: string
+  readonly rawQueryString: string
+  readonly cookies?: ReadonlyArray<string>
+  /** API Gateway lowercases names and comma-joins duplicate values. */
+  readonly headers: Readonly<Record<string, string | undefined>>
+  readonly queryStringParameters?: Readonly<Record<string, string | undefined>>
+  readonly body?: string
+  readonly isBase64Encoded: boolean
   readonly requestContext: {
     readonly requestId?: string
-    readonly identity?: { readonly sourceIp?: string }
+    readonly http: {
+      readonly method: string
+      readonly path: string
+      readonly sourceIp: string
+      readonly userAgent: string
+    }
   }
 }
 export interface WebSocketEvent {
@@ -48,8 +52,11 @@ export interface StreamEvent {
 export interface ProxyResponse {
   readonly statusCode: number
   readonly headers?: Record<string, string>
-  readonly multiValueHeaders?: Record<string, Array<string>>
   readonly body: string
+}
+export interface HttpResponse extends ProxyResponse {
+  readonly isBase64Encoded: boolean
+  readonly cookies?: Array<string>
 }
 
 /** Response mutations are isolated per HTTP invocation, shared by its batched operations. */

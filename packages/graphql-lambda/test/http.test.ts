@@ -5,13 +5,16 @@ import {
   graphqlExecutor,
   formatError,
   TransportError,
+  type ContextRequest,
 } from "../src/index.ts"
+import { header } from "../src/internal/request.ts"
 import {
   http,
   httpEvent,
   options,
   schema,
   type AppContext,
+  type LambdaContext,
 } from "./fixtures.ts"
 
 it.effect(
@@ -20,15 +23,16 @@ it.effect(
     Effect.gen(function* () {
       const response = yield* http(
         httpEvent([{ query: "{ me }" }, { query: '{ echo(text: "hi") }' }], {
+          cookies: ["session=old", "theme=dark"],
           headers: {
-            "Content-Type": "application/json",
-            oRiGiN: "https://app.example",
-            cOoKiE: "session=old",
+            "content-type": "application/json",
+            origin: "https://app.example",
           },
         }),
         { user: "middleware-user" },
       )
       expect(response.statusCode).toBe(200)
+      expect(response.isBase64Encoded).toBe(false)
       expect(JSON.parse(response.body)).toEqual([
         { data: { me: "middleware-user" } },
         { data: { echo: "hi" } },
@@ -39,17 +43,127 @@ it.effect(
       expect(response.headers?.["access-control-allow-credentials"]).toBe(
         "true",
       )
-      expect(response.multiValueHeaders?.["Set-Cookie"]).toEqual([
+      expect(response.cookies).toEqual([
         "session=rotated; HttpOnly",
         "refresh=rotated; Secure",
       ])
     }),
 )
+it.effect(
+  "passes the complete HTTP event and cookies to one batch context",
+  () =>
+    Effect.gen(function* () {
+      const event = httpEvent([{ query: "{ me }" }, { query: "{ me }" }], {
+        cookies: ["session=first", "session=second; theme=dark"],
+        headers: {
+          "content-type": "application/json",
+          "x-request-tag": "first,second",
+        },
+      })
+      let contexts = 0
+      const handler = createHttpHandler({
+        ...options,
+        context: (request: ContextRequest<LambdaContext>) => {
+          contexts++
+          expect(request.event).toBe(event)
+          if (!("version" in request.event))
+            throw new Error("Expected HTTP event")
+          expect(request.event.cookies).toEqual(event.cookies)
+          expect(header(request.event, "Cookie")).toBe(
+            "session=first; session=second; theme=dark",
+          )
+          expect(header(request.event, "x-request-tag")).toBe("first,second")
+          request.response.headers["x-context"] = "present"
+          return options.context(request)
+        },
+      })
+      const response = yield* handler(event, {})
+      expect(contexts).toBe(1)
+      expect(response).toEqual({
+        statusCode: 200,
+        headers: { "content-type": "application/json", "x-context": "present" },
+        cookies: ["session=rotated; HttpOnly", "refresh=rotated; Secure"],
+        body: JSON.stringify([
+          { data: { me: "guest" } },
+          { data: { me: "guest" } },
+        ]),
+        isBase64Encoded: false,
+      })
+    }),
+)
+
+it.effect("rejects unsupported payload versions before creating context", () =>
+  Effect.gen(function* () {
+    const handler = createHttpHandler({
+      ...options,
+      context: () => Effect.die("must not run"),
+    })
+    const event = { ...httpEvent({ query: "{ me }" }), version: "3.0" }
+    // @ts-expect-error HTTP payload versions other than 2.0 are not accepted.
+    const response = yield* handler(event, {})
+    expect(response.statusCode).toBe(400)
+    expect(response.isBase64Encoded).toBe(false)
+    expect(response.body).toContain("HTTP payload format 2.0 is required")
+  }),
+)
+
+it.effect("handles bodyless GETs and rejects unsupported methods", () =>
+  Effect.gen(function* () {
+    const response = yield* http(
+      httpEvent(null, {
+        body: undefined,
+        requestContext: { http: { method: "GET" } },
+        queryStringParameters: { query: "{ me }" },
+      }),
+      {},
+    )
+    expect(JSON.parse(response.body)).toEqual({ data: { me: "guest" } })
+    expect(response.cookies).toBeUndefined()
+    const rejected = yield* http(
+      httpEvent(null, {
+        requestContext: { http: { method: "PUT" } },
+      }),
+      {},
+    )
+    expect(rejected.statusCode).toBe(405)
+    expect(rejected.headers?.allow).toBe("GET, POST, OPTIONS")
+  }),
+)
+
+it.effect("enforces decoded UTF-8 body and configured batch limits", () =>
+  Effect.gen(function* () {
+    const body = JSON.stringify({ query: '{ echo(text: "é") }' })
+    const handler = createHttpHandler({
+      ...options,
+      maxBodyBytes: Buffer.byteLength(body),
+      maxBatchSize: 1,
+    })
+    for (const isBase64Encoded of [false, true]) {
+      const event = httpEvent(null, {
+        body: isBase64Encoded ? Buffer.from(body).toString("base64") : body,
+        isBase64Encoded,
+      })
+      expect((yield* handler(event, {})).statusCode).toBe(200)
+      const limited = createHttpHandler({
+        ...options,
+        maxBodyBytes: Buffer.byteLength(body) - 1,
+      })
+      expect((yield* limited(event, {})).statusCode).toBe(400)
+    }
+    const batchHandler = createHttpHandler({ ...options, maxBatchSize: 1 })
+    const batch = yield* batchHandler(
+      httpEvent([{ query: "{me}" }, { query: "{me}" }]),
+      {},
+    )
+    expect(batch.statusCode).toBe(400)
+    expect(batch.body).toContain("Invalid batch size")
+  }),
+)
 it.effect("GET variables work; GET mutations never execute", () =>
   Effect.gen(function* () {
     const query = yield* http(
       httpEvent(null, {
-        httpMethod: "GET",
+        requestContext: { http: { method: "GET" } },
         queryStringParameters: {
           query: "query ($text: String!) { echo(text: $text) }",
           variables: '{"text":"hello"}',
@@ -60,7 +174,7 @@ it.effect("GET variables work; GET mutations never execute", () =>
     expect(JSON.parse(query.body)).toEqual({ data: { echo: "hello" } })
     const mutation = yield* http(
       httpEvent(null, {
-        httpMethod: "GET",
+        requestContext: { http: { method: "GET" } },
         queryStringParameters: { query: "mutation { update }" },
       }),
       {},
@@ -80,9 +194,9 @@ it.effect(
       })
       const response = yield* handler(
         httpEvent(null, {
-          httpMethod: "OPTIONS",
+          requestContext: { http: { method: "OPTIONS" } },
           headers: {
-            "Access-Control-Request-Headers": "Authorization, X-App-Session-ID",
+            "access-control-request-headers": "Authorization, X-App-Session-ID",
           },
         }),
         {},
@@ -175,12 +289,12 @@ it.effect("isolates invalid batch entries and supports base64 payloads", () =>
     expect(body[1].errors).toHaveLength(1)
   }),
 )
-it.effect("controls introspection, explorer and optional health route", () =>
+it.effect("controls introspection, GraphiQL and optional health route", () =>
   Effect.gen(function* () {
     const handler = createHttpHandler({
       ...options,
       introspection: false,
-      explorerHtml: "<html>GraphiQL</html>",
+      graphiql: true,
       healthCheck: Effect.void,
     })
     expect(
@@ -196,13 +310,16 @@ it.effect("controls introspection, explorer and optional health route", () =>
       )).statusCode,
     ).toBe(200)
     const html = yield* handler(
-      httpEvent(null, { httpMethod: "GET", headers: { accept: "text/html" } }),
+      httpEvent(null, {
+        requestContext: { http: { method: "GET" } },
+        headers: { accept: "text/html" },
+      }),
       {},
     )
     expect(html.headers?.["content-type"]).toBe("text/html; charset=utf-8")
     expect(
       (yield* handler(
-        httpEvent(null, { path: "/.well-known/apollo/server-health" }),
+        httpEvent(null, { rawPath: "/.well-known/apollo/server-health" }),
         {},
       )).body,
     ).toBe('{"status":"pass"}')

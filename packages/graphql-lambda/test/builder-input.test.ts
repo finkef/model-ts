@@ -194,7 +194,7 @@ it.effect(
           httpEvent(
             {},
             {
-              httpMethod: "GET",
+              requestContext: { http: { method: "GET" } },
               queryStringParameters: { query: 'mutation {echo(value:"bad")}' },
             },
           ),

@@ -179,17 +179,32 @@ export const websocket = createWebSocketHandler(options)
 export const stream = streamHandler(options)
 export const httpEvent = (
   query: unknown,
-  overrides: Partial<HttpEvent> = {},
+  overrides: Omit<Partial<HttpEvent>, "requestContext"> & {
+    readonly requestContext?: {
+      readonly requestId?: string
+      readonly http?: Partial<HttpEvent["requestContext"]["http"]>
+    }
+  } = {},
 ): HttpEvent => ({
-  httpMethod: "POST",
-  path: "/v1/graphql",
+  version: "2.0",
+  routeKey: "$default",
+  rawPath: "/graphql",
+  rawQueryString: "",
   headers: { "content-type": "application/json" },
   body: JSON.stringify(query),
+  isBase64Encoded: false,
+  ...overrides,
   requestContext: {
     requestId: "http-test",
-    identity: { sourceIp: "127.0.0.1" },
+    ...overrides.requestContext,
+    http: {
+      method: "POST",
+      path: overrides.rawPath ?? "/graphql",
+      sourceIp: "127.0.0.1",
+      userAgent: "test-client",
+      ...overrides.requestContext?.http,
+    },
   },
-  ...overrides,
 })
 export const wsEvent = (
   id: string,

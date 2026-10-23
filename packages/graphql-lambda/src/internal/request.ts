@@ -25,12 +25,15 @@ import { singleRootFieldSubscriptionsRule } from "./SubscriptionRule.ts"
 export const header = (
   event: {
     readonly headers?: Readonly<Record<string, string | undefined>> | null
+    readonly cookies?: ReadonlyArray<string>
   },
   name: string,
 ) =>
-  Object.entries(event.headers ?? {}).find(
-    ([key]) => key.toLowerCase() === name.toLowerCase(),
-  )?.[1]
+  name.toLowerCase() === "cookie" && event.cookies?.length
+    ? event.cookies.join("; ")
+    : Object.entries(event.headers ?? {}).find(
+        ([key]) => key.toLowerCase() === name.toLowerCase(),
+      )?.[1]
 
 export const parseJson = (text: string) =>
   Effect.try({

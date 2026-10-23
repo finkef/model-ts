@@ -33,6 +33,8 @@ for (const transport of ["HTTP", "WebSocket"] as const) {
           if (transport === "HTTP") {
             const response = yield* http(httpEvent({ query }), invocation)
             expect(response.statusCode).toBe(200)
+            expect(response.isBase64Encoded).toBe(false)
+            expect(response.headers?.["content-type"]).toBe("application/json")
             return response.body
           }
           yield* websocket(wsEvent("builder", "$connect"), invocation)

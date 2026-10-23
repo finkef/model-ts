@@ -22,6 +22,9 @@ import {
   createWebSocketHandler,
   type Executor,
   type ProxyResponse,
+  type HttpResponse,
+  type HttpEvent,
+  type GraphiQLOptions,
 } from "../src/index.ts"
 import { JsonObject } from "../src/Models.ts"
 import { publish } from "../src/PubSub.ts"
@@ -60,6 +63,47 @@ const handler = createHttpHandler({
     IdentityService.use((service) => Effect.succeed({ user: service.user })),
 })
 declare const request: Parameters<typeof handler>[0]
+expectTypeOf<typeof request>().toEqualTypeOf<HttpEvent>()
+expectTypeOf<
+  Effect.Success<ReturnType<typeof handler>>
+>().toEqualTypeOf<HttpResponse>()
+expectTypeOf<HttpEvent["version"]>().toEqualTypeOf<"2.0">()
+expectTypeOf<HttpEvent["cookies"]>().toEqualTypeOf<
+  ReadonlyArray<string> | undefined
+>()
+expectTypeOf<HttpResponse["cookies"]>().toEqualTypeOf<
+  Array<string> | undefined
+>()
+expectTypeOf<
+  Extract<keyof HttpEvent, "httpMethod" | "path" | "multiValueHeaders">
+>().toEqualTypeOf<never>()
+expectTypeOf<
+  Extract<keyof HttpResponse, "multiValueHeaders">
+>().toEqualTypeOf<never>()
+// @ts-expect-error HTTP handlers require an explicit payload version.
+handler({ headers: {}, body: "", requestContext: {} }, {})
+const graphiql: GraphiQLOptions = {
+  credentials: "include",
+  endpoint: "/graphql",
+  subscriptionUrl: "wss://api.example.test/graphql",
+  headers: { authorization: "Bearer example" },
+  query: "{ __typename }",
+  title: "Example explorer",
+  nonce: "example-nonce",
+}
+createHttpHandler({
+  executor,
+  context: () => Effect.succeed({ user: "ada" }),
+  graphiql,
+})
+// @ts-expect-error Credentials are a closed browser fetch policy.
+const invalidCredentials: GraphiQLOptions = { credentials: "always" }
+const invalidSubscription: GraphiQLOptions = {
+  // @ts-expect-error Subscription URLs use secure WebSockets.
+  subscriptionUrl: "https://api.example.test",
+}
+void invalidCredentials
+void invalidSubscription
 export const requirement: Effect.Effect<
   ProxyResponse,
   never,

@@ -7,6 +7,8 @@ import {
   type ErrorFormatter,
 } from "./Errors.ts"
 import type { Executor } from "./Executor.ts"
+import type { GraphiQLOptions } from "./GraphiQL.ts"
+import { graphiqlHtml } from "./internal/graphiql.ts"
 import {
   decodeRequest,
   header,
@@ -19,7 +21,7 @@ import { operationPubSub } from "./internal/source.ts"
 import type {
   ContextRequest,
   HttpEvent,
-  ProxyResponse,
+  HttpResponse,
   ResponseHeaders,
   ValidationOptions,
 } from "./Request.ts"
@@ -44,8 +46,8 @@ export interface HttpOptions<C, L, E, R> extends ValidationOptions {
   >
   readonly maxBatchSize?: number
   readonly maxBodyBytes?: number
-  /** A self-hosted GraphiQL/Playground document. Only returned for GET Accept: text/html. */
-  readonly explorerHtml?: string
+  /** Serve GraphiQL for GET Accept: text/html. Disabled by default. */
+  readonly graphiql?: boolean | GraphiQLOptions
   readonly healthCheck?: Effect.Effect<void, E, R>
 }
 
@@ -59,7 +61,7 @@ export function createHttpHandler<
 ): (
   event: HttpEvent,
   lambdaContext: L,
-) => Effect.Effect<ProxyResponse, never, HttpRequirements<O>>
+) => Effect.Effect<HttpResponse, never, HttpRequirements<O>>
 export function createHttpHandler<C, L>(
   options: HttpOptions<C, L, unknown, unknown>,
 ) {
@@ -72,18 +74,20 @@ export function createHttpHandler<C, L>(
       headers: { "content-type": "application/json" },
       cookies: [],
     }
-    const reply = (statusCode: number, body: string): ProxyResponse => ({
+    const reply = (statusCode: number, body: string): HttpResponse => ({
       statusCode,
       headers: response.headers,
-      multiValueHeaders: response.cookies.length
-        ? { "Set-Cookie": response.cookies }
-        : undefined,
+      ...(response.cookies.length ? { cookies: response.cookies } : {}),
       body,
+      isBase64Encoded: false,
     })
     const failure = (error: unknown) => ({
       errors: [format(toGraphQLError(error))],
     })
     return yield* Effect.gen(function* () {
+      if (event.version !== "2.0")
+        return yield* badRequest("HTTP payload format 2.0 is required")
+      const method = event.requestContext.http.method
       const cors = options.cors ?? false
       if (cors) {
         if (
@@ -115,16 +119,32 @@ export function createHttpHandler<C, L>(
           response.headers["access-control-allow-headers"] = requested
       }
 
-      if (event.httpMethod === "OPTIONS") return reply(204, "")
+      if (method === "OPTIONS") return reply(204, "")
       if (
-        event.httpMethod === "GET" &&
-        options.explorerHtml &&
-        header(event, "accept")?.includes("text/html")
+        method === "GET" &&
+        options.graphiql &&
+        header(event, "accept")
+          ?.split(",")
+          .some((range) => {
+            const [type, ...parameters] = range.trim().toLowerCase().split(";")
+            return (
+              type.trim() === "text/html" &&
+              !parameters.some((parameter) =>
+                /^q\s*=\s*0(?:\.0*)?$/.test(parameter.trim()),
+              )
+            )
+          })
       ) {
         response.headers["content-type"] = "text/html; charset=utf-8"
-        return reply(200, options.explorerHtml)
+        return reply(
+          200,
+          graphiqlHtml(
+            options.graphiql === true ? {} : options.graphiql,
+            event.rawPath,
+          ),
+        )
       }
-      if (event.httpMethod !== "GET" && event.httpMethod !== "POST") {
+      if (method !== "GET" && method !== "POST") {
         response.headers.allow = "GET, POST, OPTIONS"
         return reply(
           405,
@@ -158,13 +178,13 @@ export function createHttpHandler<C, L>(
         )
       if (
         options.healthCheck &&
-        event.path === "/.well-known/apollo/server-health"
+        event.rawPath === "/.well-known/apollo/server-health"
       ) {
         yield* options.healthCheck
         return reply(200, JSON.stringify({ status: "pass" }))
       }
       let input: unknown
-      if (event.httpMethod === "GET") {
+      if (method === "GET") {
         const query = event.queryStringParameters ?? {}
         input = {
           query: query.query,
@@ -215,10 +235,7 @@ export function createHttpHandler<C, L>(
               status: 400,
               result: { errors: prepared.errors.map(format) },
             }
-          if (
-            event.httpMethod === "GET" &&
-            prepared.operation?.operation !== "query"
-          )
+          if (method === "GET" && prepared.operation?.operation !== "query")
             return {
               status: 405,
               result: failure(badRequest("GET supports queries only")),

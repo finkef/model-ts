@@ -1,7 +1,8 @@
 # @model-ts/graphql-lambda
 
-Effect-native GraphQL transport for API Gateway HTTP API payload v1.0 and
-API Gateway WebSockets with an independent executor interface. Requires Effect
+Effect-native GraphQL transport for API Gateway HTTP API or Lambda function URL
+with payload format 2.0, and API Gateway WebSockets, with an independent executor
+interface. Requires Effect
 4.0.5+, model-ts 7, graphql-js ^16.11.0, and Node 22+. Use one shared
 graphql-js installation for the schema, executor and transport.
 
@@ -250,13 +251,25 @@ The context factory returns an Effect with typed errors and receives:
 - `pubSub`: an operation-local source, described below.
 - `response.headers` and `response.cookies`: mutable HTTP response output.
 
-The application explicitly incorporates
-`persisted` into its typed context. HTTP batches share one context factory call
-and response container; operations execute in order. Duplicate cookies are
-returned as `multiValueHeaders["Set-Cookie"]`. Input headers are preserved, and
-`header(event, name)` looks them up case-insensitively.
+The application explicitly incorporates `persisted` into its typed context.
+HTTP batches share one context factory call and response container; operations
+execute in order. HTTP input cookies are available as `event.cookies` after
+narrowing the event with `"version" in event`. Join them with `"; "` when a
+Cookie header value is needed. Append each outgoing Set-Cookie value to
+`response.cookies`; the handler returns them in the payload's `cookies` array.
 
 ### HTTP
+
+Use an HTTP API or function URL with **payload format 2.0**. The package defines
+`HttpEvent` and `HttpResponse` without an `aws-lambda` types dependency.
+`HttpEvent` requires `version: "2.0"`, `routeKey`, `rawPath`, `rawQueryString`,
+`headers`, `requestContext.http` (`method`, `path`, `sourceIp`, `userAgent`) and
+`isBase64Encoded`. `body`, `cookies` and `queryStringParameters` are optional.
+API Gateway supplies lowercase, single-valued headers with comma-joined
+duplicates; cookies arrive separately in `event.cookies`. The original event
+reaches the context factory unchanged. Responses contain `statusCode`,
+`headers`, `body`, `isBase64Encoded: false` and optional `cookies`, one
+Set-Cookie value per array entry.
 
 POST accepts one GraphQL request or a nonempty array, including base64 proxy
 bodies. GET accepts `query`, JSON `variables`, JSON `extensions` and
@@ -291,15 +304,52 @@ HTTP defects, including context/executor failures, serialization errors and
 throwing formatters, return a fixed safe 500 GraphQL response and log the
 cause. Interruption remains interruption.
 
-`explorerHtml` serves an application-owned GraphiQL/Playground document on GET
-with `Accept: text/html`. Bundle or self-host its assets in the application;
-this package does not fetch a third-party script at runtime. Configure its
-fetcher for credentials and its subscription client for `graphql-transport-ws`.
+Set `graphiql: true` to serve GraphiQL on GET requests that accept `text/html`.
+It is off by default. **Introspection must be enabled for GraphiQL to be useful**;
+enabling the page does not override `introspection: false`. Configure it with
+`GraphiQLOptions` when defaults are insufficient:
+
+```ts
+const http = createHttpHandler({
+  ...options,
+  introspection: true,
+  graphiql: {
+    credentials: "same-origin",
+    endpoint: "/graphql",
+    subscriptionUrl: "wss://api.example.test/graphql",
+    headers: { "x-example-client": "graphiql" },
+    query: "{ __typename }",
+    title: "Example GraphQL API",
+  },
+})
+```
+
+`credentials` accepts `"include"`, `"same-origin"` (default), or `"omit"` and
+applies to all HTTP fetches, including introspection. `endpoint` defaults to the
+request's `rawPath`; set it explicitly when an API mapping or proxy adds an
+external path prefix. Optional `subscriptionUrl` uses the `graphql-ws` client
+with the `graphql-transport-ws` protocol. Default `headers` apply to HTTP
+requests and are sent as WebSocket `connection_init` parameters; the application
+must authenticate those parameters. `query` initializes the editor and `title`
+defaults to `"GraphiQL"`. Header persistence is disabled initially. Do not embed
+server-only credentials in a page delivered to browsers.
+
+The page loads GraphiQL 5.4.0 and pinned ESM entry points from esm.sh, following
+GraphiQL's [official CDN example](https://github.com/graphql/graphiql/blob/main/examples/graphiql-cdn/index.html)
+and [fetcher API](https://github.com/graphql/graphiql/blob/main/packages/graphiql-toolkit/docs/create-fetcher.md).
+It includes the Monaco worker setup and passes an explicit `graphql-ws` client
+to `createGraphiQLFetcher`. Options are escaped for HTML and script contexts.
+Optional `nonce` applies to the inline scripts and style. The application owns
+CSP headers and must allow the CDN assets, Monaco workers (including blob
+workers), and configured HTTP/WebSocket endpoints; a nonce alone does not
+supply that policy.
+
 An optional `healthCheck` Effect enables `/.well-known/apollo/server-health`;
-route that path explicitly in API Gateway and send a JSON content type or
-accepted preflight header when checking it. OPTIONS and the static explorer
-do not invoke application context or resolvers. Warmers remain application
-middleware.
+route that path explicitly and send a JSON content type or accepted preflight
+header when checking it. OPTIONS and GraphiQL HTML responses do not invoke
+application context or resolvers. CORS still applies to the page; executing
+operations from it follows the normal CSRF and validation checks. Warmers
+remain application middleware.
 
 ### WebSocket authentication and protocol
 
@@ -553,6 +603,7 @@ scanning subscriptions. Reservation, activation and completion use atomic
 transactions. Grant the WebSocket and stream Lambdas POST/DELETE
 ManageConnections permissions. Management endpoints derive from API Gateway's
 `domainName` and `stage`.
+Configure the HTTP API or function URL integration with payload format 2.0.
 
 ## Testing and remaining evidence gaps
 
