@@ -1,22 +1,32 @@
 # @model-ts/graphql-lambda
 
-Effect-native GraphQL transport for API Gateway HTTP API or Lambda function URL
-with payload format 2.0, and API Gateway WebSockets, with an independent executor
-interface. Requires Effect
-4.0.5+, model-ts 7, graphql-js ^16.11.0, and Node 22+. Use one shared
-graphql-js installation for the schema, executor and transport.
+An Effect v4 GraphQL transport for AWS Lambda. It serves queries and mutations
+through API Gateway HTTP APIs or Lambda function URLs using payload format 2.0,
+and queries, mutations and durable subscriptions through API Gateway WebSocket
+APIs using `graphql-transport-ws`. `PubSub.DynamoDB` stores connection state,
+subscriptions and published events in a dedicated table; a DynamoDB Streams
+Lambda delivers events by rebuilding each subscriber's context and executing
+its subscription.
 
-## Using with @model-ts/graphql
+## Requirements
 
-Pass `executor(schema)` from `@model-ts/graphql` directly as the executor. It preserves the
-builder's declared public errors, `FORBIDDEN` codes, messages and source
-locations. Internal failures are masked by the builder and reported through
-`ErrorReporter`; transport formatting does not reinterpret them.
+- Node.js 22 or later and Effect `^4.0.5`.
+- `@model-ts/core` and `@model-ts/dynamodb` `^7.0.0`.
+- `graphql` `^16.11.0`, with one shared installation for schema, executor and
+  transport.
+- AWS SDK v3 peers: `@aws-sdk/client-apigatewaymanagementapi` and
+  `@aws-sdk/util-dynamodb`.
+- `@model-ts/graphql` when using its Effect schema builder.
 
-This complete example exposes public greetings and announcements. Add your
-application's authentication when exposing private data: the context factory
-rebuilds the authenticated identity for each request or delivery, and
-`onInit` explicitly maps accepted init parameters into persisted context.
+This package is versioned independently: `@model-ts/graphql-lambda` uses major
+version 6 with model-ts core and DynamoDB major version 7.
+
+## Quick start
+
+This example exposes a public greeting and an announcement subscription. Set
+`GRAPHQL_TABLE_NAME` to a dedicated table configured as described under
+[PubSub.DynamoDB](#pubsubdynamodb). All handlers use one runtime created outside
+the Lambda exports.
 
 ```ts
 import { createBuilder, executor, ErrorReporter } from "@model-ts/graphql"
@@ -28,26 +38,22 @@ import {
   createWebSocketHandler,
   type ContextRequest,
 } from "@model-ts/graphql-lambda"
-import { Context, Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 
+interface LambdaContext {
+  readonly awsRequestId: string
+}
 interface AppContext {
   readonly requestId: string
   readonly pubSub: PubSub.Source
 }
-interface LambdaContext {
-  readonly awsRequestId: string
-}
-class Greeting extends Context.Service<
-  Greeting,
-  { readonly message: string }
->()("app/Greeting") {}
 
-const GraphQL = createBuilder<{}, AppContext>()
 const announcements = Topic.make("public/announcements")
+const GraphQL = createBuilder<{}, AppContext>()
 const greeting = GraphQL.queryField(
   "greeting",
   GraphQL.field("String", (_, __, context) =>
-    Effect.map(Greeting, ({ message }) => message + " " + context.requestId),
+    Effect.succeed(`Hello from ${context.requestId}`),
   ),
 )
 const announcement = GraphQL.subscriptionField(
@@ -65,8 +71,8 @@ const announcement = GraphQL.subscriptionField(
 )
 const schema = GraphQL.schema({ greeting, announcement })
 const options = {
-  persistedContext: Schema.Struct({}),
   executor: executor(schema),
+  persistedContext: Schema.Struct({}),
   context: (request: ContextRequest<LambdaContext>) =>
     Effect.succeed({
       requestId: request.lambdaContext.awsRequestId,
@@ -76,17 +82,14 @@ const options = {
 const http = createHttpHandler(options)
 const websocket = createWebSocketHandler(options)
 const delivery = PubSub.DynamoDB.streamHandler(options)
-
+const errorReporting = Layer.succeed(ErrorReporter, {
+  report: ({ cause, coordinate }) => Effect.logError(coordinate, cause),
+})
 const runtime = ManagedRuntime.make(
   Layer.mergeAll(
-    PubSub.DynamoDB.layer({
-      tableName: process.env.GRAPHQL_TABLE_NAME!,
-    }),
+    PubSub.DynamoDB.layer({ tableName: process.env.GRAPHQL_TABLE_NAME! }),
     Gateway.layer(),
-    Layer.succeed(Greeting, { message: "Hello" }),
-    Layer.succeed(ErrorReporter, {
-      report: ({ cause, coordinate }) => Effect.logError(coordinate, cause),
-    }),
+    errorReporting,
   ),
 )
 
@@ -100,527 +103,622 @@ export const wsHandler = (
   context: LambdaContext,
 ) => runtime.runPromise(websocket(event, context))
 
-// DynamoDB stream Lambda for events written with PubSub.publish().
 export const streamHandler = (
   event: Parameters<typeof delivery>[0],
   context: LambdaContext,
 ) => runtime.runPromise(delivery(event, context))
 
-// Call PubSub.publish from wherever your application publishes.
 export const announce = (message: string) =>
   runtime.runPromise(PubSub.publish(announcements, message))
 ```
 
-The runtime lives outside Lambda exports and retains all application services.
-Resolver requirements such as `Greeting`, and context/authentication Effect
-requirements, flow into handler types. Missing layers fail compilation. Only
-the tests depend on `@model-ts/graphql`; applications can still supply a plain
-graphql-js schema via `graphqlExecutor`.
+Route HTTP requests to `httpHandler`, WebSocket `$connect`, `$default` and
+`$disconnect` to `wsHandler`, and the table's stream to `streamHandler`. Protocol
+messages must reach `$default`. A client subscribes with
+`subscription { announcement }`; calling `announce("Hello")` writes an event
+for asynchronous delivery.
 
-The builder's subscription must use `context.pubSub.stream` (or the equivalent
-finite iterable source), so registration can discover topics and finish before
-Lambda returns. Stream delivery recreates this source with
-one event and rerun the builder's filtering and authorization. Tests run this
-wiring with graphql-js 16 on memory and DynamoDB Local.
+Each factory returns `(event, lambdaContext) => Effect`. Handler types retain
+service requirements from the executor, context factory, codecs and relevant
+hooks. Add application service layers to the runtime; missing requirements are
+type errors. A publisher in another Lambda can use `PubSub.DynamoDB.layer` with
+the same table name and call `PubSub.publish` without constructing a handler.
 
-## Handlers and executor
+The remaining TypeScript examples extend this module and reuse its imports and
+definitions.
 
-`createHttpHandler`, `createWebSocketHandler` and `PubSub.DynamoDB.streamHandler` return
-functions `(event, lambdaContext) => Effect`. Run them in the application's
-shared `ManagedRuntime`; do not build a runtime per request. Middleware can
-continue adding typed data to `lambdaContext` and inspecting the proxy response.
-No AWS client is constructed until its layer is built.
+## HTTP
+
+### Requests and responses
+
+Configure the HTTP API integration for payload format `2.0`; Lambda function
+URLs use the same event format. `HttpEvent` includes `version`, `routeKey`,
+`rawPath`, `rawQueryString`, `headers`, `isBase64Encoded` and
+`requestContext.http`, plus optional `body`, `cookies` and
+`queryStringParameters`. Other payload versions return 400.
+
+POST accepts a JSON object with `query` and optional `variables`, `operationName`
+and `extensions`. Variables and extensions are JSON objects or `null`.
+Base64-encoded request bodies are decoded before parsing and size checks.
+
+A POST array executes a batch sequentially. Its context factory runs at most
+once, when an operation first needs context; all entries share the resulting
+context and response headers/cookies. Invalid entries produce individual
+errors. An accepted batch returns HTTP 200 with an array of results, even when
+individual operations fail. Empty or oversized batches return 400.
+
+GET reads those same fields from `queryStringParameters`; encode `variables`
+and `extensions` as JSON strings. GET supports queries only. Mutations and
+subscriptions over GET return 405 with `Allow: POST`. POST subscriptions return 400. Unsupported methods return 405 with `Allow: GET, POST, OPTIONS`.
+
+For a single operation, a result with data returns 200, including partial data
+with field errors. A result containing only errors returns 400. A failed context
+Effect containing a `TransportError` uses its status; other unexpected failures
+return 500. Responses contain a JSON body and `isBase64Encoded: false`.
+
+### CORS and CSRF
+
+CORS is disabled by default. Set `cors.origin` to an explicit origin or an array
+of allowed origins. Without credentials, `true` reflects the request origin and
+`"*"` allows any origin. With `credentials: true`, explicit origins are required;
+reflection and `"*"` are rejected. CORS controls browser access to responses and
+does not authenticate requests or prevent execution for disallowed origins.
+
+OPTIONS returns 204 without creating context. With CORS enabled, responses
+advertise `GET, POST, OPTIONS`, echo `Access-Control-Request-Headers` and set
+`Vary: Origin, Access-Control-Request-Headers`.
+
+GraphQL requests must send `Content-Type: application/json` or a non-empty
+preflight header. The default accepted headers are `Apollo-Require-Preflight`
+and `X-Apollo-Operation-Name`, matched case-insensitively. This also applies to
+GET. `csrfHeaders` replaces that list and accepts explicit `x-*` names or
+`apollo-require-preflight`; simple headers cannot disable the check.
+
+### Limits and health check
+
+| Option            | Default    | Applies to                                         |
+| ----------------- | ---------- | -------------------------------------------------- |
+| `maxBodyBytes`    | 1 MiB      | Decoded POST body, measured in UTF-8 bytes         |
+| `maxBatchSize`    | 20         | Number of operations in a POST batch               |
+| `maxQueryBytes`   | 64 KiB     | Each GraphQL query string, measured in UTF-8 bytes |
+| `introspection`   | Enabled    | Set `false` to reject schema introspection         |
+| `validationRules` | None added | Additional GraphQL validation rules                |
+
+There is no built-in depth limit; supply a validation rule when needed. The
+query limit, introspection setting and validation rules also apply to WebSocket
+registration and stream delivery.
+
+Set `healthCheck` to an `Effect<void>` to handle
+`/.well-known/apollo/server-health`. A successful check returns 200 with
+`{"status":"pass"}` without parsing a GraphQL operation or creating context.
+The route still requires an accepted method and passes the CSRF check, so send
+`Apollo-Require-Preflight: true` for a bodyless GET. Failures use the normal
+transport error policy.
+
+### Cookies and response headers
+
+Read HTTP cookies from `event.cookies`, narrowing the event first with
+`"version" in event`. Join them with `"; "` if your cookie parser expects a
+Cookie header. WebSocket handshake cookies are in the event's headers.
+
+Append each outgoing Set-Cookie value separately to `response.cookies`; the
+HTTP handler returns the payload format 2.0 `cookies` array. Mutate
+`response.headers` for other headers. These containers are isolated per HTTP
+invocation and shared by its batch. Response mutations during WebSocket
+operations or delivery do not set browser cookies.
 
 ```ts
-import {
-  Gateway,
-  PubSub,
-  createHttpHandler,
-  createWebSocketHandler,
-  graphqlExecutor,
-} from "@model-ts/graphql-lambda"
-import { Layer, ManagedRuntime } from "effect"
-import {
-  schema,
-  persistedContext,
-  makeContext,
-  makeHttpContext,
-  authenticateInit,
-} from "./api.ts"
-import type { AppContext, LambdaContext } from "./context.ts"
-
-const runtime = ManagedRuntime.make(
-  Layer.merge(
-    PubSub.DynamoDB.layer({
-      tableName: process.env.GRAPHQL_TABLE_NAME!,
+export const httpWithCookies = createHttpHandler({
+  ...options,
+  context: (request: ContextRequest<LambdaContext>) =>
+    Effect.gen(function* () {
+      const cookieHeader =
+        "version" in request.event
+          ? (request.event.cookies ?? []).join("; ")
+          : ""
+      request.response.headers["cache-control"] = "no-store"
+      if (!cookieHeader) {
+        request.response.cookies.push(
+          "theme=light; Path=/; Secure; SameSite=Lax",
+        )
+      }
+      return yield* options.context(request)
     }),
-    Gateway.layer(),
-  ),
-)
-const options = {
-  persistedContext,
-  executor: graphqlExecutor<AppContext>(schema),
-  context: makeContext,
-  onInit: authenticateInit,
-  introspection: true,
-}
-const http = createHttpHandler({ ...options, context: makeHttpContext })
-const websocket = createWebSocketHandler(options)
-const delivery = PubSub.DynamoDB.streamHandler(options)
-
-export const httpHandler = (
-  event: Parameters<typeof http>[0],
-  context: LambdaContext,
-) => runtime.runPromise(http(event, context))
-export const wsHandler = (
-  event: Parameters<typeof websocket>[0],
-  context: LambdaContext,
-) => runtime.runPromise(websocket(event, context))
-export const streamHandler = (
-  event: Parameters<typeof delivery>[0],
-  context: LambdaContext,
-) => runtime.runPromise(delivery(event, context))
+})
 ```
 
-Add application service layers to this runtime. The handler's requirement type
-retains requirements from the executor, context factory and authentication
-hooks. `graphqlExecutor<C>(schema)` adapts a plain graphql-js `GraphQLSchema`.
-An Effect-aware builder implements the small `Executor<C, E, R>` interface:
+## GraphiQL
 
-- `schema: GraphQLSchema`, for operation selection and transport validation rules.
-- Optional `validation: "executor"`, declaring that execute/subscribe own standard schema validation.
-- `execute({ document, request, context }): Effect<Result, E, R>`.
-- `subscribe(...): Stream.Stream<Result, E, R>`.
-
-`Result` is a JSON-safe, `FormattedExecutionResult`-shaped object. The executor
-owns result error policy and formatting. Errors must already contain safe
-messages, paths, locations and extensions; no raw `GraphQLError` instances
-cross this seam. The transport forwards these results unchanged on HTTP,
-registration and delivery, so builder public codes survive.
-
-`executor(schema)` declares `validation: "executor"`. The transport
-then leaves standard schema validation to the executor, including scalar literal
-parsing, so literals and variables share its public/internal error policy.
-Parsing, operation selection, GET restrictions, query limits, introspection
-restrictions, subscription root selection checks and application `validationRules`
-remain transport responsibilities. Application rules run only after standard
-validation succeeds. When an executor owns validation and application rules are
-configured, the transport runs standard validation as a gate: it discards those
-errors and skips application rules on failure, letting the executor report the
-original errors under its own policy. This gate may parse scalar literals again;
-without application rules, no transport standard-validation pass occurs.
-A throwing application rule produces a masked internal error with its cause
-logged on both HTTP and WebSockets. There is no built-in maximum-depth option;
-use application validation rules for depth limits.
-Without that capability (including `graphqlExecutor`), the transport performs
-standard validation before context creation, preserving the plain-schema path.
-
-For a plain schema use `graphqlExecutor(schema, { formatError })`. It wraps
-custom scalar input callbacks in a copied type graph (without mutating the
-application schema), distinguishes their failures from graphql-js diagnostics,
-and formats/JSON-normalizes execution results. Handler `formatError` only
-handles transport failures, including request validation, context and gateway
-failures; it does not reformat executor results.
-
-The transport consumes Effect Streams directly; `graphqlExecutor` alone adapts
-graphql-js async iterables with `Stream.fromAsyncIterable`. A builder can return
-its existing subscription Stream without another iterable bridge.
-`executor(schema)` satisfies this interface directly.
-
-Registration runs the subscription Stream to its first result or completion.
-The operation-local pub/sub source is **finite and empty** during registration:
-this opens even lazy Effect subscription resolvers, collects their topics and
-closes their scopes without waiting for a future event. Errors are emitted as
-results; successful empty completion registers the collected topics. During
-delivery the same source contains one event, and `Stream.runHead` consumes at
-most one result. Subscription resolvers must use these finite sources; an
-unrelated live or never-ending source cannot be registered durably by Lambda.
-Stream finalizers run on completion, failure and interruption. There is no live
-in-process subscription fiber between Lambda invocations; stop/disconnect
-remove the durable state that future deliveries consult.
-
-Integration with `@model-ts/graphql` uses this structural interface; the package
-has no dependency on that builder's internals.
-
-The context factory returns an Effect with typed errors and receives:
-
-- `event`: original HTTP event, WebSocket event, or DynamoDB stream record.
-- `lambdaContext`: the invocation's typed middleware context.
-- `persisted`: decoded `P` for WebSockets and delivery; HTTP supplies an empty object.
-- `connection`: current connection on WebSocket and delivery paths.
-- `pubSub`: an operation-local source, described below.
-- `response.headers` and `response.cookies`: mutable HTTP response output.
-
-The application explicitly incorporates `persisted` into its typed context.
-HTTP batches share one context factory call and response container; operations
-execute in order. HTTP input cookies are available as `event.cookies` after
-narrowing the event with `"version" in event`. Join them with `"; "` when a
-Cookie header value is needed. Append each outgoing Set-Cookie value to
-`response.cookies`; the handler returns them in the payload's `cookies` array.
-
-### HTTP
-
-Use an HTTP API or function URL with **payload format 2.0**. The package defines
-`HttpEvent` and `HttpResponse` without an `aws-lambda` types dependency.
-`HttpEvent` requires `version: "2.0"`, `routeKey`, `rawPath`, `rawQueryString`,
-`headers`, `requestContext.http` (`method`, `path`, `sourceIp`, `userAgent`) and
-`isBase64Encoded`. `body`, `cookies` and `queryStringParameters` are optional.
-API Gateway supplies lowercase, single-valued headers with comma-joined
-duplicates; cookies arrive separately in `event.cookies`. The original event
-reaches the context factory unchanged. Responses contain `statusCode`,
-`headers`, `body`, `isBase64Encoded: false` and optional `cookies`, one
-Set-Cookie value per array entry.
-
-POST accepts one GraphQL request or a nonempty array, including base64 proxy
-bodies. GET accepts `query`, JSON `variables`, JSON `extensions` and
-`operationName` query parameters. Mutations over GET return 405 with `Allow:
-POST`. Subscriptions use WebSockets. Invalid requests/validation return 400;
-resolver errors return execution results. Each batch element has its own result;
-the batch response has status 200.
-
-Defaults: maximum 20 requests per batch, 1 MiB decoded body, 64 KiB query;
-introspection enabled. `validationRules`, `maxBatchSize`, `maxBodyBytes`,
-`maxQueryBytes` and `introspection` configure these.
-
-CORS is disabled by default. For credentialed cross-origin requests, configure
-an explicit exact-origin policy, for example
-`cors: { origin: ["https://app.example"], credentials: true }`.
-Neither unrestricted reflection nor `"*"` is accepted with credentials.
-Unmatched origins receive no allow-origin or allow-credentials grant.
-With CORS configured, preflight echoes requested headers and returns 204.
-
-Before parsing/validating GraphQL or creating application context, both GET
-and POST require `Content-Type: application/json` (parameters such as charset
-are allowed), or a non-empty `Apollo-Require-Preflight` /
-`X-Apollo-Operation-Name` header. Browsers must preflight these requests;
-CORS alone is not CSRF prevention. `csrfHeaders` can replace the accepted
-header names with explicit `x-...` headers or `apollo-require-preflight`;
-an empty list permits only JSON Content-Type. Safelisted headers cannot
-disable this check. Configure clients to send JSON or an accepted header.
-GET never executes mutations or subscriptions and does not create context
-for those rejected operations.
-
-HTTP defects, including context/executor failures, serialization errors and
-throwing formatters, return a fixed safe 500 GraphQL response and log the
-cause. Interruption remains interruption.
-
-Set `graphiql: true` to serve GraphiQL on GET requests that accept `text/html`.
-It is off by default. **Introspection must be enabled for GraphiQL to be useful**;
-enabling the page does not override `introspection: false`. Configure it with
-`GraphiQLOptions` when defaults are insufficient:
+Set `graphiql: true` or provide options to serve GraphiQL on GET requests that
+explicitly accept `text/html` with nonzero quality. GraphiQL is disabled by
+default. HTML rendering happens before GraphQL CSRF checks and context creation;
+protect access at the integration if needed. Queries sent by the UI still pass
+through the normal HTTP checks.
 
 ```ts
-const http = createHttpHandler({
+export const httpWithGraphiQL = createHttpHandler({
   ...options,
-  introspection: true,
   graphiql: {
-    credentials: "same-origin",
     endpoint: "/graphql",
-    subscriptionUrl: "wss://api.example.test/graphql",
-    headers: { "x-example-client": "graphiql" },
-    query: "{ __typename }",
-    title: "Example GraphQL API",
+    subscriptionUrl: "wss://api.example.test/ws",
+    credentials: "same-origin",
+    headers: { "Apollo-Require-Preflight": "true" },
+    query: "query { greeting }",
+    title: "Example API",
   },
 })
 ```
 
-`credentials` accepts `"include"`, `"same-origin"` (default), or `"omit"` and
-applies to all HTTP fetches, including introspection. `endpoint` defaults to the
-request's `rawPath`; set it explicitly when an API mapping or proxy adds an
-external path prefix. Optional `subscriptionUrl` uses the `graphql-ws` client
-with the `graphql-transport-ws` protocol. Default `headers` apply to HTTP
-requests and are sent as WebSocket `connection_init` parameters; the application
-must authenticate those parameters. `query` initializes the editor and `title`
-defaults to `"GraphiQL"`. Header persistence is disabled initially. Do not embed
-server-only credentials in a page delivered to browsers.
+`endpoint` defaults to the request's `rawPath`; `credentials` defaults to
+`"same-origin"` and also accepts `"include"` or `"omit"`. `subscriptionUrl`
+enables a `graphql-ws` client and must use `wss://` or `ws://`.
 
-The page loads GraphiQL 5.4.0 and pinned ESM entry points from esm.sh, following
-GraphiQL's [official CDN example](https://github.com/graphql/graphiql/blob/main/examples/graphiql-cdn/index.html)
-and [fetcher API](https://github.com/graphql/graphiql/blob/main/packages/graphiql-toolkit/docs/create-fetcher.md).
-It includes the Monaco worker setup and passes an explicit `graphql-ws` client
-to `createGraphiQLFetcher`. Options are escaped for HTML and script contexts.
-Optional `nonce` applies to the inline scripts and style. The application owns
-CSP headers and must allow the CDN assets, Monaco workers (including blob
-workers), and configured HTTP/WebSocket endpoints; a nonce alone does not
-supply that policy.
+Configured `headers` are HTTP defaults and WebSocket `connection_init`
+parameters. They are not WebSocket handshake headers, and they are embedded in
+the HTML: do not configure server secrets there. Header persistence in the
+editor is disabled.
 
-An optional `healthCheck` Effect enables `/.well-known/apollo/server-health`;
-route that path explicitly and send a JSON content type or accepted preflight
-header when checking it. OPTIONS and GraphiQL HTML responses do not invoke
-application context or resolvers. CORS still applies to the page; executing
-operations from it follows the normal CSRF and validation checks. Warmers
-remain application middleware.
+The page loads browser dependencies from `esm.sh`. Optional `nonce` is applied
+to inline scripts and style; the application owns CSP headers and must allow
+the required scripts, styles, workers and network endpoints.
 
-### WebSocket authentication and protocol
+## WebSockets
 
-The [graphql-transport-ws protocol](https://github.com/enisdenjo/graphql-ws/blob/master/PROTOCOL.md)
-is required. `$connect` rejects clients that do not offer `graphql-transport-ws`
-and echoes that exact token in `Sec-WebSocket-Protocol`. Header names are
-case-insensitive; subprotocol tokens are case-sensitive.
+### Connection lifecycle and authentication
 
-`persistedContext` is a required `Schema.Codec<P, JsonEncoded>` whose encoded
-side must be JSON. For example, `Schema.Struct({ user: Schema.String,
-since: Schema.DateFromString })` exposes a `Date` to application code and stores
-its string encoding. A schema that encodes to a `Date`, `Map`, function or
-`unknown` fails compilation. Schema service requirements flow through the handler
-requirements: WebSockets require decoding and encoding services; delivery needs
-decoding services only.
+The client must offer the case-sensitive subprotocol `graphql-transport-ws`.
+The `$connect` response selects that token. A successful handshake creates an
+uninitialized connection; the client sends `connection_init` and waits for
+`connection_ack` before starting operations.
 
-`onConnect(connection, event, lambdaContext)` runs during the `$connect`
-handshake. It can return a decoded `P`, accept without context by returning
-`void`, or reject with `false` / `ConnectionRejected`. Origin and cookie
-authentication belongs here. Produced values are encoded before storage.
+| Hook        | Arguments                                                | Result                                                                       |
+| ----------- | -------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| `onConnect` | `(connection, event, lambdaContext)`                     | Decoded persisted context, `void` to accept without it, or `false` to reject |
+| `onInit`    | `(payload, persisted, connection, event, lambdaContext)` | Final decoded persisted context, or `false` to reject                        |
 
-`connection_init` atomically claims initialization and calls
-`onInit(payload, persisted, connection, event, lambdaContext)`. Its second
-argument is the decoded handshake value, or `undefined` when absent. It returns
-the final decoded `P` or rejects with `false` / `ConnectionRejected`. Its result
-**replaces** handshake context; there is no implicit merge. Init parameters are
-stored separately in `connection.initParams` and are never promoted automatically.
-A successful init encodes the final value, stores it and sends `connection_ack`.
-`acknowledgementPayload` optionally adds public JSON to that frame; hook return
-values are never echoed.
+Both hooks return Effects. Returning `false` or failing with
+`ConnectionRejected` explicitly rejects authentication. Other failures,
+including a failed credential lookup, are internal errors and are logged.
+Validate origins and handshake credentials in `onConnect` or a `$connect`
+authorizer.
 
-Without `onInit`, initialization retains the decoded handshake value. If no
-hook produced context, it decodes `{}` through `persistedContext`, then encodes
-and stores that result. A public API can use `Schema.Struct({})` and no hooks.
-A schema requiring identity fields rejects that empty default. A subscribe
-before acknowledgement, or with an initialized row missing context, closes as
-unauthorized without invoking application context or resolvers.
+`persistedContext` is required and must be an Effect `Schema.Codec` whose
+encoded representation is JSON. Its decoded type is the application's
+persisted context type. For example, a codec can expose a `Date` while storing
+a string. Values produced by hooks are encoded before storage and decoded
+before use on subsequent messages and deliveries.
 
-Every WebSocket read and delivery decodes stored JSON before using it as
-`ContextRequest<L, P>.persisted`. Encode/decode failures are typed
-`PersistedContextError` values. During handshake/init or another WebSocket
-message they are logged and close with internal-error intent. During delivery,
-a value that no longer decodes is logged and its connection and operations are
-removed, like Gone cleanup; the stream batch continues to other subscribers
-without retrying that invalid value. Other hook failures are logged and close
-with internal-error intent. HTTP has no connection context; supply a separate
-HTTP context factory when it differs from the typed WebSocket factory.
+`onInit` receives the decoded `onConnect` value, or `undefined` if absent. Its
+result replaces that value; there is no implicit merge. Init parameters are
+stored separately as `connection.initParams` and are never automatically trusted
+as context. `acknowledgementPayload` optionally adds public JSON to
+`connection_ack`; hook results are not echoed.
 
-Clients wait for `connection_ack`, then send `subscribe { id, payload }` with
-a GraphQL request. Subscriptions register durable topic membership. Queries and
-mutations send `next { id, payload }` followed by `complete { id }`. Parsing,
-validation, subscription-root and registration failures send
-`error { id, payload: GraphQLFormattedError[] }`, which terminates that operation
-without a subsequent `complete`. Execution results, including field errors,
-use `next`. Client `complete { id }` cancels pending or active operations without
-an acknowledgement; unknown IDs are ignored. IDs may be reused after completion.
-An active duplicate ID closes the entire connection.
+Without `onInit`, initialization retains the handshake context. If none was
+provided, it decodes `{}` through `persistedContext` and stores the result. Use
+`Schema.Struct({})` for a public API with no hooks, as in the quick start. A codec
+with required identity fields needs a hook to supply those fields.
 
-`ping` receives `pong`, echoing its optional payload, including `null`. Client
-`pong` is ignored. Both are valid before initialization. An optional application
-scheduler can call `keepAlive(connectionId)` to send `ping` for initialized
-connections. No timers or connection scans run inside Lambda.
+### Rebuilding application context
 
-API Gateway's `DeleteConnection` accepts neither a close code nor a reason,
-and `$disconnect` runs after the socket has closed. The transport records the
-intended code and reason on the `GraphQL.close` span, removes connection and
-operation state, and calls `DeleteConnection`. Clients receive API Gateway's
-close behavior rather than these application codes; no substitute protocol
-frames are sent.
+The context factory runs for each accepted `subscribe` message, including
+queries and mutations, and again for each subscriber on every delivered event.
+It does not run for `connection_init`, `ping`, `pong` or `complete`. Stored JSON
+is decoded on `$default` messages before processing their protocol action.
 
-| Intended code | Condition                        | API Gateway behavior                                         |
-| ------------- | -------------------------------- | ------------------------------------------------------------ |
-| 4400          | Invalid message or message size  | Cleanup and DeleteConnection                                 |
-| 4401          | Subscribe before acknowledgement | Cleanup and DeleteConnection                                 |
-| 4403          | Authentication rejection         | Reject handshake or cleanup and DeleteConnection             |
-| 4406          | Subprotocol not offered          | Reject handshake, cleanup and DeleteConnection               |
-| 4409          | Duplicate active operation ID    | Cleanup and DeleteConnection                                 |
-| 4429          | Repeated or concurrent init      | Cleanup and DeleteConnection                                 |
-| 4500          | Internal failure                 | Cleanup and DeleteConnection                                 |
-| 4408          | Init timeout                     | No Lambda timer; enforce init ordering on the next subscribe |
+| Context field   | Meaning                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
+| `event`         | HTTP event, WebSocket message event, or individual DynamoDB stream record   |
+| `lambdaContext` | Context of the current Lambda invocation, including typed middleware fields |
+| `persisted`     | Decoded connection context for WebSockets/delivery; `{}` for HTTP           |
+| `connection`    | Current connection for WebSocket operations and delivery                    |
+| `pubSub`        | Source for the current operation or delivered event                         |
+| `response`      | Mutable headers and cookies for HTTP responses                              |
 
-Every operation reserves a generation before application work. Completion removes
-pending and active operations; activation checks that generation. A cancelled
-setup cannot resurrect itself or overwrite a later reuse of its ID. The default
-limit is 100 operations per connection (`maxOperations`), enforced transactionally
-across concurrent invocations. Each subscription supports 1–20 unique topics.
-Topic names are application-owned, including tenant prefixes.
+Persist stable identity references and load current permissions in the context
+factory. Delivery has the stream invocation's context and record, not the
+original handshake event. If HTTP authentication needs a different context
+shape, give `createHttpHandler` a separate context factory.
 
-Decoded messages and queries default to a 64 KiB limit (`maxQueryBytes`). Encoded
-outbound messages are limited to 32 KiB UTF-8 bytes, raising `MessageTooLarge`
-before a send. Connection lifetime defaults to two hours and cannot exceed it.
-`$disconnect` and Gone cleanup also remove operations when the connection row
-has already expired through DynamoDB TTL.
+Codec failures during WebSocket handling close with internal-error intent.
+During delivery, an undecodable persisted value is logged and its connection
+state is removed; that value is not retried.
 
-Connection IDs, operation IDs, event IDs and topics use distinct Schema brands:
-`ConnectionId`, `OperationId`, `EventId`, and `Topic`. Decode them at external
-boundaries or use their `.make(string)` constructors for application-created
-values. Their wire and stored representations remain strings. Handler factories
-infer the union of requirements from individual callbacks; options have only
-the application context, Lambda context, persisted context, error and service
-requirement type parameters.
+### Operations, limits and lifetime
 
-## Publishing, filtering and delivery
+Queries and mutations send `next`, then `complete`. Subscription registration
+stores the request and topic membership for later deliveries. Request or
+registration errors send an operation `error` array and terminate that operation
+without a following `complete`. Results with data, including field errors, use
+`next`.
 
-`PubSub` is the backend-agnostic namespace. `PubSub.Publisher` is a
-`Context.Service`; `PubSub.publish(topic, payload, options?)` requires only
-that service and returns the published `EventId`. Payloads are `Schema.Json`.
-`options.ttlSeconds` defaults to 7200 and must be positive. Invalid topics,
-TTLs and non-serializable runtime inputs fail before any event is written.
-Call `PubSub.publish` from wherever your application publishes.
+Client `complete` cancels a pending or active operation without an acknowledgement;
+unknown IDs are ignored. IDs can be reused after completion. Reusing an ID that
+is still pending or active closes the connection. Reservations and activation
+use generations so a cancelled setup cannot restore a completed operation.
+
+| Limit                   | Default or fixed value                                                      |
+| ----------------------- | --------------------------------------------------------------------------- |
+| `maxOperations`         | 100 pending/active operations per connection, enforced transactionally      |
+| Topics per subscription | 1–20 unique, non-empty topics                                               |
+| Operation ID            | 1–128 characters                                                            |
+| `maxQueryBytes`         | 64 KiB for the decoded incoming message and separately for the query string |
+| Outbound message        | 32 KiB of UTF-8 JSON, including the protocol envelope                       |
+| `ttlSeconds`            | 7200 seconds; must be positive and at most 7200                             |
+
+An oversized outbound message raises `MessageTooLarge` before sending. During
+message handling it closes the connection with internal-error intent; during
+stream delivery it participates in record retry handling.
+
+Connection TTL is fixed at connect time. Operations and topic memberships
+inherit it; activity does not extend it. Expired state is rejected even before
+DynamoDB TTL physically removes rows. `$disconnect` and a 410 Gone response
+remove connection and operation state, including memberships.
+
+`ping` receives `pong` with the same optional payload; client `pong` is ignored.
+Both are accepted before initialization. An external scheduler can call
+`keepAlive(ConnectionId.make(id))` for known connections; it sends `ping` only
+when initialized. There is no built-in timer or connection scan. API Gateway
+also imposes a two-hour connection duration and a ten-minute idle timeout. See
+[AWS WebSocket quotas](https://docs.aws.amazon.com/apigateway/latest/developerguide/apigateway-execution-service-websocket-limits-table.html).
+
+## API Gateway deviations
+
+API Gateway's `DeleteConnection` cannot specify a protocol close code or reason.
+The handler records the intended code and reason in logs and on the
+`GraphQL.close` span (`graphql.close.code`, `graphql.close.reason`), removes
+connection state and calls `DeleteConnection`. No substitute protocol frame is
+sent. A Lambda status returned after the handshake is not a client-visible
+WebSocket close code.
+
+| Protocol close code | Condition                                                      | What happens                                                                                 |
+| ------------------- | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
+| 4400                | Invalid message or incoming message too large                  | Cleanup and `DeleteConnection`; Lambda returns 400                                           |
+| 4401                | Subscribe before initialization, missing or expired connection | Cleanup and `DeleteConnection`; Lambda returns 401                                           |
+| 4403                | Explicit authentication rejection                              | `$connect` fails with 401, or an established socket is cleaned up and deleted                |
+| 4406                | Required subprotocol absent                                    | `$connect` fails with 400; cleanup is attempted                                              |
+| 4409                | Duplicate pending or active operation ID                       | Cleanup and `DeleteConnection`; Lambda returns 400                                           |
+| 4429                | Repeated or concurrent initialization                          | Cleanup and `DeleteConnection`; Lambda returns 400                                           |
+| 4500                | Internal failure                                               | Logged, cleanup and `DeleteConnection`; Lambda returns 500                                   |
+| 4408                | Initialization timeout                                         | No server timer implements this close; a subscribe before initialization is rejected as 4401 |
+
+Reject invalid credentials during `$connect`, using cookies or a short-lived
+query token validated by an authorizer or handshake authentication. This makes
+the handshake fail before the socket is established. Configure the
+`graphql-ws` client's `shouldRetry` policy and a finite `retryAttempts` for
+failed connections.
+
+A rejected `connection_init` instead deletes an already-open socket. If that
+arrives as a normal close (1000), `graphql-ws` immediately reconnects while
+subscriptions are pending. Its normal-close branch runs before `shouldRetry`
+and `retryAttempts`, so those options alone do not stop this loop. If init-time
+rejection is necessary, track acknowledgement on the client and dispose the
+client or cancel pending subscriptions after a pre-acknowledgement close before
+explicitly reconnecting with new credentials. See the
+[graphql-ws client implementation](https://github.com/enisdenjo/graphql-ws/blob/master/src/client.ts).
+
+There is no `connectionInitWaitTimeout` option. Use client acknowledgement
+timeouts and external enforcement if an initialization deadline is required;
+Lambda does not remain running to wait for the next message.
+
+## PubSub
+
+### Publishing and subscription sources
+
+Create a branded `Topic` with `Topic.make("public/announcements")`. Topic names
+are application-owned; use tenant or resource prefixes where needed and
+authorize access in application code.
+
+`PubSub.publish(topic, payload, { ttlSeconds? })` returns an Effect requiring
+`PubSub.Publisher`. Call it from resolvers, jobs or any other application code
+with that service available. With `PubSub.DynamoDB`, it writes one event and
+returns its `EventId`; it does not wait for subscribers. Payloads must be JSON.
+Event TTL defaults to 7200 seconds and can be set to any positive finite value.
+This is independent of the connection TTL.
+
+Put the provided `PubSub.Source` on application context. Its two source methods
+accept one topic or an array of topics:
+
+| Method                                 | Result                               | Use                                                        |
+| -------------------------------------- | ------------------------------------ | ---------------------------------------------------------- |
+| `stream(topics)`                       | `Stream<Schema.Json>`                | Effect subscription resolvers                              |
+| `subscribe(topics)`                    | `AsyncIterableIterator<Schema.Json>` | graphql-js subscription resolvers                          |
+| `PubSub.withFilter(source, predicate)` | Async generator                      | Filter an async source with a boolean or Promise predicate |
 
 ```ts
-import { PubSub, Topic } from "@model-ts/graphql-lambda"
+export const nonEmptyAnnouncements = (context: AppContext) =>
+  context.pubSub.stream(announcements).pipe(
+    Stream.map((payload) => Schema.decodeUnknownSync(Schema.String)(payload)),
+    Stream.filter((message) => message.length > 0),
+  )
 
-const publication = PubSub.publish(
-  Topic.make("public/announcements"),
-  { message: "Hello" },
-  { ttlSeconds: 3600 },
-)
-
-// A graphql-js subscription resolver:
-subscribe: (_parent, args, context) =>
+export const filteredAnnouncementIterator = (context: AppContext) =>
   PubSub.withFilter(
-    context.pubSub.subscribe(Topic.make("public/announcements")),
-    (payload) => EventPayload.decode(payload).category === args.category,
+    context.pubSub.subscribe(announcements),
+    (payload) => typeof payload === "string" && payload.length > 0,
   )
 ```
 
-Resolvers receive `PubSub.Source` on `ContextRequest.pubSub`. Its `stream(topics)`
-is Effect-native; `subscribe(topics)` returns an async iterator. Both collect
-topics during registration and produce one matching event during delivery.
-`withFilter` requires a strictly true predicate result and forwards cancellation
-to its source iterator. Decode JSON payloads before reading application fields.
+`withFilter` accepts only a strict `true` result and forwards iterator cleanup
+on completion or failure. Validate payload shape in the subscription resolver;
+`Topic` does not specify a payload schema.
 
-`PubSub.DynamoDB.layer({ tableName, client? })` supplies both `Publisher` and
-`Storage` using a dedicated transport table. Publication writes a
-`GraphQLPublishedEvent`; the table's `NEW_IMAGE` stream triggers
-`PubSub.DynamoDB.streamHandler(options)`. Publishing completes after persistence;
-delivery runs in the stream Lambda.
+During registration, sources are finite and empty. Running the subscription
+collects its topics and closes its resources. During delivery, a matching
+source contains one event and the transport consumes at most one result. Build
+subscriptions from these sources; a never-ending external source cannot be
+registered durably. No subscription fiber remains alive between invocations.
 
-The handler only processes event `INSERT` records; other model writes and TTL
-deletes are ignored. Expired events, connections and memberships are hidden
-before TTL deletion. Delivery uses consistent reads and 50-row topic pages,
-reconstructs current application context, validates the saved request, and
-reruns subscription filters and authorization. Subscribers run sequentially to
-keep invocation-scoped context isolated. A generation check before sending
-discards results from operations completed or reused during context execution.
+### Delivery and retries
 
-Gone (HTTP 410) removes the connection and all its operations and memberships.
-Other infrastructure failures retain retry behavior: the handler attempts the
-remaining subscribers and returns failed records' DynamoDB **sequence numbers**
-in `batchItemFailures`. Enable `ReportBatchItemFailures` and configure retry
-count, maximum record age and an on-failure destination. The stream Lambda must
-have enough duration for one event's fan-out. Successful subscribers can receive
-duplicates on retry; clients should handle events idempotently. There is no
-replay on reconnect or exactly-once guarantee.
+Delivery is at-least-once. Records are processed in input order and subscribers
+are attempted sequentially. A failed subscriber does not prevent attempts for
+the others. Successful subscribers can receive the event again on retry; include
+an application event identifier in the payload when consumers need deduplication.
 
-Context and resolver failures become formatted `next` results. Context defects
-and throwing formatters are logged and produce a fixed safe
-`INTERNAL_SERVER_ERROR` result for that subscriber. Storage reads and gateway
-sends retain infrastructure retry behavior. Interruption remains interruption
-and awaits context cleanup.
+For every event, delivery reloads the connection and operation, rebuilds context,
+validates the saved request and reruns the subscription, including authorization
+and filtering. A filtered event sends nothing. Context or execution failures
+become GraphQL results for that subscriber instead of retrying the event; a
+permission denial therefore does not become an infrastructure retry. The
+operation remains registered unless completed or cleaned up.
 
-## Errors and AWS services
+Expired events and memberships are ignored. A 410 Gone response triggers
+connection cleanup. Storage failures and non-Gone management API failures are
+collected for retry. A failed record with a `SequenceNumber` produces
+`batchItemFailures: [{ itemIdentifier: sequenceNumber }]`; a failure without a
+sequence number fails the handler Effect.
 
-Default formatting masks resolver/infrastructure errors as
-`INTERNAL_SERVER_ERROR`, including prelocated GraphQLErrors and custom scalar
-exceptions. Missing `originalError` or a supplied extension code is not proof
-that an error is public. Ordinary graphql-js parse, validation and built-in
-coercion diagnostics retain their safe messages/codes.
-`TransportError({ message, code, status })` explicitly marks a public error;
-application validation rules must use this policy too.
+Configure the DynamoDB event source mapping explicitly:
 
-Configure executor-result formatting at `graphqlExecutor(schema, { formatError })`
-and transport-failure formatting on the handlers. Custom formatters are trusted
-application policy and may report original causes to Sentry before choosing a
-public message. Builder-formatted errors and declared result unions pass through
-unchanged. WebSocket authentication rejections close the connection;
-infrastructure failures during authentication remain private server errors.
+| Setting                                              | Purpose                                              |
+| ---------------------------------------------------- | ---------------------------------------------------- |
+| `FunctionResponseTypes: ["ReportBatchItemFailures"]` | Enables the handler's partial batch response         |
+| `MaximumRetryAttempts`                               | Bounds retries for persistent failures               |
+| `MaximumRecordAgeInSeconds`                          | Bounds how long delivery is retried                  |
+| `DestinationConfig.OnFailure`                        | Retains discarded records for inspection or recovery |
+| `BatchSize` and Lambda timeout                       | Allow enough time for sequential subscriber delivery |
 
-`Gateway` is a `Context.Service` with `post`/`close`. `Gateway.layer(config)`
-uses AWS SDK v3 clients cached **per endpoint**, destroys them with its scope,
-passes interruption signals, and produces typed `GatewayError` values with
-`gone`, `operation`, and `cause`. Calls have PostToConnection/DeleteConnection
-spans. `Gateway.layerMemory` records sends/closes in `GatewayMessages` and
-supports `markGone` without contacting AWS. Supply your own Gateway layer to
-simulate throttling or permission failures. Storage uses the existing traced
-DynamoDB service; transport operations have their own Effect spans as well.
+Lambda resumes from the lowest failed sequence number, so later successful
+records can also be repeated. See
+[AWS partial batch response behavior](https://docs.aws.amazon.com/lambda/latest/dg/services-ddb-batchfailurereporting.html).
+Choose retry age/count and an on-failure destination together; event TTL also
+limits how long the transport will attempt delivery.
 
-## Storage service
+## PubSub.DynamoDB
 
-WebSocket handlers, keep-alive and stream delivery require `PubSub.Storage`.
-Its contract owns connection creation, atomic init claims, updates and live
-lookup; generation reservations, activation and limits; completion, disconnect
-cleanup and paged subscriber streams. Backend failures use `StorageError`;
-invalid registrations and missing/expired connections use `TransportError`.
-Implementations must preserve consistency, generation checks and TTL visibility.
+Provision a dedicated table with string partition key `PK`, string sort key
+`SK`, TTL enabled on the numeric `ttl` attribute, and a stream with
+`StreamViewType: NEW_IMAGE`. No secondary index is required.
 
-`PubSub.DynamoDB.layer` captures a private DynamoDB service and provides it
-internally to every transport model operation, including publication. It never
-consumes or exports the application's `DynamoDB` service. Application model
-layers can be composed alongside it without changing either table's ownership.
-Use `layer({ tableName, client? })` for production options or
-`layerFrom(tableLayer)` for an explicitly supplied DynamoDB layer. Both export
-only `Publisher` and `Storage`; no auxiliary service from the table layer escapes.
-Transport pagination uses internal keys and exposes no cursors.
+`PubSub.DynamoDB.layer({ tableName, client? })` supplies `PubSub.Publisher` and
+`PubSub.Storage`. It captures its own table service, so merging it with an
+application's DynamoDB layer does not change which table either service uses.
+`layerFrom(databaseLayer)` accepts an explicitly configured DynamoDB layer and
+likewise keeps its table services private to the backend.
 
-For tests and local development, use the PubSub-specific sandbox constructors:
+### Key layout
+
+In the table below, `json(x)` means `JSON.stringify(x)`, including string quotes
+and escaping. Array keys encode the entire tuple. All rows also include model-ts
+`_tag` and `_docVersion` metadata.
+
+| Row              | PK                                        | SK                                  | Stored data                                                                          |
+| ---------------- | ----------------------------------------- | ----------------------------------- | ------------------------------------------------------------------------------------ |
+| Connection       | `GRAPHQL#CONNECTION#<json(connectionId)>` | `CONNECTION`                        | Endpoint, encoded context, init parameters, initialization flags, creation time, TTL |
+| Operation        | `GRAPHQL#CONNECTION#<json(connectionId)>` | `OPERATION#<json(operationId)>`     | GraphQL request, generation, pending/active state, topics, TTL                       |
+| Topic membership | `GRAPHQL#TOPIC#<json(topic)>`             | `json([connectionId, operationId])` | Topic, connection ID, operation ID, TTL                                              |
+| Published event  | `GRAPHQL#EVENT#<eventId>`                 | `EVENT`                             | Topic, JSON payload text, TTL                                                        |
+
+Connection creation time is in milliseconds; TTL values are Unix seconds.
+Disconnect queries the connection partition to remove operations and memberships.
+Reservation, activation and completion use transactional writes.
+
+The stream handler processes only `INSERT` records whose new image has
+`_tag: "GraphQLPublishedEvent"`. It ignores other row types and update/delete
+records. An event source filter can restrict delivery to that tag and event name.
+
+### IAM and management endpoints
+
+Grant WebSocket and stream Lambdas the table read/write permissions needed for
+connection, operation and membership access, including queries, batch writes
+and transactional writes. Publishers need permission to write event items. The
+stream Lambda also needs DynamoDB Streams read permissions for its event source.
+
+Both the WebSocket Lambda and the stream Lambda need
+`execute-api:ManageConnections` for POST and DELETE on the API's `@connections`
+resources. Delivery may need to delete a connection as well as post to it.
+Management endpoints derive from the WebSocket event's `domainName` and `stage`
+and are stored with the connection. `Gateway.layer()` caches AWS clients by
+endpoint and destroys them when its layer scope closes.
+
+## Errors and formatting
+
+Executors own errors inside GraphQL results. The transport forwards those
+formatted results unchanged. Handler `formatError` handles transport failures
+such as parsing, transport validation and context failures; it does not reformat
+executor output.
+
+With `executor(schema)` from `@model-ts/graphql`, configure public errors and
+codes on the builder. Its `ErrorReporter` receives internal failures; the quick
+start provides a logging layer for it. With `graphqlExecutor`, pass
+`{ formatError }` to that adapter to customize execution error formatting.
+
+The default transport formatter exposes explicit `TransportError` messages and
+codes, `ConnectionRejected` as `UNAUTHORIZED`, and `MessageTooLarge` as
+`MESSAGE_TOO_LARGE`. Trusted GraphQL request diagnostics use
+`GRAPHQL_PARSE_FAILED`, `GRAPHQL_VALIDATION_FAILED` or `BAD_USER_INPUT`.
+Unexpected errors are masked as `Internal server error` with
+`INTERNAL_SERVER_ERROR`; setting arbitrary `GraphQLError.extensions` does not
+make a failure public.
+
+Use `TransportError({ message, code, status })` for an intentionally public
+transport/context failure. Its status applies when it escapes to the HTTP
+handler; errors already inside an executor result follow the result's HTTP
+status rules. In authentication hooks, use `false` or `ConnectionRejected` to
+reject credentials explicitly.
+
+An `ErrorFormatter` receives a `GraphQLError`, including `originalError` where
+available, and returns a `GraphQLFormattedError`. Report internal causes while
+keeping returned details safe. Custom validation-rule failures are treated as
+application failures. Formatter or serialization defects have masked fallbacks;
+Effect interruption is preserved.
+
+## Testing
+
+`PubSub.DynamoDB.layerMemory()` runs without AWS. `layerLocal()` uses a running
+DynamoDB Local instance and manages an isolated table for the layer's scope.
+Both expose `PubSub.DynamoDB.Sandbox` for inspection and seeding; use that service
+for the transport table when a test also has an application-table sandbox.
+
+`Gateway.layerMemory` records posts and closes without network calls.
+`GatewayMessages.all` and `.closed` expose them; `.markGone(connectionId)`
+simulates a 410 response on posts.
+
+A sandbox write does not invoke a Lambda automatically. Construct a stream
+record from the stored event using DynamoDB AttributeValue encoding and pass it
+to the delivery handler. This example exercises registration through delivery
+using the quick start's public schema:
 
 ```ts
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
+import { marshall } from "@aws-sdk/util-dynamodb"
+import {
+  GatewayMessages,
+  PublishedEvent,
+  type WebSocketEvent,
+} from "@model-ts/graphql-lambda"
 
-const layers = Layer.merge(
-  Sandbox.layerMemory(), // Application DynamoDB + application Sandbox.
-  PubSub.DynamoDB.layerMemory(), // Publisher + Storage + PubSub.DynamoDB.Sandbox.
-)
-
-const inspect = Effect.gen(function* () {
-  const app = yield* Sandbox
-  const transport = yield* PubSub.DynamoDB.Sandbox
-  return { app: yield* app.snapshot, pubSub: yield* transport.snapshot }
+const socketEvent = (
+  routeKey: string,
+  message?: Schema.Json,
+): WebSocketEvent => ({
+  headers: { "sec-websocket-protocol": "graphql-transport-ws" },
+  requestContext: {
+    routeKey,
+    connectionId: "test-connection",
+    domainName: "api.example.test",
+    stage: "ws",
+  },
+  ...(message === undefined ? {} : { body: JSON.stringify(message) }),
 })
+
+export const deliveryExample = Effect.gen(function* () {
+  const invocation = { awsRequestId: "test-request" }
+  yield* websocket(socketEvent("$connect"), invocation)
+  yield* websocket(
+    socketEvent("$default", { type: "connection_init" }),
+    invocation,
+  )
+  yield* websocket(
+    socketEvent("$default", {
+      type: "subscribe",
+      id: "announcement-1",
+      payload: { query: "subscription { announcement }" },
+    }),
+    invocation,
+  )
+
+  const id = yield* PubSub.publish(announcements, "Hello")
+  const sandbox = yield* PubSub.DynamoDB.Sandbox
+  const stored = yield* sandbox.get({ PK: `GRAPHQL#EVENT#${id}`, SK: "EVENT" })
+  const event = yield* Schema.decodeUnknownEffect(PublishedEvent)(stored)
+  const result = yield* delivery(
+    {
+      Records: [
+        {
+          eventName: "INSERT",
+          dynamodb: {
+            NewImage: marshall(event.encode()),
+            SequenceNumber: "1",
+          },
+        },
+      ],
+    },
+    invocation,
+  )
+  const messages = yield* (yield* GatewayMessages).all
+  return { result, messages }
+}).pipe(
+  Effect.provide(
+    Layer.mergeAll(
+      PubSub.DynamoDB.layerMemory(),
+      Gateway.layerMemory,
+      errorReporting,
+    ),
+  ),
+)
 ```
 
-`PubSub.DynamoDB.Sandbox` has a distinct service tag and wraps the table sandbox's
-`seed`, `get`, `snapshot`, and `diff` operations. It cannot replace the application's
-Sandbox when layers are merged, in either order. `layerLocal(options?)` provides
-the same PubSub services using an isolated DynamoDB Local table; it does not
-start or stop the local server. `layerMemory(options?)` uses an in-process table.
+Run `deliveryExample` with `Effect.runPromise` or an Effect test runner. Expect
+an empty `result.batchItemFailures` array and two recorded messages:
+`connection_ack` and `next` with `data.announcement` equal to `"Hello"`.
+Replace `layerMemory()` with `layerLocal()` to exercise the same flow against a
+DynamoDB Local instance.
 
-## Storage layout
+## Executors
 
-Four model roles share the dedicated PubSub table. Provision string `PK` and
-`SK` primary keys, no secondary indexes, TTL attribute **`ttl`**, and a
-**`NEW_IMAGE`** stream. Connection/topic/operation components use JSON encoding
-to avoid delimiter collisions.
+Use `executor(schema)` from `@model-ts/graphql` for builder schemas, as in the
+quick start. It preserves resolver service requirements, declared public
+errors and builder error policy. Use `graphqlExecutor<C>(schema)` for a plain
+graphql-js schema:
 
-| Model tag                    | PK                             | SK                                 | Contents                                                                         |
-| ---------------------------- | ------------------------------ | ---------------------------------- | -------------------------------------------------------------------------------- |
-| GraphQLConnection            | `GRAPHQL#CONNECTION#<JSON id>` | `CONNECTION`                       | endpoint, encoded context, initParams, initReceived, initialized, createdAt, ttl |
-| GraphQLSubscriptionOperation | same connection PK             | `OPERATION#<JSON id>`              | connectionId, operationId, generation, state, request, topics, ttl               |
-| GraphQLSubscription          | `GRAPHQL#TOPIC#<JSON topic>`   | JSON `[connectionId, operationId]` | membership and ttl                                                               |
-| GraphQLPublishedEvent        | `GRAPHQL#EVENT#<UUID>`         | `EVENT`                            | topic, JSON payload text, ttl                                                    |
+```ts
+import { graphqlExecutor } from "@model-ts/graphql-lambda"
+import { GraphQLObjectType, GraphQLSchema, GraphQLString } from "graphql"
 
-All models also carry `_tag` and `_docVersion`. Connection TTL is fixed at
-connect time, defaults to two hours and cannot exceed two hours. Operations
-and memberships inherit that exact TTL; activity and keep-alive never extend
-it beyond API Gateway's maximum connection duration. Events have their own
-publish-time TTL. Disconnect queries the connection partition rather than
-scanning subscriptions. Reservation, activation and completion use atomic
-transactions. Grant the WebSocket and stream Lambdas POST/DELETE
-ManageConnections permissions. Management endpoints derive from API Gateway's
-`domainName` and `stage`.
-Configure the HTTP API or function URL integration with payload format 2.0.
+const plainSchema = new GraphQLSchema({
+  query: new GraphQLObjectType<unknown, AppContext>({
+    name: "Query",
+    fields: {
+      greeting: {
+        type: GraphQLString,
+        resolve: (_, __, context) => `Hello from ${context.requestId}`,
+      },
+    },
+  }),
+  subscription: new GraphQLObjectType<Schema.Json, AppContext>({
+    name: "Subscription",
+    fields: {
+      announcement: {
+        type: GraphQLString,
+        subscribe: (_, __, context) => context.pubSub.subscribe(announcements),
+        resolve: (payload) => Schema.decodeUnknownSync(Schema.String)(payload),
+      },
+    },
+  }),
+})
 
-## Testing and remaining evidence gaps
-
-Tests use `@effect/vitest`, `PubSub.DynamoDB.layerMemory` and `PubSub.DynamoDB.layerLocal`,
-plus `Gateway.layerMemory`. Local tests create and delete only their own
-isolated tables at `localhost:8000`; they do not start/stop DynamoDB Local.
-Both projects use graphql-js 16. Storage snapshots document key layout and TTL
-alignment.
-
-```sh
-node_modules/.bin/tsc -b packages/graphql-lambda/tsconfig.test.json
-node_modules/.bin/vitest run --project graphql-lambda:memory
-node_modules/.bin/vitest run --project graphql-lambda:local
+export const plainOptions = {
+  ...options,
+  executor: graphqlExecutor<AppContext>(plainSchema),
+}
+export const plainHttp = createHttpHandler(plainOptions)
+export const plainWebSocket = createWebSocketHandler(plainOptions)
+export const plainDelivery = PubSub.DynamoDB.streamHandler(plainOptions)
 ```
 
-The source and type fixtures also compile with the TypeScript 7 native CLI;
-there is no programmatic compiler API or `baseUrl` configuration.
+`graphqlExecutor` adapts async subscription iterables to Effect Streams,
+formats results and normalizes them to JSON. It protects custom scalar input
+callbacks without mutating the supplied schema.
 
-A browser and managed API Gateway smoke test remains integration work; local
-tests do not establish deployed network behavior.
+A custom `Executor<C, E, R>` supplies:
+
+| Member                                      | Contract                                                                 |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
+| `schema`                                    | A graphql-js `GraphQLSchema` for operation selection and validation      |
+| `execute({ document, request, context })`   | `Effect<Result, E, R>`                                                   |
+| `subscribe({ document, request, context })` | `Stream<Result, E, R>`                                                   |
+| `validation: "executor"` (optional)         | Executor performs standard schema validation and formats its diagnostics |
+
+`Result` is JSON-safe formatted execution data: `data`, `errors` and
+`extensions`. Error objects must already be safe to return to clients; raw
+`GraphQLError` instances do not cross the executor interface.
+
+The builder executor declares `validation: "executor"`. Parsing, operation
+selection, limits, GET restrictions, introspection restrictions and
+single-root subscription checks remain transport responsibilities. Additional
+`validationRules` run only after standard validation succeeds. With executor-owned
+validation and additional rules, the transport runs a standard validation pass
+as a gate, then leaves diagnostics to the executor. Without executor-owned
+validation, including with `graphqlExecutor`, the transport performs standard
+validation before creating context.
