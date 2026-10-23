@@ -40,9 +40,7 @@ type EncodeRequirements<O> = O extends {
   ? RE
   : never
 
-export type HttpRequirements<O> =
-  | Execute<O>
-  | From<O, "context" | "healthCheck">
+export type HttpRequirements<O> = Execute<O> | From<O, "context">
 export type WebSocketRequirements<O> =
   | DecodeRequirements<O>
   | EncodeRequirements<O>

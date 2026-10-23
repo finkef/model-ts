@@ -1,5 +1,4 @@
 import { Cause, Clock, Effect, Option, Schema, Stream } from "effect"
-import type { GraphQLFormattedError } from "graphql"
 import {
   badRequest,
   ConnectionRejected,
@@ -14,23 +13,17 @@ import {
   type ErrorFormatter,
 } from "./Errors.ts"
 import { type Executor } from "./Executor.ts"
-import { Gateway } from "./Gateway.ts"
-import { ConnectionId, OperationId, type Topic } from "./Identifiers.ts"
+import type { Gateway } from "./Gateway.ts"
+import { ConnectionId, OperationId } from "./Identifiers.ts"
 import { decodePersisted, encodePersisted } from "./internal/persisted.ts"
-import { close, type ServerMessage } from "./internal/protocol.ts"
+import { close, send } from "./internal/protocol.ts"
 import { header, parseJson, prepare } from "./internal/request.ts"
 import type { WebSocketRequirements } from "./internal/requirements.ts"
 import { operationPubSub } from "./internal/source.ts"
-import {
-  Connection,
-  JsonObject,
-  OperationRequest,
-  type SubscriptionOperation,
-} from "./Models.ts"
+import { Connection, JsonObject, OperationRequest } from "./Models.ts"
 import type {
   ContextRequest,
   ProxyResponse,
-  StreamRecord,
   ValidationOptions,
   WebSocketEvent,
 } from "./Request.ts"
@@ -80,35 +73,6 @@ export interface WebSocketOptions<C, L, P, E, R> extends ValidationOptions {
   readonly maxOperations?: number
   readonly acknowledgementPayload?: JsonObject
 }
-
-export const send = Effect.fn("GraphQL.send")(function* (
-  connection: Connection,
-  frame: ServerMessage,
-) {
-  const storage = yield* Storage
-  const gateway = yield* Gateway
-  const data = yield* Effect.try({
-    try: () => JSON.stringify(frame),
-    catch: () => badRequest("Cannot serialize result"),
-  })
-  // Limit the encoded message, not individual WebSocket frames.
-  const bytes = Buffer.byteLength(data)
-  if (bytes > 32 * 1024) {
-    const error = new MessageTooLarge({ bytes, limit: 32 * 1024 })
-    yield* Effect.logError("GraphQL WebSocket send rejected", error)
-    return yield* error
-  }
-  return yield* gateway.post(connection.endpoint, connection.id, data).pipe(
-    Effect.as(true),
-    Effect.catchTag("GatewayError", (error) =>
-      Effect.gen(function* () {
-        if (!error.gone) return yield* error
-        yield* storage.disconnect(connection.id)
-        return false
-      }),
-    ),
-  )
-})
 
 const authenticate = <P, E, R>(run: () => Effect.Effect<P | false, E, R>) =>
   Effect.suspend(run).pipe(
@@ -427,129 +391,3 @@ export const keepAlive = Effect.fn("GraphQL.keepAlive")(function* (
   const connection = yield* storage.liveConnection(connectionId)
   if (connection.initialized) yield* send(connection, { type: "ping" })
 })
-
-/** Same validation, context factory, subscribe guards and field authorization as registration. */
-export const deliverOperation = <C, L, P, E, R>(
-  options: WebSocketOptions<C, L, P, E, R>,
-  connection: Connection,
-  operation: SubscriptionOperation,
-  event: { readonly topic: Topic; readonly payload: Schema.Json },
-  record: StreamRecord,
-  lambdaContext: L,
-) =>
-  Effect.gen(function* () {
-    const storage = yield* Storage
-    const persisted = yield* decodePersisted(
-      options.persistedContext,
-      connection.context,
-    ).pipe(
-      Effect.map(Option.some),
-      Effect.catchTag("PersistedContextError", (error) =>
-        Effect.gen(function* () {
-          yield* Effect.logError(
-            "GraphQL persisted context no longer decodes",
-            error,
-          )
-          // Retain state if closing fails so stream delivery can retry DeleteConnection.
-          yield* close(connection, "Internal")
-          yield* storage.disconnect(connection.id)
-          return Option.none<P>()
-        }),
-      ),
-    )
-    if (Option.isNone(persisted)) return
-    const format = options.formatError ?? defaultFormatError
-    const result = yield* Effect.gen(function* () {
-      const prepared = yield* prepare(
-        options.executor,
-        operation.request,
-        options,
-      )
-      if (prepared.errors.length) return { errors: prepared.errors.map(format) }
-      const { pubSub } = operationPubSub(event)
-      const context = yield* options.context({
-        event: record,
-        lambdaContext,
-        connection,
-        persisted: persisted.value,
-        pubSub,
-        response: { headers: {}, cookies: [] },
-      })
-      const result = yield* options.executor
-        .subscribe({
-          document: prepared.document,
-          request: operation.request,
-          context,
-        })
-        .pipe(Stream.runHead)
-      return Option.getOrUndefined(result)
-    }).pipe(
-      Effect.catch((error) =>
-        Effect.succeed({ errors: [format(toGraphQLError(error))] }),
-      ),
-      Effect.catchCause((cause) =>
-        Effect.gen(function* () {
-          if (Cause.hasInterrupts(cause)) return yield* Effect.interrupt
-          yield* Effect.logError("GraphQL subscriber execution failed", cause)
-          // Do not invoke application formatters again: they can be the defect's source.
-          return {
-            errors: [
-              {
-                message: "Internal server error",
-                extensions: { code: "INTERNAL_SERVER_ERROR" },
-              },
-            ],
-          }
-        }),
-      ),
-    )
-    // Infrastructure failures still reach the stream retry policy. Only execution failures
-    // become GraphQL results; retrying a permission denial cannot make it succeed.
-    const current = yield* storage.operation(
-      connection.id,
-      operation.operationId,
-    )
-    if (
-      !result ||
-      current?.generation !== operation.generation ||
-      current.state !== "active"
-    )
-      return
-    const failOperation = (errors: ReadonlyArray<GraphQLFormattedError>) =>
-      Effect.gen(function* () {
-        // Keep the operation until the terminal frame is accepted so gateway failures retry.
-        yield* send(connection, {
-          type: "error",
-          id: operation.operationId,
-          payload: errors,
-        })
-        yield* storage.stop(
-          connection.id,
-          operation.operationId,
-          operation.generation,
-        )
-      })
-    yield* (
-      (!("data" in result) || result.data === undefined) &&
-      result.errors?.length
-        ? failOperation(result.errors)
-        : send(connection, {
-            type: "next",
-            id: operation.operationId,
-            payload: result,
-          })
-    ).pipe(
-      Effect.catchTag("MessageTooLarge", (error) =>
-        // Retrying a result that cannot fit a frame only duplicates healthy deliveries.
-        failOperation([defaultFormatError(toGraphQLError(error))]).pipe(
-          Effect.catchTag("MessageTooLarge", () =>
-            Effect.gen(function* () {
-              // An ID alone can exceed a frame; only socket closure can terminate it.
-              yield* close(connection, "Internal")
-              yield* storage.disconnect(connection.id)
-            }),
-          ),
-        ),
-      ),
-    )
-  })

@@ -15,7 +15,6 @@ import {
   SubscriptionOperation,
   PublishedEvent,
   ConnectionRejected,
-  TransportError,
   type ContextRequest,
   type GatewayService,
   createHttpHandler,
@@ -133,10 +132,6 @@ class UpgradeService extends Context.Service<
 class InitService extends Context.Service<InitService, { token: string }>()(
   "InitService",
 ) {}
-class HealthService extends Context.Service<
-  HealthService,
-  { healthy: boolean }
->()("HealthService") {}
 const independentOptions = {
   persistedContext: JsonObject,
   executor,
@@ -149,15 +144,6 @@ const independentOptions = {
       Effect.fail(new Error("origin store unavailable")),
     ),
   onInit: () => InitService.use(() => Effect.fail(new ConnectionRejected({}))),
-  healthCheck: HealthService.use(() =>
-    Effect.fail(
-      new TransportError({
-        message: "unhealthy",
-        code: "UNAVAILABLE",
-        status: 503,
-      }),
-    ),
-  ),
 }
 const allHooks = createWebSocketHandler(independentOptions)
 export const allHookServices: Effect.Effect<
@@ -183,16 +169,10 @@ const allHttp = createHttpHandler(independentOptions)
 export const httpServices: Effect.Effect<
   ProxyResponse,
   never,
-  ResolverService | IdentityService | HealthService
-> = allHttp(request, { cookie: "session" })
-// @ts-expect-error Health-check requirements cannot be silently lost.
-export const missingHealth: Effect.Effect<
-  ProxyResponse,
-  never,
   ResolverService | IdentityService
 > = allHttp(request, { cookie: "session" })
 const delivery = streamHandler(independentOptions)
-// Delivery does not require authentication or health services from the same options object.
+// Delivery does not require authentication services from the same options object.
 export const deliveryServices: Effect.Effect<
   { batchItemFailures: Array<{ itemIdentifier: string }> },
   unknown,

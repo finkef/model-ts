@@ -1,11 +1,7 @@
 import { expect, it } from "@effect/vitest"
 import { Effect } from "effect"
-import {
-  Connection,
-  ConnectionId,
-  GatewayMessages,
-  send,
-} from "../src/index.ts"
+import { Connection, ConnectionId, GatewayMessages } from "../src/index.ts"
+import { send } from "../src/internal/protocol.ts"
 import { testLayer } from "./fixtures.ts"
 
 it.effect(

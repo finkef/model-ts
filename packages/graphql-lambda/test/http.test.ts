@@ -289,13 +289,12 @@ it.effect("isolates invalid batch entries and supports base64 payloads", () =>
     expect(body[1].errors).toHaveLength(1)
   }),
 )
-it.effect("controls introspection, GraphiQL and optional health route", () =>
+it.effect("controls introspection and GraphiQL", () =>
   Effect.gen(function* () {
     const handler = createHttpHandler({
       ...options,
       introspection: false,
       graphiql: true,
-      healthCheck: Effect.void,
     })
     expect(
       (yield* handler(
@@ -317,17 +316,11 @@ it.effect("controls introspection, GraphiQL and optional health route", () =>
       {},
     )
     expect(html.headers?.["content-type"]).toBe("text/html; charset=utf-8")
-    expect(
-      (yield* handler(
-        httpEvent(null, { rawPath: "/.well-known/apollo/server-health" }),
-        {},
-      )).body,
-    ).toBe('{"status":"pass"}')
   }),
 )
 
 it.effect(
-  "preserves Apollo parse, validation and variable error codes without exposing resolver details",
+  "preserves graphql-js parse, validation and variable error codes without exposing resolver details",
   () =>
     Effect.gen(function* () {
       for (const [request, code] of [

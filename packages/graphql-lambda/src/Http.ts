@@ -40,15 +40,15 @@ export interface HttpOptions<C, L, E, R> extends ValidationOptions {
         readonly origin: string | ReadonlyArray<string>
         readonly credentials: true
       }
-  /** Non-empty header values that require browser preflight. JSON Content-Type also qualifies. */
-  readonly csrfHeaders?: ReadonlyArray<
-    `x-${string}` | "apollo-require-preflight"
-  >
+  /**
+   * Custom headers that also pass the CSRF check when non-empty. Browsers must
+   * preflight them, like a JSON Content-Type. None by default.
+   */
+  readonly csrfHeaders?: ReadonlyArray<`x-${string}`>
   readonly maxBatchSize?: number
   readonly maxBodyBytes?: number
   /** Serve GraphiQL for GET Accept: text/html. Disabled by default. */
   readonly graphiql?: boolean | GraphiQLOptions
-  readonly healthCheck?: Effect.Effect<void, E, R>
 }
 
 /** Run the returned Effect with the application's shared ManagedRuntime. */
@@ -157,32 +157,16 @@ export function createHttpHandler<C, L>(
         ?.split(";", 1)[0]
         .trim()
         .toLowerCase()
-      const csrfHeaders = options.csrfHeaders ?? [
-        "apollo-require-preflight",
-        "x-apollo-operation-name",
-      ]
-      if (
-        csrfHeaders.some(
-          (name) =>
-            name !== "apollo-require-preflight" &&
-            !/^x-[a-z0-9-]+$/i.test(name),
-        )
-      )
+      const csrfHeaders = options.csrfHeaders ?? []
+      if (csrfHeaders.some((name) => !/^x-[a-z0-9-]+$/i.test(name)))
         throw new Error("CSRF headers must be explicit non-simple headers")
       if (
         contentType !== "application/json" &&
         !csrfHeaders.some((name) => header(event, name)?.trim())
       )
         return yield* badRequest(
-          "Send application/json or a non-empty Apollo-Require-Preflight header",
+          "Send Content-Type: application/json or a configured CSRF header",
         )
-      if (
-        options.healthCheck &&
-        event.rawPath === "/.well-known/apollo/server-health"
-      ) {
-        yield* options.healthCheck
-        return reply(200, JSON.stringify({ status: "pass" }))
-      }
       let input: unknown
       if (method === "GET") {
         const query = event.queryStringParameters ?? {}

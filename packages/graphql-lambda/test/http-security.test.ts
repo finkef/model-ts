@@ -82,6 +82,7 @@ it.effect(
       const handler = createHttpHandler({
         ...options,
         cors: { origin: ["https://app.example"], credentials: true },
+        csrfHeaders: ["x-graphql-csrf"],
         context: (request: ContextRequest<LambdaContext>) => {
           contexts++
           return options.context(request)
@@ -113,7 +114,7 @@ it.effect(
           httpEvent(null, {
             requestContext: { http: { method: "GET" } },
             queryStringParameters: { query: "{ me }" },
-            headers: { "apollo-require-preflight": value },
+            headers: { "x-graphql-csrf": value },
           }),
           {},
         )
@@ -124,7 +125,7 @@ it.effect(
         httpEvent(null, {
           requestContext: { http: { method: "GET" } },
           queryStringParameters: { query: "mutation { update }" },
-          headers: { "apollo-require-preflight": "true" },
+          headers: { "x-graphql-csrf": "true" },
         }),
         {},
       )
@@ -134,7 +135,7 @@ it.effect(
         httpEvent(null, {
           requestContext: { http: { method: "GET" } },
           queryStringParameters: { query: "{ me }" },
-          headers: { "apollo-require-preflight": "true" },
+          headers: { "x-graphql-csrf": "true" },
         }),
         {},
       )

@@ -162,13 +162,15 @@ OPTIONS returns 204 without creating context. With CORS enabled, responses
 advertise `GET, POST, OPTIONS`, echo `Access-Control-Request-Headers` and set
 `Vary: Origin, Access-Control-Request-Headers`.
 
-GraphQL requests must send `Content-Type: application/json` or a non-empty
-preflight header. The default accepted headers are `Apollo-Require-Preflight`
-and `X-Apollo-Operation-Name`, matched case-insensitively. This also applies to
-GET. `csrfHeaders` replaces that list and accepts explicit `x-*` names or
-`apollo-require-preflight`; simple headers cannot disable the check.
+GraphQL requests, including GET, must send `Content-Type: application/json`.
+Browsers preflight that content type, so a cross-site page cannot send a request
+the handler accepts. To also accept requests without it, for example GET
+queries from a client that sends no content type, list custom headers in
+`csrfHeaders`, such as `csrfHeaders: ["x-graphql-client"]`. A request then
+passes when one of them is non-empty. Names are matched case-insensitively and
+must be `x-*` headers, because safelisted headers do not trigger a preflight.
 
-### Limits and health check
+### Limits
 
 | Option            | Default    | Applies to                                         |
 | ----------------- | ---------- | -------------------------------------------------- |
@@ -181,13 +183,6 @@ GET. `csrfHeaders` replaces that list and accepts explicit `x-*` names or
 There is no built-in depth limit; supply a validation rule when needed. The
 query limit, introspection setting and validation rules also apply to WebSocket
 registration and stream delivery.
-
-Set `healthCheck` to an `Effect<void>` to handle
-`/.well-known/apollo/server-health`. A successful check returns 200 with
-`{"status":"pass"}` without parsing a GraphQL operation or creating context.
-The route still requires an accepted method and passes the CSRF check, so send
-`Apollo-Require-Preflight: true` for a bodyless GET. Failures use the normal
-transport error policy.
 
 ### Cookies and response headers
 
@@ -236,7 +231,7 @@ export const httpWithGraphiQL = createHttpHandler({
     endpoint: "/graphql",
     subscriptionUrl: "wss://api.example.test/ws",
     credentials: "same-origin",
-    headers: { "Apollo-Require-Preflight": "true" },
+    headers: { "x-client-name": "graphiql" },
     query: "query { greeting }",
     title: "Example API",
   },

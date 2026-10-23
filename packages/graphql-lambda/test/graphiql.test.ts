@@ -73,7 +73,7 @@ it.effect(
           ...pageEvent("application/json"),
           headers: {
             accept: "application/json",
-            "apollo-require-preflight": "true",
+            "content-type": "application/json",
           },
           queryStringParameters: { query: "{ me }" },
         },

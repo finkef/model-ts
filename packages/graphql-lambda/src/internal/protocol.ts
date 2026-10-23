@@ -1,10 +1,11 @@
 import { Effect } from "effect"
 import type { GraphQLFormattedError } from "graphql"
-import { ProtocolClose } from "../Errors.ts"
+import { badRequest, MessageTooLarge, ProtocolClose } from "../Errors.ts"
 import type { Result } from "../Executor.ts"
 import { Gateway } from "../Gateway.ts"
 import type { OperationId } from "../Identifiers.ts"
 import type { Connection, JsonObject } from "../Models.ts"
+import { Storage } from "../Storage.ts"
 
 export type ServerMessage =
   | {
@@ -44,4 +45,33 @@ export const close = Effect.fn("GraphQL.close")(function* (
         error.gone ? Effect.void : Effect.fail(error),
       ),
     )
+})
+
+export const send = Effect.fn("GraphQL.send")(function* (
+  connection: Connection,
+  frame: ServerMessage,
+) {
+  const storage = yield* Storage
+  const gateway = yield* Gateway
+  const data = yield* Effect.try({
+    try: () => JSON.stringify(frame),
+    catch: () => badRequest("Cannot serialize result"),
+  })
+  // Limit the encoded message, not individual WebSocket frames.
+  const bytes = Buffer.byteLength(data)
+  if (bytes > 32 * 1024) {
+    const error = new MessageTooLarge({ bytes, limit: 32 * 1024 })
+    yield* Effect.logError("GraphQL WebSocket send rejected", error)
+    return yield* error
+  }
+  return yield* gateway.post(connection.endpoint, connection.id, data).pipe(
+    Effect.as(true),
+    Effect.catchTag("GatewayError", (error) =>
+      Effect.gen(function* () {
+        if (!error.gone) return yield* error
+        yield* storage.disconnect(connection.id)
+        return false
+      }),
+    ),
+  )
 })
