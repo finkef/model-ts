@@ -1,3 +1,4 @@
+import { Schema } from "effect"
 import { connectionField } from "./Connections.ts"
 import { type ErrorPolicy } from "./Errors.ts"
 import { wrap, normalize } from "./FieldRuntime.ts"
@@ -8,7 +9,7 @@ import {
   config,
   resolverField,
 } from "./Resolver.ts"
-import { invalid } from "./SchemaTypes.ts"
+import { id, invalid } from "./SchemaTypes.ts"
 import { eventField } from "./Subscription.ts"
 
 export function makeFields<Types, G, C>(
@@ -80,6 +81,12 @@ export function makeFields<Types, G, C>(
   // erased here, at the single boundary between typed definitions and graphql-js.
   return {
     ...scalarHelpers(false),
+    // A schema can never be field options, so the argument alone selects the
+    // position; the public overload admits only string schemas.
+    id: (input?: AnyConfig | Schema.Top) =>
+      Schema.isSchema(input)
+        ? id(input as Schema.Top & Schema.Schema<string>)
+        : field("ID", input),
     events: (ref: RuntimeRef, options: AnyConfig) =>
       eventField(policy, ref, options),
     field,

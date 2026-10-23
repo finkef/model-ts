@@ -21,10 +21,10 @@ export class Service extends Context.Service<
 export const tenant = createBuilder<{}, TenantContext>()
 export const user = createBuilder<{}, UserContext>()
 export const query = tenant.query({
-  value: tenant.fields.field("String", (_, __, ctx) => ctx.tenant),
+  value: tenant.field("String", (_, __, ctx) => ctx.tenant),
 })
 export const subscription = tenant.subscription({
-  event: tenant.fields.events("String", {
+  event: tenant.events("String", {
     authorize: (_, __, ctx) => Effect.map(Service, () => ctx.tenant.length > 0),
     subscribe: (_, __, ctx) => Stream.succeed(ctx.tenant),
   }),

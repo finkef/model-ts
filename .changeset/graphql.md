@@ -2,7 +2,7 @@
 "@model-ts/graphql": major
 ---
 
-Add @model-ts/graphql to the coordinated model-ts 7 release. Build Effect-native GraphQL APIs from registered model and Schema classes, with plain-object field definitions and no server resolver type generation. Preserve typed request context and collect resolver, authorization, subscription, and connection service requirements in the built schema.
+Add @model-ts/graphql to the coordinated model-ts 7 release. Build Effect-native GraphQL APIs from registered model and Schema classes, with plain-object field definitions and no server resolver type generation. Field helpers live on the builder next to the definitions (`GraphQL.string()`, `GraphQL.field(...)`, `GraphQL.connection(...)`); `GraphQL.id()` is the ID output field and `GraphQL.id(schema)` a branded ID argument. Preserve typed request context and collect resolver, authorization, subscription, and connection service requirements in the built schema.
 
 Support mapped enums, inherited interface fields, tagged and explicitly named unions, nullable and multi-success typed result unions, Schema-decoded inputs with branded IDs and explicit null handling, and custom or adopted scalars. Derive connections over objects, interfaces, and unions; preserve storage pagination defaults and opaque cursors, and resolve total counts only when selected.
 

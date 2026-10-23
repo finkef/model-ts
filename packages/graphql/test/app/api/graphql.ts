@@ -26,5 +26,3 @@ export const GraphQL = createBuilder<Types, AppContext>().withErrorPolicy({
   ],
   public: [ItemNotFoundError, PaginationError],
 })
-
-export const t = GraphQL.fields

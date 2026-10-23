@@ -2,7 +2,7 @@ import { Effect, Schema } from "effect"
 import { NotFoundError, UserInputError } from "../../../../store/errors.ts"
 import { ListId } from "../../../../store/ids.ts"
 import { List } from "../../../../store/models.ts"
-import { GraphQL, t } from "../../../graphql.ts"
+import { GraphQL } from "../../../graphql.ts"
 
 export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
   "ListUpdateInput",
@@ -16,7 +16,7 @@ export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
 }) {}
 
 export const ListUpdateMutation = GraphQL.mutation({
-  listUpdate: t.field("ListEdge", {
+  listUpdate: GraphQL.field("ListEdge", {
     args: {
       id: GraphQL.id(ListId).annotate({ description: "The list ID." }),
       input: ListUpdateInput,

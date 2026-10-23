@@ -344,7 +344,17 @@ export type CheckedFields<Types, N extends string, S, F> = {
     : `${N}.${K & string}: ${DefaultMessage<S, K, F[K]>}`
 }
 
-export interface Fields<Types, G, C = {}> extends ScalarHelpers<Types, G, C> {
+/** Field helpers of a builder; `id` covers both the output field and ID arguments. */
+export interface Fields<Types, G, C = {}> extends Omit<
+  ScalarHelpers<Types, G, C>,
+  "id"
+> {
+  /** A non-null `ID` output field read from the source or resolved by `authorize`. */
+  id<S, AR = never>(
+    options?: DefaultOptions<S, G, AR, C>,
+  ): SourceDefault<S, AR, "ID", C>
+  /** Exposes a string schema, such as a branded ID, as a GraphQL `ID` argument or input field. */
+  id<S extends Schema.Top & Schema.Schema<string>>(schema: S): S["Rebuild"]
   events<
     S,
     const T extends Ref<Types>,

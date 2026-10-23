@@ -12,7 +12,6 @@ import {
   Identity,
   Alternative,
   Missing,
-  t,
 } from "./fixtures/type-contracts.ts"
 
 const execute = (
@@ -194,7 +193,7 @@ it("checks enum mappings and rejects ambiguous internal aliases", () => {
 
 it("rejects conflicting explicit result names", () => {
   const query = G.query({
-    one: t.field("Item", {
+    one: G.field("Item", {
       errors: [Missing],
       result: { name: "ChangeResult" },
       resolve: () =>
@@ -269,7 +268,7 @@ it.effect(
         members: ["Item", "Alternative"],
       })
       const query = G.query({
-        value: t.field("Success", () => ({
+        value: G.field("Success", () => ({
           ...Schema.decodeUnknownSync(Item)({
             id: "item-1",
             kind: "item",
@@ -297,8 +296,8 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const identity = G.interface("Identity", Identity, {
-        id: t.id(),
-        change: t.nullable("Item", {
+        id: G.id(),
+        change: G.nullable("Item", {
           errors: [Missing],
           resolve: () => Effect.fail(new Missing({ message: "Not found" })),
         }),
@@ -307,7 +306,7 @@ it.effect(
         "Item",
         Item,
         { implements: ["Identity"] },
-        { name: t.string() },
+        { name: G.string() },
       )
       const alternative = G.object(
         "Alternative",

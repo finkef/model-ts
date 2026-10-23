@@ -151,7 +151,7 @@ export type CompatibleContexts<M, C> = {
     ? M[K] extends Contextual<C>
       ? F extends FieldMap<never, C>
         ? unknown
-        : "Fields require a different request context; use fields from createBuilder<Types, AppContext>() with the schema context"
+        : "Fields require a different request context; build them with the createBuilder<Types, AppContext>() builder that builds the schema"
       : "Definition requires a different request context; use definitions from createBuilder<Types, AppContext>() with the schema context"
     : unknown
 }

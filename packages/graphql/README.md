@@ -161,12 +161,15 @@ export const GraphQL = createBuilder<Types, AppContext>().withErrorPolicy({
     TransactionCanceledError,
   ],
 })
-export const t = GraphQL.fields
 ```
 
 The policy lets resolvers use storage operations while keeping their failures
 private. Translate a storage failure into a domain error when clients should
 handle it, as the mutation below does.
+
+The builder carries the definitions, the field helpers such as
+`GraphQL.string()` and `GraphQL.field(...)`, and execution. It is your
+application's own value, so you may export it under a shorter name such as `G`.
 
 ### 3. Expose objects
 
@@ -177,15 +180,15 @@ from its model tag. No registration is needed for individual fields.
 
 ```ts
 import { Workspace } from "../../store/models.ts"
-import { GraphQL, t, type Register } from "../graphql.ts"
+import { GraphQL, type Register } from "../graphql.ts"
 
 declare module "../graphql.ts" {
   interface Types extends Register<typeof Workspace> {}
 }
 
 export const WorkspaceType = GraphQL.object(Workspace, {
-  id: t.id(),
-  name: t.string(),
+  id: GraphQL.id(),
+  name: GraphQL.string(),
 })
 ```
 
@@ -193,7 +196,7 @@ export const WorkspaceType = GraphQL.object(Workspace, {
 
 ```ts
 import { List, Workspace } from "../../store/models.ts"
-import { GraphQL, t, type Register } from "../graphql.ts"
+import { GraphQL, type Register } from "../graphql.ts"
 
 declare module "../graphql.ts" {
   interface Types extends Register<typeof List> {}
@@ -203,10 +206,10 @@ export const ListType = GraphQL.object(
   List,
   { description: "A list belonging to a workspace." },
   {
-    id: t.id(),
-    name: t.string(),
-    description: t.nullable.string(),
-    workspace: t.field("Workspace", (list) =>
+    id: GraphQL.id(),
+    name: GraphQL.string(),
+    description: GraphQL.nullable.string(),
+    workspace: GraphQL.field("Workspace", (list) =>
       Workspace.load(Workspace.key(list.workspaceId)),
     ),
   },
@@ -223,10 +226,10 @@ that requirement becomes part of the built schema's type.
 ```ts
 import { Effect } from "effect"
 import { List, ListId } from "../../store/models.ts"
-import { GraphQL, t } from "../graphql.ts"
+import { GraphQL } from "../graphql.ts"
 
 export const ListQuery = GraphQL.query({
-  list: t.nullable("List", {
+  list: GraphQL.nullable("List", {
     args: { id: GraphQL.id(ListId) },
     authorize: (_, __, context) => context.identity !== null,
     resolve: (_, { id }) =>
@@ -251,7 +254,7 @@ registration unless you want custom fields or interfaces on them.
 ```ts
 import { Effect, Schema } from "effect"
 import { List, ListId } from "../../store/models.ts"
-import { GraphQL, t } from "../graphql.ts"
+import { GraphQL } from "../graphql.ts"
 
 export class NotFoundError extends Schema.TaggedError<NotFoundError>()(
   "NotFoundError",
@@ -269,7 +272,7 @@ export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
 }) {}
 
 export const ListUpdateMutation = GraphQL.mutation({
-  listUpdate: t.field("List", {
+  listUpdate: GraphQL.field("List", {
     args: { id: GraphQL.id(ListId), input: ListUpdateInput },
     errors: [NotFoundError, UserInputError],
     authorize: (_, __, { identity }) => identity?.canWrite === true,
@@ -413,7 +416,7 @@ The checks happen where you can fix the problem:
 | Missing service layer                                               | Running the Effect or Stream                         |
 | Duplicate runtime name or invalid GraphQL type shape                | Schema construction                                  |
 
-Output fields are non-null by default. Use `t.nullable` when the model or resolver
+Output fields are non-null by default. Use `GraphQL.nullable` when the model or resolver
 can return null, undefined, or an `Option`. A real registered name takes precedence
 over a possible derived name such as `LibraryConnection`. Generated connection
 and edge names are reserved only when used; actual collisions still fail assembly.
@@ -424,30 +427,30 @@ A field without a resolver reads the property with the same name. A field with a
 resolver receives `(parent, decodedArgs, context)` and returns a value or Effect.
 Use `GraphQL.object(Model, options, fields)` for descriptions and interfaces.
 
-| Helper                                                        | GraphQL output                      |
-| ------------------------------------------------------------- | ----------------------------------- |
-| `t.id()`, `t.string()`, `t.int()`, `t.float()`, `t.boolean()` | Required scalar property            |
-| `t.dateTime()`, `t.json()`                                    | Required DateTime or JSON property  |
-| `t.nullable.string()` and other nullable scalar helpers       | Nullable scalar property            |
-| `t.field("Workspace", resolve)`                               | Required named type with a resolver |
-| `t.nullable("Workspace", { resolve })`                        | Nullable named type                 |
-| `t.list("List", { resolve })`                                 | Required list of required items     |
-| `t.list(t.nullable("List"), { resolve })`                     | Required list allowing null items   |
-| `t.nullable(t.list("List"), { resolve })`                     | Nullable list of required items     |
+| Helper                                                                                      | GraphQL output                      |
+| ------------------------------------------------------------------------------------------- | ----------------------------------- |
+| `GraphQL.id()`, `GraphQL.string()`, `GraphQL.int()`, `GraphQL.float()`, `GraphQL.boolean()` | Required scalar property            |
+| `GraphQL.dateTime()`, `GraphQL.json()`                                                      | Required DateTime or JSON property  |
+| `GraphQL.nullable.string()` and other nullable scalar helpers                               | Nullable scalar property            |
+| `GraphQL.field("Workspace", resolve)`                                                       | Required named type with a resolver |
+| `GraphQL.nullable("Workspace", { resolve })`                                                | Nullable named type                 |
+| `GraphQL.list("List", { resolve })`                                                         | Required list of required items     |
+| `GraphQL.list(GraphQL.nullable("List"), { resolve })`                                       | Required list allowing null items   |
+| `GraphQL.nullable(GraphQL.list("List"), { resolve })`                                       | Nullable list of required items     |
 
-For computed scalar fields, use `t.field` with the scalar name:
+For computed scalar fields, use `GraphQL.field` with the scalar name:
 
 `examples/fields.ts`
 
 ```ts
-import { GraphQL, t } from "../api/graphql.ts"
+import { GraphQL } from "../api/graphql.ts"
 import { List } from "../store/models.ts"
 
 export const ListWithSummary = GraphQL.object(List, {
-  id: t.id(),
-  name: t.string({ deprecationReason: "Use displayName." }),
-  displayName: t.field("String", (list) => list.name),
-  summary: t.field("String", {
+  id: GraphQL.id(),
+  name: GraphQL.string({ deprecationReason: "Use displayName." }),
+  displayName: GraphQL.field("String", (list) => list.name),
+  summary: GraphQL.field("String", {
     description: "A short label for this list.",
     resolve: (list) => `${list.name}: ${list.description ?? "No description"}`,
   }),
@@ -463,6 +466,8 @@ object name. Field options include `description`, `deprecationReason`, and
 Arguments are Effect schemas. Decoding preserves branded IDs, nested class
 instances, refinements, and transformations. Use `GraphQL.id(IdSchema)` to expose
 a string-based branded schema as GraphQL `ID` without changing the model schema.
+Without a schema, `GraphQL.id()` is the `ID` output field; each form is rejected
+by the compiler in the other position.
 `GraphQL.input("FilterInput", Schema.Struct(...))` names an input struct;
 `Schema.Class` inputs already supply a name. Inputs need no `Types` registration.
 
@@ -491,10 +496,10 @@ Use `GraphQL.default(schema, decodedValue)` for argument defaults:
 
 ```ts
 import { Schema } from "effect"
-import { GraphQL, t } from "../api/graphql.ts"
+import { GraphQL } from "../api/graphql.ts"
 
 export const GreetingQuery = GraphQL.query({
-  greeting: t.field("String", {
+  greeting: GraphQL.field("String", {
     args: { name: GraphQL.default(Schema.String, "world") },
     resolve: (_, { name }) => `Hello, ${name}`,
   }),
@@ -514,7 +519,7 @@ name, then choose identity values or map GraphQL names to domain values.
 
 ```ts
 import { Schema } from "effect"
-import { GraphQL, t, type Register } from "../api/graphql.ts"
+import { GraphQL, type Register } from "../api/graphql.ts"
 
 const Scope = Schema.Literals(["user:read", "workspace:write"])
 declare module "../api/graphql.ts" {
@@ -528,7 +533,7 @@ export const ScopeType = GraphQL.enum("Scope", Scope, {
   },
 })
 export const ScopeQuery = GraphQL.query({
-  echoScope: t.field("Scope", {
+  echoScope: GraphQL.field("Scope", {
     args: { scope: Scope },
     resolve: (_, { scope }) => scope,
   }),
@@ -557,7 +562,7 @@ An interface defines a source shape and a reusable field map. Objects declare
 
 ```ts
 import { Schema } from "effect"
-import { GraphQL, t, type Register } from "../api/graphql.ts"
+import { GraphQL, type Register } from "../api/graphql.ts"
 import { List, Workspace } from "../store/models.ts"
 
 const Node = Schema.Struct({ id: Schema.String })
@@ -565,17 +570,17 @@ declare module "../api/graphql.ts" {
   interface Types extends Register<typeof Node, "Node", "interface"> {}
 }
 export const NodeType = GraphQL.interface("Node", Node, {
-  id: t.id(),
+  id: GraphQL.id(),
 })
 export const ListWithNode = GraphQL.object(
   List,
   { implements: ["Node"] },
-  { name: t.string() },
+  { name: GraphQL.string() },
 )
 export const WorkspaceWithNode = GraphQL.object(
   Workspace,
   { implements: ["Node"] },
-  { name: t.string() },
+  { name: GraphQL.string() },
 )
 ```
 
@@ -616,7 +621,7 @@ then pass `members` in the same order as the schemas in `Schema.Union`. A custom
 
 ```ts
 import { Schema } from "effect"
-import { GraphQL, t, type Register } from "../api/graphql.ts"
+import { GraphQL, type Register } from "../api/graphql.ts"
 
 const Project = Schema.Struct({
   kind: Schema.Literal("project"),
@@ -638,13 +643,13 @@ export const ProjectType = GraphQL.object(
   "ProjectHit",
   Project,
   {},
-  { title: t.string() },
+  { title: GraphQL.string() },
 )
 export const PersonType = GraphQL.object(
   "PersonHit",
   Person,
   {},
-  { name: t.string() },
+  { name: GraphQL.string() },
 )
 export const HitType = GraphQL.union("Hit", Hit, {
   members: ["ProjectHit", "PersonHit"],
@@ -673,7 +678,7 @@ type Mutation {
 }
 ```
 
-Use `t.nullable("List", { errors, resolve })` for a nullable result and to allow a
+Use `GraphQL.nullable("List", { errors, resolve })` for a nullable result and to allow a
 null success. Its nullability also determines where GraphQL contains an
 execution or authorization failure. A union success reference, such as
 `"SearchResult"` above, contributes all its object members to the generated
@@ -685,11 +690,11 @@ The `result` option controls the wrapper's name and description:
 
 ```ts
 import { Effect } from "effect"
-import { GraphQL, t } from "../api/graphql.ts"
+import { GraphQL } from "../api/graphql.ts"
 import { NotFoundError } from "../api/mutation/list-update.ts"
 
 export const OptionalUpdate = GraphQL.mutation({
-  optionalUpdate: t.nullable("List", {
+  optionalUpdate: GraphQL.nullable("List", {
     errors: [NotFoundError],
     result: {
       name: "OptionalUpdateResult",
@@ -712,7 +717,7 @@ it with `implements`. The generated union reuses that object definition:
 
 ```ts
 import { Schema } from "effect"
-import { GraphQL, t, type Register } from "../api/graphql.ts"
+import { GraphQL, type Register } from "../api/graphql.ts"
 import { NotFoundError } from "../api/mutation/list-update.ts"
 
 const ErrorModel = Schema.Struct({ message: Schema.String })
@@ -723,7 +728,7 @@ declare module "../api/graphql.ts" {
       Register<typeof NotFoundError> {}
 }
 export const ErrorType = GraphQL.interface("Error", ErrorModel, {
-  message: t.string(),
+  message: GraphQL.string(),
 })
 export const NotFoundType = GraphQL.object(
   NotFoundError,
@@ -742,18 +747,18 @@ a result member. Translate infrastructure failures into domain errors instead.
 
 ## Connections and pagination
 
-`t.connection("List", options)` generates `edges`, `node`, and `pageInfo` fields
+`GraphQL.connection("List", options)` generates `edges`, `node`, and `pageInfo` fields
 with Relay connection shapes. Nodes can be registered objects, interfaces, or
 unions. A storage-backed connection returns its page directly:
 
 `examples/connections.ts`
 
 ```ts
-import { GraphQL, t } from "../api/graphql.ts"
+import { GraphQL } from "../api/graphql.ts"
 import { List, WorkspaceId } from "../store/models.ts"
 
 export const ListsQuery = GraphQL.query({
-  lists: t.connection("List", {
+  lists: GraphQL.connection("List", {
     args: { workspaceId: GraphQL.id(WorkspaceId) },
     authorize: (_, __, { identity }) => identity !== null,
     resolve: (_, { workspaceId, ...page }) =>
@@ -820,7 +825,7 @@ Uncounted connections default to `<Node>Connection`; counted ones default to
 overrides the default `<Node>Edge` independently. A real `LibraryConnection`
 object can coexist with a generated `LibraryDirectoryConnection` by naming the
 latter explicitly. Assembly rejects incompatible reuse of generated names.
-Derived references such as `t.field("ListEdge", resolve)` retain the node type.
+Derived references such as `GraphQL.field("ListEdge", resolve)` retain the node type.
 
 ## Scalars
 
@@ -831,14 +836,14 @@ The builder supplies `ID`, `String`, `Boolean`, `Int`, `Float`, `DateTime`, and
 
 ```ts
 import { DateTime, JSONValue } from "@model-ts/graphql"
-import { GraphQL, t } from "../api/graphql.ts"
+import { GraphQL } from "../api/graphql.ts"
 
 export const ScalarQuery = GraphQL.query({
-  echoTime: t.field("DateTime", {
+  echoTime: GraphQL.field("DateTime", {
     args: { at: DateTime },
     resolve: (_, { at }) => at,
   }),
-  echoJSON: t.field("JSON", {
+  echoJSON: GraphQL.field("JSON", {
     args: { value: JSONValue },
     resolve: (_, { value }) => value,
   }),
@@ -860,7 +865,7 @@ Custom scalars pair a registered name with a Schema codec:
 
 ```ts
 import { Schema } from "effect"
-import { GraphQL, t, type Register } from "../api/graphql.ts"
+import { GraphQL, type Register } from "../api/graphql.ts"
 
 const Slug = Schema.String.check(Schema.isPattern(/^[a-z0-9-]+$/)).pipe(
   Schema.brand("Slug"),
@@ -875,7 +880,7 @@ export const SlugType = GraphQL.scalar(
   }),
 )
 export const SlugQuery = GraphQL.query({
-  echoSlug: t.field("Slug", {
+  echoSlug: GraphQL.field("Slug", {
     args: { slug: SlugType.schema },
     resolve: (_, { slug }) => slug,
   }),
@@ -910,11 +915,11 @@ other resolvers.
 
 ```ts
 import { Stream } from "effect"
-import { GraphQL, t } from "../api/graphql.ts"
+import { GraphQL } from "../api/graphql.ts"
 import { List, ListId } from "../store/models.ts"
 
 export const ListSubscription = GraphQL.subscription({
-  listChanged: t.events("List", {
+  listChanged: GraphQL.events("List", {
     args: { id: GraphQL.id(ListId) },
     // A finite stream for this example; replace it with your event source.
     subscribe: (_, { id }) => Stream.fromEffect(List.load(List.key(id))),
@@ -1048,7 +1053,7 @@ export const Reporting = Layer.succeed(ErrorReporter, {
 })
 ```
 
-Apply the policy before obtaining `G.fields` and constructing definitions. A
+Apply the policy before constructing fields and definitions with the builder. A
 public error's default code is its tag; `publicCodes` overrides it. Only declared
 Schema fields are exposed, not incidental properties or stacks. Keep internal
 errors in `internal`; unclassified resolver failures and defects are masked as
@@ -1190,7 +1195,7 @@ class UpstreamError extends Schema.TaggedError<UpstreamError>()(
 ) {}
 const G = createBuilder<{}>().withErrorPolicy({ internal: [UpstreamError] })
 export const RemoteQuery = G.query({
-  status: G.fields.field("String", {
+  status: G.field("String", {
     resolve: () =>
       Effect.tryPromise({
         try: async (signal) => {
@@ -1220,8 +1225,9 @@ functions such as `executor` are separate exports, not builder methods.
 | `Register<typeof Model, Name?, Kind?>`                        | Extend the registry with a model                                  |
 | Builder `.object`, `.interface`, `.union`, `.enum`, `.scalar` | Define named output types                                         |
 | Builder `.query`, `.mutation`, `.subscription`                | Define operation fields                                           |
-| Builder `.fields`                                             | Obtain the `t` field helpers                                      |
-| Builder `.id`, `.input`, `.default`                           | Annotate argument/input schemas                                   |
+| Builder `.id()`, `.string()`, `.nullable`, `.list`, `.field`  | Define output fields                                              |
+| Builder `.connection`, `.events`                              | Define connection and subscription event fields                   |
+| Builder `.id(Schema)`, `.input`, `.default`                   | Annotate argument/input schemas                                   |
 | Builder `.withErrorPolicy`                                    | Classify global public and internal typed failures                |
 | Builder `.schema(definitions)`                                | Check completeness and build a `BuiltSchema<R, C>`                |
 | `execute`, `subscribe` (also on the builder)                  | Run source-text requests as Effects or Streams                    |
@@ -1236,15 +1242,14 @@ functions such as `executor` are separate exports, not builder methods.
 ## Development
 
 From the repository root, `bun run build`, `bun run typecheck`, `bun run lint`,
-and `bun run format:check` include this package. Root `bun run test` uses memory;
-`bun run test:local` also checks GraphQL storage operations against DynamoDB Local.
+`bun run format:check`, and `bun run test` include this package. Its tests use
+the in-memory DynamoDB Sandbox.
 
 From `packages/graphql`:
 
 | Command                 | Checks                                                            |
 | ----------------------- | ----------------------------------------------------------------- |
 | `bun run test`          | Runtime and in-memory storage tests                               |
-| `bun run test:local`    | Storage integration against DynamoDB Local                        |
 | `bun run test:types`    | Inferred parent, argument, context, and service types             |
 | `bun run test:compiler` | Negative typing and registry diagnostics with native TypeScript 7 |
 | `bun run test:scale`    | A generated 200-model schema                                      |

@@ -12,7 +12,7 @@ function fixture() {
   let sources = 0
   const builder = GraphQL.createBuilder<GraphQL.Register<typeof Payload>>()
   const events = () =>
-    builder.fields.events("Payload", {
+    builder.events("Payload", {
       subscribe: () => {
         sources++
         return Stream.succeed(new Payload({ text: "hello", extra: "world" }))
@@ -20,11 +20,11 @@ function fixture() {
     })
   const schema = builder.schema({
     payload: builder.object(Payload, {
-      text: builder.fields.string(),
-      extra: builder.fields.string(),
+      text: builder.string(),
+      extra: builder.string(),
     }),
     query: builder.query({
-      ping: builder.fields.field("String", () => "pong"),
+      ping: builder.field("String", () => "pong"),
     }),
     subscription: builder.subscription({ event: events(), other: events() }),
   })

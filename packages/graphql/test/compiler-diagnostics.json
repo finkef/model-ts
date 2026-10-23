@@ -82,7 +82,7 @@
       {
         "file": "test/app/api/graphql/query/search.ts",
         "line": 22,
-        "column": 45,
+        "column": 51,
         "code": 2769
       }
     ]
@@ -292,7 +292,7 @@
       {
         "file": "test/fixtures/execution.ts",
         "line": 24,
-        "column": 40,
+        "column": 33,
         "code": 2769
       }
     ]
@@ -335,7 +335,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 17,
+        "line": 19,
         "column": 5,
         "code": 2322
       }
@@ -357,7 +357,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 17,
+        "line": 19,
         "column": 5,
         "code": 2322
       }
@@ -412,7 +412,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 24,
+        "line": 26,
         "column": 30,
         "code": 2339
       }
@@ -423,13 +423,13 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 23,
+        "line": 25,
         "column": 5,
         "code": 2322
       },
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 27,
+        "line": 29,
         "column": 9,
         "code": 2769
       }
@@ -440,7 +440,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 27,
+        "line": 29,
         "column": 43,
         "code": 2339
       }
@@ -484,8 +484,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/workspace.ts",
-        "line": 15,
-        "column": 33,
+        "line": 17,
+        "column": 39,
         "code": 2769
       }
     ]
@@ -495,8 +495,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 18,
-        "column": 21,
+        "line": 20,
+        "column": 27,
         "code": 2769
       }
     ]
@@ -506,8 +506,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 23,
-        "column": 27,
+        "line": 25,
+        "column": 33,
         "code": 2769
       }
     ]
@@ -518,7 +518,7 @@
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
         "line": 19,
-        "column": 23,
+        "column": 29,
         "code": 2769
       }
     ]
@@ -528,8 +528,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/workspace.ts",
-        "line": 15,
-        "column": 25,
+        "line": 17,
+        "column": 31,
         "code": 2769
       }
     ]
@@ -551,7 +551,7 @@
       {
         "file": "test/app/api/graphql/list.ts",
         "line": 15,
-        "column": 27,
+        "column": 33,
         "code": 2322
       }
     ]
@@ -793,7 +793,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 58,
-        "column": 24,
+        "column": 30,
         "code": 2345
       }
     ]
@@ -804,7 +804,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 53,
-        "column": 21,
+        "column": 27,
         "code": 2345
       }
     ]
@@ -815,7 +815,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 53,
-        "column": 21,
+        "column": 27,
         "code": 2345
       }
     ]
@@ -826,7 +826,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 56,
-        "column": 19,
+        "column": 25,
         "code": 2345
       }
     ]
@@ -837,7 +837,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 59,
-        "column": 23,
+        "column": 29,
         "code": 2345
       }
     ]
@@ -848,7 +848,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 58,
-        "column": 19,
+        "column": 25,
         "code": 2345
       }
     ]
@@ -859,7 +859,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 70,
-        "column": 30,
+        "column": 36,
         "code": 2769
       }
     ]
@@ -870,7 +870,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 70,
-        "column": 33,
+        "column": 39,
         "code": 2769
       }
     ]
@@ -881,7 +881,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 70,
-        "column": 32,
+        "column": 38,
         "code": 2769
       }
     ]
@@ -898,7 +898,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 71,
-        "column": 34,
+        "column": 40,
         "code": 2769
       }
     ]
@@ -920,7 +920,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 72,
-        "column": 46,
+        "column": 52,
         "code": 2769
       }
     ]
@@ -931,7 +931,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 70,
-        "column": 33,
+        "column": 39,
         "code": 2769
       }
     ]
@@ -942,7 +942,7 @@
       {
         "file": "test/fixtures/definitions/objects.ts",
         "line": 81,
-        "column": 42,
+        "column": 48,
         "code": 2769
       }
     ]
@@ -952,8 +952,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 23,
-        "column": 27,
+        "line": 25,
+        "column": 33,
         "code": 2769
       }
     ]
@@ -1106,8 +1106,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/workspace.ts",
-        "line": 15,
-        "column": 25,
+        "line": 17,
+        "column": 31,
         "code": 2769
       }
     ]
@@ -1150,8 +1150,8 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/list.ts",
-        "line": 18,
-        "column": 21,
+        "line": 20,
+        "column": 27,
         "code": 2769
       }
     ]
@@ -1179,7 +1179,7 @@
       {
         "file": "test/app/api/graphql/query/examples.ts",
         "line": 8,
-        "column": 39,
+        "column": 45,
         "code": 2769
       }
     ]
@@ -1212,7 +1212,7 @@
       {
         "file": "test/app/api/graphql/list.ts",
         "line": 15,
-        "column": 52,
+        "column": 58,
         "code": 2339
       }
     ]
@@ -1222,7 +1222,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 41,
+        "line": 40,
         "column": 3,
         "code": 2322
       }
@@ -1233,7 +1233,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 42,
+        "line": 41,
         "column": 5,
         "code": 2322
       }
@@ -1244,7 +1244,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 104,
+        "line": 103,
         "column": 29,
         "code": 2769
       }
@@ -1255,7 +1255,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 55,
+        "line": 54,
         "column": 5,
         "code": 2322
       }
@@ -1266,7 +1266,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 56,
+        "line": 55,
         "column": 13,
         "code": 2339
       }
@@ -1277,7 +1277,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 163,
+        "line": 162,
         "column": 32,
         "code": 2345
       }
@@ -1288,7 +1288,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 164,
+        "line": 163,
         "column": 32,
         "code": 2345
       }
@@ -1299,13 +1299,13 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 94,
+        "line": 93,
         "column": 13,
         "code": 2769
       },
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 94,
+        "line": 93,
         "column": 28,
         "code": 2769
       }
@@ -1316,7 +1316,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 94,
+        "line": 93,
         "column": 21,
         "code": 2769
       }
@@ -1327,7 +1327,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 94,
+        "line": 93,
         "column": 21,
         "code": 2769
       }
@@ -1338,7 +1338,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 94,
+        "line": 93,
         "column": 3,
         "code": 2769
       }
@@ -1349,7 +1349,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 95,
+        "line": 94,
         "column": 3,
         "code": 2769
       }
@@ -1360,7 +1360,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 146,
+        "line": 145,
         "column": 33,
         "code": 2769
       }
@@ -1371,7 +1371,7 @@
     "diagnostics": [
       {
         "file": "test/fixtures/type-contracts.ts",
-        "line": 104,
+        "line": 103,
         "column": 31,
         "code": 2769
       }

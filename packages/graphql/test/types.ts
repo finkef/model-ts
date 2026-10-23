@@ -10,7 +10,7 @@ import type {
   Values,
 } from "../src/GraphQL.ts"
 import { identityFor, type AppContext } from "./app/api/context.ts"
-import { GraphQL, t, type Types } from "./app/api/graphql.ts"
+import { GraphQL, type Types } from "./app/api/graphql.ts"
 import type * as definitions from "./app/api/graphql/index.ts"
 import { ListUpdateInput } from "./app/api/graphql/mutation/list/list-update.ts"
 import { schema } from "./app/api/schema.ts"
@@ -77,13 +77,13 @@ export class Extra extends Context.Service<Extra, { readonly n: number }>()(
   "Extra",
 ) {}
 const defaults = GraphQL.object(Workspace, {
-  id: t.id({ authorize: () => Extra.useSync((s) => s.n > 0) }),
+  id: GraphQL.id({ authorize: () => Extra.useSync((s) => s.n > 0) }),
 })
 export type DefaultAuthRequirements = Assert<
   Equal<Requirements<{ defaults: typeof defaults }>, Extra>
 >
 const counted = GraphQL.query({
-  page: t.connection("List", {
+  page: GraphQL.connection("List", {
     resolve: () =>
       List.paginate(
         { first: 1 },
@@ -107,7 +107,7 @@ const alias = aliasBuilder.object(
   "ListAlias",
   List,
   {},
-  { id: aliasBuilder.fields.id() },
+  { id: aliasBuilder.id() },
 )
 export type AliasName = Assert<Equal<(typeof alias)["~name"], "ListAlias">>
 export type UnionKind = Assert<Equal<Types["FavoriteTarget"]["kind"], "union">>

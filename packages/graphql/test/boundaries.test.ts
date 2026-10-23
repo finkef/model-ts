@@ -50,20 +50,20 @@ for (const operation of ["query", "subscription"] as const) {
         const custom = throwingScalar()
         const scalar = builder.scalar("Custom", scalarSchema, custom)
         const query = builder.query({
-          ping: builder.fields.field("String", () => "ok"),
+          ping: builder.field("String", () => "ok"),
         })
         const field = { args: { value: scalar.schema } }
         const built = builder.schema({
           scalar,
           query,
           echo: builder.query({
-            echo: builder.fields.field("String", {
+            echo: builder.field("String", {
               ...field,
               resolve: () => "ok",
             }),
           }),
           events: builder.subscription({
-            echo: builder.fields.events("String", {
+            echo: builder.events("String", {
               ...field,
               subscribe: () => Stream.succeed("ok"),
             }),
@@ -122,7 +122,7 @@ it.effect(
       const builder = G.createBuilder<{}>()
       const schema = builder.schema({
         query: builder.query({
-          echo: builder.fields.field("String", {
+          echo: builder.field("String", {
             args: { value: Schema.String },
             resolve: (_, { value }) => value,
           }),
@@ -168,8 +168,8 @@ it.effect(
             G.Register<typeof output, "Output">
         >().withErrorPolicy({ public: [PublicInput] })
         const schema = builder.schema({
-          node: builder.object(Node, { id: builder.fields.id() }),
-          other: builder.object(Other, { id: builder.fields.id() }),
+          node: builder.object(Node, { id: builder.id() }),
+          other: builder.object(Other, { id: builder.id() }),
           abstract: builder.union("Abstract", abstract, {
             members: ["Node", "Other"],
             resolveType: () => {
@@ -187,14 +187,14 @@ it.effect(
             }),
           ),
           query: builder.query({
-            leak: builder.fields.nullable("String", () => {
+            leak: builder.nullable("String", () => {
               throw error
             }),
-            abstract: builder.fields.nullable(
+            abstract: builder.nullable(
               "Abstract",
               () => new Node({ id: "id" }),
             ),
-            scalar: builder.fields.nullable("Output", () => "value"),
+            scalar: builder.nullable("Output", () => "value"),
           }),
         })
         const result = yield* G.execute(schema, {
@@ -231,20 +231,18 @@ it.effect(
       const adapter = G.executor(
         builder.schema({
           query: builder.query({
-            denied: builder.fields.nullable("String", {
+            denied: builder.nullable("String", {
               authorize: () => false,
               resolve: () => "no",
             }),
-            public: builder.fields.nullable("String", () =>
-              Effect.fail(publicInput),
-            ),
-            json: builder.fields.field("JSON", () => ({
+            public: builder.nullable("String", () => Effect.fail(publicInput)),
+            json: builder.field("JSON", () => ({
               at: new Date("2026-10-23T00:00:00Z"),
               omitted: undefined,
             })),
           }),
           subscription: builder.subscription({
-            public: builder.fields.events("String", {
+            public: builder.events("String", {
               subscribe: () => Stream.fail(publicInput),
             }),
           }),
@@ -297,10 +295,10 @@ it.effect(
         const adapter = G.executor(
           builder.schema({
             query: builder.query({
-              value: builder.fields.field("JSON", () => value),
+              value: builder.field("JSON", () => value),
             }),
             subscription: builder.subscription({
-              value: builder.fields.events("JSON", {
+              value: builder.events("JSON", {
                 subscribe: () => Stream.succeed(value),
               }),
             }),
@@ -371,15 +369,15 @@ for (const phase of ["authorize", "resolve"] as const) {
         )
         const schema = builder.schema({
           node: builder.object(Node, {
-            id: builder.fields.field("String", () =>
+            id: builder.field("String", () =>
               phase === "resolve" ? blocked : "id",
             ),
           }),
           query: builder.query({
-            ping: builder.fields.field("String", () => "ok"),
+            ping: builder.field("String", () => "ok"),
           }),
           subscription: builder.subscription({
-            event: builder.fields.events("Node", {
+            event: builder.events("Node", {
               subscribe: () =>
                 Stream.succeed(new Node({ id: "id" })).pipe(
                   Stream.ensuring(
@@ -431,10 +429,10 @@ it.effect(
       const builder = G.createBuilder<{}>()
       const schema = builder.schema({
         query: builder.query({
-          ping: builder.fields.field("String", () => "ok"),
+          ping: builder.field("String", () => "ok"),
         }),
         subscription: builder.subscription({
-          event: builder.fields.events("String", { subscribe: () => source }),
+          event: builder.events("String", { subscribe: () => source }),
         }),
       })
       const fiber = yield* G.subscribe(schema, {
@@ -479,17 +477,17 @@ it.effect(
         G.Register<typeof Problem> & G.Register<typeof Node>
       >()
       const schema = builder.schema({
-        node: builder.object(Node, { id: builder.fields.id() }),
+        node: builder.object(Node, { id: builder.id() }),
         problem: builder.object(Problem, {
-          message: builder.fields.string(),
-          display: builder.fields.string(),
-          label: builder.fields.field("String", {
+          message: builder.string(),
+          display: builder.string(),
+          label: builder.field("String", {
             authorize: (parent) => parent === problem,
             resolve: (parent) => parent.label(),
           }),
         }),
         query: builder.query({
-          result: builder.fields.field("Node", {
+          result: builder.field("Node", {
             errors: [Problem],
             resolve: () => Effect.fail(problem),
           }),
@@ -532,7 +530,7 @@ it.effect(
       const schema = builder.schema({
         scalar,
         query: builder.query({
-          echo: builder.fields.field("String", {
+          echo: builder.field("String", {
             args: { value: scalar.schema },
             resolve: (_, { value }) => value,
           }),

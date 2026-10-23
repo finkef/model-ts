@@ -20,7 +20,7 @@ import { makeFields } from "./Fields.ts"
 import { type Fields, type Requirements } from "./FieldTypes.ts"
 import { type Complete, type CompatibleContexts } from "./Registry.ts"
 import { type ErrorSchema, type ErrorsOf } from "./Results.ts"
-import { id, input, defaulted, invalid } from "./SchemaTypes.ts"
+import { input, defaulted, invalid } from "./SchemaTypes.ts"
 
 export interface BuilderOptions {
   /** Largest "first"/"last" a connection accepts. Defaults to 100. */
@@ -29,10 +29,10 @@ export interface BuilderOptions {
   readonly defaultPageSize?: number
 }
 
-export interface Builder<Types, G, C = {}> extends DefinitionBuilder<Types, C> {
-  readonly fields: Fields<Types, G, C>
+/** Definitions, field helpers and execution for one registry and request context. */
+export interface Builder<Types, G, C = {}>
+  extends DefinitionBuilder<Types, C>, Fields<Types, G, C> {
   input: typeof input
-  id: typeof id
   default: typeof defaulted
   /** Errors any resolver may fail with, and how each reaches the response. */
   withErrorPolicy<
@@ -79,12 +79,10 @@ function make<Types, G, C>(
   maxPageSize: number,
   defaultPageSize: number,
 ): Builder<Types, G, C> {
-  const fields = makeFields<Types, G, C>(policy, maxPageSize, defaultPageSize)
   return {
-    fields,
+    ...makeFields<Types, G, C>(policy, maxPageSize, defaultPageSize),
     ...makeDefinitions<Types, C>(),
     input,
-    id,
     default: defaulted,
     withErrorPolicy: (options) =>
       make(

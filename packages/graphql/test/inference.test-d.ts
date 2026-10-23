@@ -20,7 +20,7 @@ import {
 import * as Testing from "../src/Testing.ts"
 import type { AppContext, Identity } from "./app/api/context.ts"
 import { identityFor } from "./app/api/context.ts"
-import { GraphQL, t } from "./app/api/graphql.ts"
+import { GraphQL } from "./app/api/graphql.ts"
 import { ListUpdateInput } from "./app/api/graphql/mutation/list/list-update.ts"
 import { schema } from "./app/api/schema.ts"
 import { ListId } from "./app/store/ids.ts"
@@ -33,7 +33,7 @@ import { schema as inheritedSchema } from "./fixtures/type-contracts.ts"
 describe("inference across registered real model classes", () => {
   it("preserves parent, decoded args, context and resolver requirements", () => {
     GraphQL.object(List, {
-      workspace: t.field("Workspace", {
+      workspace: GraphQL.field("Workspace", {
         args: { id: GraphQL.id(ListId), input: ListUpdateInput },
         resolve: (parent, args, context) => {
           expectTypeOf(parent).toEqualTypeOf<List>()
@@ -67,6 +67,36 @@ it("preserves explicit connection-shaped names", () => {
   >().toEqualTypeOf<LibraryConnection>()
 })
 
+it("GraphQL.id is an output field without a schema and an ID argument with one", () => {
+  const argument = GraphQL.id(ListId)
+  expectTypeOf(argument).toEqualTypeOf<(typeof ListId)["Rebuild"]>()
+  expectTypeOf<Schema.Schema.Type<typeof argument>>().toEqualTypeOf<ListId>()
+  GraphQL.object(List, {
+    id: GraphQL.id(),
+    workspaceId: GraphQL.id({
+      description: "The owning workspace.",
+      authorize: (list) => list.workspaceId.length > 0,
+    }),
+    workspace: GraphQL.nullable("Workspace", {
+      args: { id: GraphQL.id(ListId) },
+      resolve: () => null,
+    }),
+  })
+  GraphQL.object(List, {
+    // @ts-expect-error an ID argument schema is not an output field
+    id: GraphQL.id(ListId),
+  })
+  GraphQL.nullable("Workspace", {
+    // @ts-expect-error the ID output field is not an argument schema
+    args: { id: GraphQL.id() },
+    resolve: () => null,
+  })
+  // @ts-expect-error ID arguments must decode from strings
+  GraphQL.id(Schema.Number)
+  // @ts-expect-error ID output fields take no resolver
+  GraphQL.id({ resolve: () => "id" })
+})
+
 it("rejects incompatible contexts at each composition boundary", () => {
   interface Tenant {
     readonly tenant: { readonly id: string }
@@ -78,13 +108,13 @@ it("rejects incompatible contexts at each composition boundary", () => {
   const user = createBuilder<{}, User>()
   const anonymous = createBuilder<{}>()
   const query = tenant.query({
-    id: tenant.fields.field("String", (_, __, context) => context.tenant.id),
+    id: tenant.field("String", (_, __, context) => context.tenant.id),
   })
   const built = tenant.schema({ query })
   expectTypeOf(built).toEqualTypeOf<BuiltSchema<never, Tenant>>()
   user.query({
     // @ts-expect-error fields retain the context of their builder
-    id: tenant.fields.field("String", (_, __, context) => context.tenant.id),
+    id: tenant.field("String", (_, __, context) => context.tenant.id),
   })
   // @ts-expect-error definitions retain context when exported through a barrel
   user.schema({ query })
@@ -127,7 +157,7 @@ it("abstract connections retain model types, decoded filters and services", () =
     Connection<List | Workspace>
   >()
   GraphQL.query({
-    searchPage: t.connection("FavoriteTarget", {
+    searchPage: GraphQL.connection("FavoriteTarget", {
       args: { ids: Schema.Array(GraphQL.id(ListId)) },
       nodes: (_, { ids }, context) => {
         expectTypeOf(ids).toEqualTypeOf<readonly ListId[]>()
@@ -253,7 +283,7 @@ it("Testing.client fills request context and keeps factory services", () => {
   >().toEqualTypeOf<DynamoDB | Sandbox>()
   const plain = createBuilder<{}>()
   const plainSchema = plain.schema({
-    query: plain.query({ ping: plain.fields.field("String", () => "pong") }),
+    query: plain.query({ ping: plain.field("String", () => "pong") }),
   })
   expectTypeOf(Testing.client(plainSchema).request("{ping}")).toEqualTypeOf<
     Effect.Effect<Testing.Result>

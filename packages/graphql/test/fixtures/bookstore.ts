@@ -62,12 +62,11 @@ interface Types
     Register<typeof Search, "SearchResult">,
     Register<typeof OrderSuccess, "OrderSuccess"> {}
 const G = createBuilder<Types>()
-const t = G.fields
 const boundary = (name: ObjectNames) =>
-  G.object(name, Boundary, {}, { id: t.id() })
+  G.object(name, Boundary, {}, { id: G.id() })
 export const schema = G.schema({
   scope: G.enum("Scope", Scope, { values: scopeValues }),
-  error: G.interface("Error", ErrorModel, { message: t.string() }),
+  error: G.interface("Error", ErrorModel, { message: G.string() }),
   notFound: G.object(NotFoundError, { implements: ["Error"] }, {}),
   inputError: G.object(UserInputError, { implements: ["Error"] }, {}),
   outOfStock: G.object(OutOfStockError, { implements: ["Error"] }, {}),
@@ -76,7 +75,7 @@ export const schema = G.schema({
     Boundary,
     {},
     {
-      portrait: t.nullable("String", {
+      portrait: G.nullable("String", {
         description: "The URL of the author's portrait.",
         deprecationReason: "Use photo instead.",
         resolve: () => null,
@@ -99,22 +98,22 @@ export const schema = G.schema({
   orderSuccess: G.union("OrderSuccess", OrderSuccess, {
     members: ["OrderConfirmation", "Backorder"],
   }),
-  query: G.query({ health: t.field("Boolean", () => true) }),
+  query: G.query({ health: G.field("Boolean", () => true) }),
   mutation: G.mutation({
-    bookCreate: t.nullable("Book", {
+    bookCreate: G.nullable("Book", {
       errors: [NotFoundError, UserInputError],
       resolve: () => null,
     }),
-    orderPlace: t.nullable("OrderSuccess", {
+    orderPlace: G.nullable("OrderSuccess", {
       errors: [OutOfStockError, UserInputError],
       resolve: () => null,
     }),
-    adminRefundIssue: t.nullable("Refund", {
+    adminRefundIssue: G.nullable("Refund", {
       errors: [UserInputError],
       result: { name: "AdminRefundResult" },
       resolve: () => null,
     }),
-    wishlistClear: t.nullable("WishlistClearSuccess", {
+    wishlistClear: G.nullable("WishlistClearSuccess", {
       result: {},
       resolve: () => null,
     }),

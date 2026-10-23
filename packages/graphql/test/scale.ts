@@ -20,11 +20,11 @@ try {
   const definitions = Array.from(
     { length: count },
     (_, i) =>
-      `item${i}: G.object(Item${i}, {id: t.id(), next: t.nullable("Item${(i + 1) % count}", () => null)})`,
+      `item${i}: G.object(Item${i}, {id: G.id(), next: G.nullable("Item${(i + 1) % count}", () => null)})`,
   )
   writeFileSync(
     join(directory, "scale.ts"),
-    `import { Model } from "@model-ts/core"\nimport { Schema } from "effect"\nimport { createBuilder, type Register } from "../src/index.ts"\n${models.join("\n")}\ninterface Types extends ${registrations} {}\nconst G = createBuilder<Types>()\nconst t = G.fields\nconst definitions = {${definitions.join(",\n")}, query: G.query({root: t.field("Item0", () => new Item0({id:"root"}))})}\nexport const schema = G.schema(definitions)\n`,
+    `import { Model } from "@model-ts/core"\nimport { Schema } from "effect"\nimport { createBuilder, type Register } from "../src/index.ts"\n${models.join("\n")}\ninterface Types extends ${registrations} {}\nconst G = createBuilder<Types>()\nconst definitions = {${definitions.join(",\n")}, query: G.query({root: G.field("Item0", () => new Item0({id:"root"}))})}\nexport const schema = G.schema(definitions)\n`,
   )
   writeFileSync(
     join(directory, "tsconfig.json"),

@@ -12,7 +12,6 @@ import {
 } from "./app/store/errors.ts"
 import { ListId, OrganizationId, WorkspaceId } from "./app/store/ids.ts"
 import { List } from "./app/store/models.ts"
-import { testTable } from "./utils.ts"
 
 class Library extends Schema.TaggedClass<Library>()("Library", {
   id: Schema.String,
@@ -30,11 +29,10 @@ interface Types
     Register<typeof Node, "Node", "interface">,
     Register<typeof SearchResult, "SearchResult"> {}
 const G = createBuilder<Types>({ defaultPageSize: 2, maxPageSize: 5 })
-const t = G.fields
 const definitions = {
-  library: G.object(Library, { implements: ["Node"] }, { id: t.id() }),
-  connection: G.object(LibraryConnection, { token: t.string() }),
-  node: G.interface("Node", Node, { id: t.id() }),
+  library: G.object(Library, { implements: ["Node"] }, { id: G.id() }),
+  connection: G.object(LibraryConnection, { token: G.string() }),
+  node: G.interface("Node", Node, { id: G.id() }),
   result: G.union("SearchResult", SearchResult),
 }
 const nodes = Array.from(
@@ -44,24 +42,24 @@ const nodes = Array.from(
 
 test("abstract nodes, typed edges and renamed directory coexist with a real LibraryConnection", async () => {
   const query = G.query({
-    directory: t.connection("Library", {
+    directory: G.connection("Library", {
       name: "LibraryDirectoryConnection",
       edgeName: "LibraryDirectoryEdge",
       nodes: () => nodes,
     }),
-    connected: t.field(
+    connected: G.field(
       "LibraryConnection",
       () => new LibraryConnection({ token: "secret" }),
     ),
-    holdings: t.connection("Node", { nodes: () => nodes }),
-    search: t.connection("SearchResult", {
+    holdings: G.connection("Node", { nodes: () => nodes }),
+    search: G.connection("SearchResult", {
       args: { terms: Schema.Array(Schema.String) },
       nodes: (_, { terms }) =>
         terms.length
           ? [nodes[0]!, new LibraryConnection({ token: "hit" })]
           : [],
     }),
-    edge: t.field("SearchResultEdge", () => ({
+    edge: G.field("SearchResultEdge", () => ({
       cursor: "opaque",
       node: nodes[0]!,
     })),
@@ -108,7 +106,7 @@ test("abstract nodes, typed edges and renamed directory coexist with a real Libr
 
 test("before-only defaults backward; zero, null and explicit sizes retain their meaning", async () => {
   const query = G.query({
-    page: t.connection("Library", {
+    page: G.connection("Library", {
       name: "Catalog",
       nodes: () => nodes,
       totalCount: () => Effect.succeed(nodes.length),
@@ -151,10 +149,9 @@ test("totalCount runs only when selected and retains decoded args, context and s
     Register<typeof Library>,
     { readonly tenant: string }
   >()
-  const fields = local.fields
   let calls = 0
   const query = local.query({
-    page: fields.connection("Library", {
+    page: local.connection("Library", {
       args: { filter: Schema.NumberFromString },
       nodes: () => nodes,
       totalCount: (_, { filter }, { tenant }) => {
@@ -164,7 +161,7 @@ test("totalCount runs only when selected and retains decoded args, context and s
     }),
   })
   const built = local.schema({
-    library: local.object(Library, { id: fields.id() }),
+    library: local.object(Library, { id: local.id() }),
     query,
   })
   const run = (source: string) =>
@@ -193,7 +190,7 @@ test("totalCount runs only when selected and retains decoded args, context and s
 
 test("lazy totalCount failures use the field error policy", async () => {
   const query = G.query({
-    page: t.connection("Library", {
+    page: G.connection("Library", {
       name: "Catalog",
       resolve: () => Effect.succeed(slice(nodes, { first: 1 })),
       totalCount: () => Effect.die(new Error("private count failure")),
@@ -229,7 +226,7 @@ test("paged resolvers receive opaque storage cursors and return their page uncha
     },
   }
   const query = G.query({
-    page: t.connection("Library", {
+    page: G.connection("Library", {
       name: "Catalog",
       args: { filter: Schema.String },
       resolve: (_, args) => {
@@ -262,18 +259,18 @@ test("only names actually derived are claimed, and incompatible reused shapes fa
   const build = (fields: Parameters<typeof G.query>[0]) =>
     G.schema({ ...definitions, query: G.query(fields) })
   expect(() =>
-    build({ bad: t.connection("Library", { nodes: () => nodes }) }),
+    build({ bad: G.connection("Library", { nodes: () => nodes }) }),
   ).toThrow("Duplicate GraphQL name: LibraryConnection")
   expect(() =>
     build({
-      a: t.connection("Node", { name: "Shared", nodes: () => nodes }),
-      b: t.connection("SearchResult", { name: "Shared", nodes: () => nodes }),
+      a: G.connection("Node", { name: "Shared", nodes: () => nodes }),
+      b: G.connection("SearchResult", { name: "Shared", nodes: () => nodes }),
     }),
   ).toThrow("Duplicate GraphQL name: Shared")
   expect(() =>
     build({
-      a: t.connection("Node", { edgeName: "SharedEdge", nodes: () => nodes }),
-      b: t.connection("SearchResult", {
+      a: G.connection("Node", { edgeName: "SharedEdge", nodes: () => nodes }),
+      b: G.connection("SearchResult", {
         edgeName: "SharedEdge",
         nodes: () => nodes,
       }),
@@ -281,8 +278,8 @@ test("only names actually derived are claimed, and incompatible reused shapes fa
   ).toThrow("Incompatible edge SharedEdge")
   expect(() =>
     build({
-      a: t.connection("Node", { nodes: () => nodes }),
-      b: t.connection("Node", {
+      a: G.connection("Node", { nodes: () => nodes }),
+      b: G.connection("Node", {
         name: "NodeConnection",
         totalCount: () => 5,
         nodes: () => nodes,
@@ -314,8 +311,8 @@ test("generated connections print Relay descriptions, explicit names and nullabi
     ),
   )
   const query = G.query({
-    search: t.connection("SearchResult", { nodes: () => nodes }),
-    directory: t.connection("Library", {
+    search: G.connection("SearchResult", { nodes: () => nodes }),
+    directory: G.connection("Library", {
       name: "LibraryDirectoryConnection",
       nodes: () => nodes,
     }),
@@ -337,7 +334,7 @@ test("generated connections print Relay descriptions, explicit names and nullabi
 
 test("PageInfo cannot be reused as an edge name", () => {
   const query = G.query({
-    page: t.connection("Node", { edgeName: "PageInfo", nodes: () => nodes }),
+    page: G.connection("Node", { edgeName: "PageInfo", nodes: () => nodes }),
   })
   expect(() => G.schema({ ...definitions, query })).toThrow(
     "Incompatible derived type PageInfo",
@@ -367,15 +364,14 @@ it.effect(
       >().withErrorPolicy({
         internal: [DynamoDBError, ItemDecodeError, PaginationError],
       })
-      const fields = local.fields
       const list = local.object(
         List,
         { implements: ["Node"] },
-        { id: fields.id() },
+        { id: local.id() },
       )
-      const node = local.interface("Node", Node, { id: fields.id() })
+      const node = local.interface("Node", Node, { id: local.id() })
       const query = local.query({
-        page: fields.connection("Node", {
+        page: local.connection("Node", {
           authorize: () => Effect.succeed(true),
           resolve: (_, args) =>
             List.paginate(args, {
@@ -411,6 +407,8 @@ it.effect(
         })
       }
     }).pipe(
-      Effect.provide(testTable({ pagination: { default: 1, limit: 5 } })),
+      Effect.provide(
+        Sandbox.layerMemory({ pagination: { default: 1, limit: 5 } }),
+      ),
     ),
 )

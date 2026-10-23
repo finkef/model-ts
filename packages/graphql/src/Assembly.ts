@@ -99,7 +99,9 @@ export function assemble(
     if (!isDefinition(value)) continue
     const fields = value.fields
     if (!isFieldMap(fields))
-      return invalid(`${key}: fields must be an object of t.* fields`)
+      return invalid(
+        `${key}: fields must be an object of builder field helpers such as GraphQL.string()`,
+      )
     if (value["~kind"] === "object" || value["~kind"] === "interface") {
       const name = value["~name"] ?? invalid(`${key} has no GraphQL name`)
       if (objects.has(name)) invalid(`Duplicate GraphQL object: ${name}`)

@@ -40,10 +40,9 @@ const G = createBuilder<
   internal: [PrivateError],
   publicCodes: { PublicError: "BAD_REQUEST_ERROR" },
 })
-const t = G.fields
-const node = G.object(Node, { id: t.id() })
+const node = G.object(Node, { id: G.id() })
 const context = { tenant: "tenant-1" }
-const query = G.query({ ping: t.field("String", (_, __, ctx) => ctx.tenant) })
+const query = G.query({ ping: G.field("String", (_, __, ctx) => ctx.tenant) })
 const visible = new PublicError({ message: "Safe", member: "member" })
 const secret = new Error("private-backend-detail")
 const reports = () => {
@@ -65,21 +64,21 @@ for (const operation of ["query", "mutation"] as const) {
     () =>
       Effect.gen(function* () {
         const fields = {
-          sync: t.connection("Node", {
+          sync: G.connection("Node", {
             authorize: () => true,
             nodes: () => [],
           }),
-          effect: t.connection("Node", {
+          effect: G.connection("Node", {
             authorize: () => Effect.succeed(true),
             nodes: () => [],
           }),
-          paginateSync: t.connection("Node", {
+          paginateSync: G.connection("Node", {
             authorize: () => true,
             resolve: () => {
               throw new Error("Invalid pagination must stop before resolving")
             },
           }),
-          paginateEffect: t.connection("Node", {
+          paginateEffect: G.connection("Node", {
             authorize: () => Effect.succeed(true),
             resolve: () => {
               throw new Error("Invalid pagination must stop before resolving")
@@ -116,30 +115,30 @@ for (const operation of ["query", "mutation"] as const) {
       Effect.gen(function* () {
         const report = reports()
         const fields = {
-          denied: t.nullable("String", {
+          denied: G.nullable("String", {
             authorize: () => false,
             resolve: () => "never",
           }),
-          effectDenied: t.nullable("String", {
+          effectDenied: G.nullable("String", {
             authorize: () => Effect.succeed(false),
             resolve: () => "never",
           }),
-          thrownPublic: t.nullable("String", () => {
+          thrownPublic: G.nullable("String", () => {
             throw visible
           }),
-          failedPublic: t.nullable("String", () => Effect.fail(visible)),
-          authorization: t.nullable("String", {
+          failedPublic: G.nullable("String", () => Effect.fail(visible)),
+          authorization: G.nullable("String", {
             authorize: () => Effect.fail(visible),
             resolve: () => "never",
           }),
-          thrown: t.nullable("String", () => {
+          thrown: G.nullable("String", () => {
             throw secret
           }),
-          defect: t.nullable("String", () => Effect.die(secret)),
-          internal: t.nullable("String", () =>
+          defect: G.nullable("String", () => Effect.die(secret)),
+          internal: G.nullable("String", () =>
             Effect.fail(new PrivateError({ message: "private" })),
           ),
-          graphql: t.nullable("String", () => {
+          graphql: G.nullable("String", () => {
             throw new GraphQLError("private-graphql", {
               extensions: { code: "BAD_USER_INPUT" },
             })
@@ -192,22 +191,22 @@ it.effect(
     Effect.gen(function* () {
       const report = reports()
       const subscription = G.subscription({
-        setup: t.events("String", {
+        setup: G.events("String", {
           subscribe: () => {
             throw secret
           },
         }),
-        stream: t.events("String", { subscribe: () => Stream.die(secret) }),
-        failed: t.events("String", {
+        stream: G.events("String", { subscribe: () => Stream.die(secret) }),
+        failed: G.events("String", {
           subscribe: () =>
             Stream.fail(new PrivateError({ message: "private" })),
         }),
-        publicSetup: t.events("String", {
+        publicSetup: G.events("String", {
           subscribe: () => {
             throw visible
           },
         }),
-        publicStream: t.events("String", {
+        publicStream: G.events("String", {
           subscribe: () => Stream.fail(visible),
         }),
       })
@@ -249,7 +248,7 @@ it.effect(
     Effect.gen(function* () {
       let calls = 0
       const subscription = G.subscription({
-        events: t.events("String", {
+        events: G.events("String", {
           args: { prefix: Schema.String },
           authorize: (value, args, ctx) =>
             Effect.map(Gate, (gate) => {
@@ -280,7 +279,7 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const subscription = G.subscription({
-        events: t.events("String", {
+        events: G.events("String", {
           subscribe: (_, __, ctx) =>
             Stream.fromEffect(Effect.map(Gate, () => ctx.tenant)),
         }),
@@ -322,7 +321,7 @@ it.effect(
 it.effect("telemetry defects cannot replace the original error", () =>
   Effect.gen(function* () {
     const definition = G.query({
-      broken: t.nullable("String", () => Effect.die(secret)),
+      broken: G.nullable("String", () => Effect.die(secret)),
     })
     const result = yield* execute(
       G.schema({ node, query, definition }),
@@ -347,7 +346,7 @@ it.effect("subscription interruption closes the source exactly once", () =>
   Effect.gen(function* () {
     let closed = 0
     const subscription = G.subscription({
-      events: t.events("String", {
+      events: G.events("String", {
         subscribe: () =>
           Stream.make("one", "two").pipe(
             Stream.onExit(() =>
@@ -378,7 +377,7 @@ it.effect(
       const stopped = yield* Deferred.make<void>()
       const report = reports()
       const definition = G.query({
-        waiting: t.field("String", () =>
+        waiting: G.field("String", () =>
           Effect.gen(function* () {
             yield* Deferred.succeed(started, undefined)
             return yield* Effect.never
@@ -401,7 +400,7 @@ it.effect("graphql-js serialization errors are masked and reported", () =>
   Effect.gen(function* () {
     const report = reports()
     const definition = G.query({
-      invalid: t.nullable("Float", () => Number.NaN),
+      invalid: G.nullable("Float", () => Number.NaN),
     })
     const result = yield* Testing.execute(
       G.schema({ node, query, definition }),
@@ -428,7 +427,7 @@ it.effect("a JavaScript Promise authorization cannot bypass the gate", () =>
         return "private"
       },
     }
-    const definition = G.query({ blocked: t.nullable("String", options) })
+    const definition = G.query({ blocked: G.nullable("String", options) })
     // Model an untyped JS caller without weakening the public TypeScript API.
     Reflect.set(options, "authorize", () => Promise.resolve(false))
     const result = yield* Testing.execute(
@@ -447,10 +446,10 @@ it.effect(
     Effect.gen(function* () {
       const G = createBuilder<{}, null>()
       const query = G.query({
-        check: G.fields.field("Boolean", (_, __, context) => context === null),
+        check: G.field("Boolean", (_, __, context) => context === null),
       })
       const subscription = G.subscription({
-        check: G.fields.events("Boolean", {
+        check: G.events("Boolean", {
           subscribe: (_, __, context) => Stream.succeed(context === null),
         }),
       })
@@ -472,7 +471,7 @@ it.effect(
     Effect.gen(function* () {
       let setups = 0
       const subscription = G.subscription({
-        dated: t.events("String", {
+        dated: G.events("String", {
           args: { at: Schema.Date, label: Schema.optionalKey(Schema.String) },
           subscribe: (_, { at }) => {
             setups++

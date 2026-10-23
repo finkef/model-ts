@@ -616,7 +616,7 @@ The repository is a Bun workspace.
 | `bun run typecheck`      | Type-checks sources and tests, including the type tests. |
 | `bun run test`           | Runs the test suite with the in-memory DynamoDB engine.  |
 | `bun run dynamodb:start` | Starts DynamoDB Local in Docker on port 8000.            |
-| `bun run test:local`     | Runs DynamoDB and GraphQL tests against DynamoDB Local.  |
+| `bun run test:local`     | Runs the DynamoDB tests against DynamoDB Local.          |
 | `bun run lint`           | Checks sources and tests with oxlint.                    |
 | `bun run format`         | Formats with oxfmt.                                      |
 | `bun run format:check`   | Checks formatting with oxfmt.                            |

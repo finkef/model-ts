@@ -3,7 +3,6 @@ import { Effect, Schema } from "effect"
 import { createBuilder, type Register } from "../src/GraphQL.ts"
 import {
   G,
-  t,
   definitions,
   Identity,
   Scope,
@@ -24,18 +23,18 @@ it.effect(
         },
         {
           ...definitions.identity.fields,
-          related: t.connection("Identity", { nodes: () => [value] }),
+          related: G.connection("Identity", { nodes: () => [value] }),
         },
       )
       const query = G.query({
-        identities: t.connection("Identity", { nodes: () => [value] }),
-        search: t.connection("Success", {
+        identities: G.connection("Identity", { nodes: () => [value] }),
+        search: G.connection("Success", {
           nodes: () => [
             value,
             { id: "item-1", kind: "item" as const, name: "one" },
           ],
         }),
-        edge: t.field("SuccessEdge", () => ({ cursor: "opaque", node: value })),
+        edge: G.field("SuccessEdge", () => ({ cursor: "opaque", node: value })),
       })
       const built = G.schema({ ...definitions, identity, query })
       const result = yield* G.execute(
@@ -92,7 +91,7 @@ it.effect(
         scopes: Schema.optionalKey(Schema.NullOr(Schema.Array(Scope))),
       }) {}
       const query = G.query({
-        echo: t.list("Scope", {
+        echo: G.list("Scope", {
           args: {
             scope: Schema.optionalKey(
               Scope.annotate({ description: "Optional permission." }),
@@ -143,7 +142,7 @@ it("unregistered literal schemas report the input path and registration fix", ()
     Schema.Struct({ scopes: Schema.Array(Unregistered) }),
   )
   const query = G.query({
-    value: t.field("Boolean", { args: { input: Input }, resolve: () => true }),
+    value: G.field("Boolean", { args: { input: Input }, resolve: () => true }),
   })
   expect(() => G.schema({ ...definitions, query })).toThrow(
     "Unregistered literal or union schema at UnregisteredInput.scopes; register this exact model schema with GraphQL.enum(name, schema) and export the definition in the schema barrel",
@@ -158,7 +157,7 @@ it.effect("singleton enum identity is local to the assembled schema", () =>
       values: { ONLY: "only:value" },
     })
     const query = local.query({
-      value: local.fields.field("Single", {
+      value: local.field("Single", {
         args: { value: Schema.optionalKey(Single) },
         resolve: (_, args) => args.value ?? "only:value",
       }),
@@ -170,7 +169,7 @@ it.effect("singleton enum identity is local to the assembled schema", () =>
     ).toEqual({ data: { value: "ONLY" } })
     const unregistered = createBuilder<{}>()
     const missing = unregistered.query({
-      value: unregistered.fields.field("Boolean", {
+      value: unregistered.field("Boolean", {
         args: { value: Single },
         resolve: () => true,
       }),
@@ -191,7 +190,7 @@ it("rejects two enum names for one model schema instead of choosing by barrel or
     values,
   })
   const query = local.query({
-    value: local.fields.field("One", () => "user:read"),
+    value: local.field("One", () => "user:read"),
   })
   expect(() => local.schema({ one, two, query })).toThrow(
     "Enum schema is registered as both One and Two; use a separate Schema.Literals instance for each enum",

@@ -10,7 +10,6 @@ import {
 } from "../src/GraphQL.ts"
 
 const G = createBuilder<{}>()
-const t = G.fields
 const execute = (
   query: Parameters<typeof G.schema>[0],
   source: string,
@@ -19,23 +18,23 @@ const execute = (
 
 test("DateTime accepts Date and string outputs, normalizes ISO inputs, and decodes native Dates", async () => {
   const query = G.query({
-    date: t.field("DateTime", () => new Date("2026-10-22T08:00:00Z")),
-    iso: t.field("DateTime", () => "2026-10-22T10:00:00+02:00"),
-    echo: t.field("DateTime", {
+    date: G.field("DateTime", () => new Date("2026-10-22T08:00:00Z")),
+    iso: G.field("DateTime", () => "2026-10-22T10:00:00+02:00"),
+    echo: G.field("DateTime", {
       args: { at: DateTime },
       resolve: (_, { at }) => {
         expect(typeof at).toBe("string")
         return at
       },
     }),
-    native: t.field("DateTime", {
+    native: G.field("DateTime", {
       args: { at: Schema.Date },
       resolve: (_, { at }) => {
         expect(at).toBeInstanceOf(Date)
         return at
       },
     }),
-    codec: t.field("DateTime", {
+    codec: G.field("DateTime", {
       args: { at: input("DateTime", Schema.DateFromString) },
       resolve: (_, { at }) => {
         expect(at).toBeInstanceOf(Date)
@@ -69,11 +68,11 @@ test("DateTime accepts Date and string outputs, normalizes ISO inputs, and decod
 test("JSON keeps permissive JS variables/outputs but rejects enum literals, including nested ones", async () => {
   const value = { date: new Date("2026-10-22T00:00:00Z"), missing: undefined }
   const query = G.query({
-    echo: t.field("JSON", {
+    echo: G.field("JSON", {
       args: { value: JSONValue },
       resolve: (_, { value }) => value,
     }),
-    output: t.field("JSON", () => value),
+    output: G.field("JSON", () => value),
   })
   expect(
     await execute({ query }, "query($value:JSON!){echo(value:$value) output}", {
@@ -117,7 +116,7 @@ test("custom scalar codecs retain brands and metadata, and decode list arguments
   const url = local.scalar("URL", URL)
   const zone = local.scalar("TimeZone", TimeZone)
   const query = local.query({
-    urls: local.fields.list("URL", {
+    urls: local.list("URL", {
       args: { urls: Schema.Array(url.schema), zone: zone.schema },
       resolve: (_, args) => {
         expect(args.zone).toBe("Europe/Berlin")
@@ -172,15 +171,15 @@ test("existing scalar behavior is preserved without mutating the instance; built
   const date = local.scalar("DateTime", dates)
   const jsonType = local.scalar("JSON", json)
   const query = local.query({
-    zone: local.fields.field("TimeZone", {
+    zone: local.field("TimeZone", {
       args: { value: zone.schema },
       resolve: (_, { value }) => value,
     }),
-    date: local.fields.field("DateTime", {
+    date: local.field("DateTime", {
       args: { value: date.schema },
       resolve: (_, { value }) => value,
     }),
-    json: local.fields.field("JSON", {
+    json: local.field("JSON", {
       args: { value: jsonType.schema },
       resolve: (_, { value }) => value,
     }),
@@ -224,7 +223,7 @@ class Patch extends Schema.Class<Patch>("Patch")(
 
 test("input descriptions, omission, explicit clearing, nested lists and defaults", async () => {
   const query = G.query({
-    patch: t.field("JSON", {
+    patch: G.field("JSON", {
       args: {
         input: Patch,
         count: G.default(Schema.Int, 3),
@@ -267,7 +266,7 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
 
 test("null diagnostics do not blame a permissive JSON field when another field fails", async () => {
   const query = G.query({
-    value: t.field("String", {
+    value: G.field("String", {
       args: {
         json: Schema.optionalKey(JSONValue),
         label: Schema.NonEmptyString,
@@ -285,7 +284,7 @@ test("DateTime decoding reaches native Date fields inside input classes and list
     stored: Schema.DateFromString,
   }) {}
   const query = G.query({
-    times: t.list("DateTime", {
+    times: G.list("DateTime", {
       args: { input: Times },
       resolve: (_, { input }) => {
         expect(input).toBeInstanceOf(Times)
@@ -310,7 +309,7 @@ test("codec scalars such as TimeZone require quoted string literals", async () =
   const local = createBuilder<Register<typeof zoneValue, "TimeZone">>()
   const zone = local.scalar("TimeZone", zoneValue)
   const query = local.query({
-    zone: local.fields.field("TimeZone", {
+    zone: local.field("TimeZone", {
       args: { value: zone.schema },
       resolve: (_, { value }) => value,
     }),

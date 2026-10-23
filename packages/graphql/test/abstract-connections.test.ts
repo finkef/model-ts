@@ -41,7 +41,6 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const G = createBuilder<Types>()
-      const t = G.fields
       const searchNodes = [
         { id: "author", __typename: "Author" },
         { id: "book", __typename: "Book" },
@@ -57,7 +56,7 @@ it.effect(
           Identified,
           {},
           {
-            catalog: t.connection("Media", {
+            catalog: G.connection("Media", {
               nodes: () => [{ id: "ebook" }],
             }),
           },
@@ -67,21 +66,21 @@ it.effect(
           Identified,
           { resolveType: () => "Ebook" },
           {
-            id: t.id(),
-            editions: t.connection("Edition", { nodes: editions }),
+            id: G.id(),
+            editions: G.connection("Edition", { nodes: editions }),
           },
         ),
         edition: G.interface(
           "Edition",
           Identified,
           { resolveType: () => "PaperbackEdition" },
-          { id: t.id() },
+          { id: G.id() },
         ),
         event: G.interface(
           "Event",
           Identified,
           { resolveType: () => "SigningEvent" },
-          { id: t.id() },
+          { id: G.id() },
         ),
         ebook: G.object("Ebook", Identified, { implements: ["Media"] }, {}),
         paperback: G.object(
@@ -96,18 +95,18 @@ it.effect(
           { implements: ["Event"] },
           {},
         ),
-        author: G.object("Author", Author, {}, { id: t.id() }),
-        book: G.object("Book", Book, {}, { id: t.id() }),
-        publisher: G.object("Publisher", Publisher, {}, { id: t.id() }),
-        review: G.object("Review", Review, {}, { id: t.id() }),
-        series: G.object("Series", Series, {}, { id: t.id() }),
+        author: G.object("Author", Author, {}, { id: G.id() }),
+        book: G.object("Book", Book, {}, { id: G.id() }),
+        publisher: G.object("Publisher", Publisher, {}, { id: G.id() }),
+        review: G.object("Review", Review, {}, { id: G.id() }),
+        series: G.object("Series", Series, {}, { id: G.id() }),
         shelf: G.object(
           "Shelf",
           Shelf,
           {},
           {
-            id: t.id(),
-            editions: t.connection("Edition", { nodes: editions }),
+            id: G.id(),
+            editions: G.connection("Edition", { nodes: editions }),
           },
         ),
         searchResult: G.union("SearchResult", SearchResult, {
@@ -115,12 +114,12 @@ it.effect(
           resolveType: (value) => value.__typename,
         }),
         query: G.query({
-          store: t.field("Store", () => ({ id: "store" })),
-          shelf: t.field("Shelf", () => searchNodes[5]),
-          events: t.connection("Event", {
+          store: G.field("Store", () => ({ id: "store" })),
+          shelf: G.field("Shelf", () => searchNodes[5]),
+          events: G.connection("Event", {
             nodes: () => [{ id: "signing" }],
           }),
-          search: t.connection("SearchResult", {
+          search: G.connection("SearchResult", {
             args: { query: Schema.String },
             nodes: (_, { query }) => (query ? searchNodes : []),
           }),

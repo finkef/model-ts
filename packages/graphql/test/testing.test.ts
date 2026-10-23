@@ -7,7 +7,6 @@ import { identityFor, type Identity } from "./app/api/context.ts"
 import { schema } from "./app/api/schema.ts"
 import { ListId, OrganizationId, WorkspaceId } from "./app/store/ids.ts"
 import { List, Workspace } from "./app/store/models.ts"
-import { testTable } from "./utils.ts"
 
 const context = {
   identity: identityFor(OrganizationId.make("org"), [
@@ -23,7 +22,7 @@ const workspace = new Workspace({
   createdAt: new Date("2026-10-23T00:00:00Z"),
 })
 const request = { source: '{workspace(id:"workspace"){id name}}' }
-layer(testTable())((it) => {
+layer(Sandbox.layerMemory())((it) => {
   it.effect(
     "uses the file's layer and returns plain snapshot-friendly data",
     () =>
@@ -60,7 +59,7 @@ it.effect(
         extensions: { code: "FORBIDDEN" },
       })
       expect(Object.getPrototypeOf(result.errors?.[0])).toBe(Object.prototype)
-    }).pipe(Effect.provide(testTable())),
+    }).pipe(Effect.provide(Sandbox.layerMemory())),
 )
 
 it.effect(
@@ -125,7 +124,7 @@ it.effect(
         +   updatedAt: "2026-10-22T08:00:00.000Z"
             workspaceId: "workspace""
       `)
-    }).pipe(Effect.provide(testTable())),
+    }).pipe(Effect.provide(Sandbox.layerMemory())),
 )
 
 const anonymous = identityFor(null, [])
@@ -243,7 +242,7 @@ it.effect("client requests fill the default context per call", () =>
         },
       }
     `)
-  }).pipe(Effect.provide(testTable())),
+  }).pipe(Effect.provide(Sandbox.layerMemory())),
 )
 
 it.effect("client subscriptions use the same context factory", () =>
@@ -300,7 +299,7 @@ it.effect("client subscriptions use the same context factory", () =>
         ],
       }
     `)
-  }).pipe(Effect.provide(testTable())),
+  }).pipe(Effect.provide(Sandbox.layerMemory())),
 )
 
 class CurrentIdentity extends Context.Service<CurrentIdentity, Identity>()(
@@ -336,7 +335,7 @@ it.effect("an Effect context factory reads services for each request", () =>
         .pipe(Effect.provideService(CurrentIdentity, anonymous))).errors?.[0]
         ?.extensions,
     ).toEqual({ code: "FORBIDDEN" })
-  }).pipe(Effect.provide(testTable())),
+  }).pipe(Effect.provide(Sandbox.layerMemory())),
 )
 
 it.effect(
@@ -376,5 +375,5 @@ it.effect(
       expect((yield* app.request(invalid)).errors?.[0]?.message).toContain(
         "Unterminated string",
       )
-    }).pipe(Effect.provide(testTable())),
+    }).pipe(Effect.provide(Sandbox.layerMemory())),
 )

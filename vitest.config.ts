@@ -30,8 +30,7 @@ const graphqlResolve = {
 /**
  * DynamoDB tests run twice: against the in-memory engine (dynamodb:memory)
  * and against DynamoDB Local (dynamodb:local). The project picks the table
- * the tests get; nothing reads an environment variable. GraphQL Sandbox
- * operation tests use the same selection in graphql:memory / graphql:local.
+ * the tests get; nothing reads an environment variable.
  */
 export default defineConfig({
   test: {
@@ -53,31 +52,8 @@ export default defineConfig({
         resolve: graphqlResolve,
         test: {
           name: "graphql",
-          exclude: ["test/testing.test.ts", "test/connections.test.ts"],
           root: "packages/graphql",
           include: ["test/**/*.test.ts"],
-          env,
-        },
-      },
-      {
-        resolve: graphqlResolve,
-        test: {
-          name: "graphql:memory",
-          root: "packages/graphql",
-          include: ["test/testing.test.ts", "test/connections.test.ts"],
-          provide: { dynamodb: "memory" },
-          env,
-        },
-      },
-      {
-        resolve: graphqlResolve,
-        test: {
-          name: "graphql:local",
-          root: "packages/graphql",
-          include: ["test/testing.test.ts", "test/connections.test.ts"],
-          provide: { dynamodb: "local" },
-          testTimeout: 30_000,
-          hookTimeout: 30_000,
           env,
         },
       },

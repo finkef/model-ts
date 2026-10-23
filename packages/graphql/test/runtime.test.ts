@@ -16,7 +16,7 @@ import {
   type AppContext,
   type Identity,
 } from "./app/api/context.ts"
-import { GraphQL, t } from "./app/api/graphql.ts"
+import { GraphQL } from "./app/api/graphql.ts"
 import * as definitions from "./app/api/graphql/index.ts"
 import { execute } from "./app/api/handler.ts"
 import { schema } from "./app/api/schema.ts"
@@ -224,14 +224,9 @@ test("declared fields need no model AST inspection", async () => {
     },
   })
   const local = createBuilder<Register<typeof model, "Explicit">>()
-  const object = local.object(
-    "Explicit",
-    model,
-    {},
-    { value: local.fields.string() },
-  )
+  const object = local.object("Explicit", model, {}, { value: local.string() })
   // Use a scalar query to include the object without requiring a new registry ref.
-  const query = local.query({ hello: local.fields.field("String", () => "ok") })
+  const query = local.query({ hello: local.field("String", () => "ok") })
   const built = local.schema({ object, query })
   expect(
     await local
@@ -333,7 +328,7 @@ class OuterInput extends Schema.Class<OuterInput>("OuterInput")({
   nested: NestedInput,
 }) {}
 const NestedQuery = GraphQL.query({
-  nested: t.field("String", {
+  nested: GraphQL.field("String", {
     args: { input: OuterInput },
     resolve: (_, { input }) =>
       input instanceof OuterInput && input.nested instanceof NestedInput
@@ -364,7 +359,7 @@ test("decode failure without declared UserInputError remains BAD_USER_INPUT", as
 })
 test("nested decode path in UserInputError", async () => {
   const query = GraphQL.query({
-    nestedEdge: t.field("ListEdge", {
+    nestedEdge: GraphQL.field("ListEdge", {
       args: { input: OuterInput },
       errors: [UserInputError],
       resolve: () =>
@@ -393,11 +388,11 @@ test("nested decode path in UserInputError", async () => {
 
 test("errors preserve public/internal/defect policy", async () => {
   const query = GraphQL.query({
-    internal: t.nullable("String", () =>
+    internal: GraphQL.nullable("String", () =>
       Effect.fail(new DynamoDBError({ operation: "secret", cause: "secret" })),
     ),
-    defect: t.nullable("String", () => Effect.die(new Error("secret"))),
-    thrown: t.nullable("String", () => {
+    defect: GraphQL.nullable("String", () => Effect.die(new Error("secret"))),
+    thrown: GraphQL.nullable("String", () => {
       throw new Error("secret")
     }),
   })
@@ -416,7 +411,7 @@ test("errors preserve public/internal/defect policy", async () => {
 test("internal errors cannot be exposed as result members", () => {
   expect(() => {
     const query = GraphQL.query({
-      bad: t.field("List", {
+      bad: GraphQL.field("List", {
         errors: [DynamoDBError],
         resolve: () =>
           Effect.fail(new DynamoDBError({ operation: "x", cause: "x" })),
@@ -516,10 +511,9 @@ test("default page size is 20, independently of the maximum of 100", async () =>
     public: [ItemNotFoundError],
     internal: [DynamoDBError, ItemDecodeError],
   })
-  const t = local.fields
-  const object = local.object(List, { id: t.id() })
+  const object = local.object(List, { id: local.id() })
   const query = local.query({
-    page: t.connection("List", {
+    page: local.connection("List", {
       nodes: () =>
         List.load(List.key(ListId.make("l1"))).pipe(
           Effect.map((list) => Array.from({ length: 120 }, () => list)),
@@ -545,6 +539,6 @@ test("tag, not overridden class identifier, supplies object name", () => {
     { id: Schema.String },
   ) {}
   const local = createBuilder<Register<typeof Tagged>>()
-  const object = local.object(Tagged, { id: local.fields.id() })
+  const object = local.object(Tagged, { id: local.id() })
   expect(object["~name"]).toBe("ActualTag")
 })

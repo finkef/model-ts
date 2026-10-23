@@ -1,5 +1,5 @@
 import { Effect, Context, Schema } from "effect"
-import { GraphQL, t, type Register } from "../graphql.ts"
+import { GraphQL, type Register } from "../graphql.ts"
 import { Fixture, List, Workspace, Status, Token, fixture } from "../models.ts"
 export class Guard extends Context.Service<
   Guard,
@@ -26,61 +26,61 @@ export const ListType = GraphQL.object(
   "List",
   List,
   {},
-  { id: t.id(), name: t.string() },
+  { id: GraphQL.id(), name: GraphQL.string() },
 )
 export const WorkspaceType = GraphQL.object(
   "Workspace",
   Workspace,
   {},
-  { id: t.id(), title: t.string() },
+  { id: GraphQL.id(), title: GraphQL.string() },
 )
 export const FixtureType = GraphQL.object(
   "Fixture",
   Fixture,
   {},
   {
-    id: t.id(),
-    text: t.string({
+    id: GraphQL.id(),
+    text: GraphQL.string({
       description: "Text",
       deprecationReason: "Prefer computed",
       authorize: () => true,
     }),
-    integer: t.int(),
-    float: t.float(),
-    boolean: t.boolean(),
-    date: t.dateTime(),
-    json: t.json(),
-    custom: t.field("Token"),
-    status: t.field("Status"),
-    workspace: t.field("Workspace"),
-    nodes: t.list("List"),
-    edge: t.field("ListEdge"),
-    page: t.connection("List"),
-    pageInfo: t.field("PageInfo"),
-    optional: t.nullable.string(),
-    nullish: t.nullable.string(),
-    option: t.nullable.string(),
-    maybeNodes: t.nullable(t.list("List")),
-    maybeWorkspace: t.nullable("Workspace", {
+    integer: GraphQL.int(),
+    float: GraphQL.float(),
+    boolean: GraphQL.boolean(),
+    date: GraphQL.dateTime(),
+    json: GraphQL.json(),
+    custom: GraphQL.field("Token"),
+    status: GraphQL.field("Status"),
+    workspace: GraphQL.field("Workspace"),
+    nodes: GraphQL.list("List"),
+    edge: GraphQL.field("ListEdge"),
+    page: GraphQL.connection("List"),
+    pageInfo: GraphQL.field("PageInfo"),
+    optional: GraphQL.nullable.string(),
+    nullish: GraphQL.nullable.string(),
+    option: GraphQL.nullable.string(),
+    maybeNodes: GraphQL.nullable(GraphQL.list("List")),
+    maybeWorkspace: GraphQL.nullable("Workspace", {
       description: "Optional workspace",
       authorize: () => true,
     }),
-    maybeStatus: t.nullable("Status"),
-    nullableElements: t.list(t.nullable("String")),
-    computed: t.field("String", (source) => source.text),
-    resolvedList: t.list("List", () => fixture.nodes),
-    resolvedConnection: t.connection("List", {
+    maybeStatus: GraphQL.nullable("Status"),
+    nullableElements: GraphQL.list(GraphQL.nullable("String")),
+    computed: GraphQL.field("String", (source) => source.text),
+    resolvedList: GraphQL.list("List", () => fixture.nodes),
+    resolvedConnection: GraphQL.connection("List", {
       nodes: () => fixture.nodes,
       totalCount: () => fixture.nodes.length,
     }),
-    guarded: t.field("String", {
+    guarded: GraphQL.field("String", {
       authorize: () => Guard.useSync((s) => s.allowed),
       resolve: () => Fetch.useSync((s) => s.value),
     }),
-    plainNullable: t.nullable("String", () => undefined),
-    effectNullable: t.nullable("String", () => Effect.succeed(undefined)),
+    plainNullable: GraphQL.nullable("String", () => undefined),
+    effectNullable: GraphQL.nullable("String", () => Effect.succeed(undefined)),
   },
 )
 export const Query = GraphQL.query({
-  fixture: t.field("Fixture", () => fixture),
+  fixture: GraphQL.field("Fixture", () => fixture),
 })

@@ -36,8 +36,7 @@
   },
   "scripts": {
     "build": "tsc -b",
-    "test": "vitest run --project graphql --project graphql:memory --root ../..",
-    "test:local": "vitest run --project graphql:local --root ../..",
+    "test": "vitest run --project graphql --root ../..",
     "test:compiler": "bun test/compiler.ts",
     "test:scale": "bun test/scale.ts",
     "test:types": "vitest run --project graphql:types --root ../.."

@@ -35,7 +35,6 @@ interface Types
     Register<typeof Missing> {}
 
 export const G = createBuilder<Types, { readonly allowed: boolean }>()
-export const t = G.fields
 export const scope = G.enum("Scope", Scope, {
   description: "Permissions granted to an API key.",
   values: {
@@ -56,8 +55,8 @@ export const identity = G.interface(
       value.id.startsWith("item") ? "Item" : "Alternative",
   },
   {
-    id: t.id(),
-    label: t.field("String", {
+    id: G.id(),
+    label: G.field("String", {
       description: "Inherited label.",
       authorize: (_, __, context) => Effect.succeed(context.allowed),
       resolve: (value) =>
@@ -70,9 +69,9 @@ export const item = G.object(
   Item,
   { implements: ["Identity"] },
   {
-    name: t.string({ deprecationReason: "Use label instead." }),
-    label: t.field("String", (value) => value.name),
-    change: t.nullable("Item", {
+    name: G.string({ deprecationReason: "Use label instead." }),
+    label: G.field("String", (value) => value.name),
+    change: G.nullable("Item", {
       errors: [Missing],
       resolve: (value) => value,
     }),
@@ -83,7 +82,7 @@ export const alternative = G.object(
   Alternative,
   { implements: ["Identity"] },
   {
-    change: t.nullable("Item", {
+    change: G.nullable("Item", {
       errors: [Missing],
       resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
     }),
@@ -94,32 +93,32 @@ export const success = G.union("Success", Success, {
   members: ["Item", "Alternative"],
   resolveType: (value) => (value.kind === "item" ? "Item" : "Alternative"),
 })
-export const error = G.interface("Error", ErrorModel, { message: t.string() })
+export const error = G.interface("Error", ErrorModel, { message: G.string() })
 export const missing = G.object(Missing, { implements: ["Error"] }, {})
 const ScopeInput = G.input(
   "ScopeInput",
   Schema.Struct({ scopes: Schema.Array(Scope) }),
 )
 export const query = G.query({
-  status: t.field("Status", () => "ACTIVE"),
-  echo: t.field("Scope", {
+  status: G.field("Status", () => "ACTIVE"),
+  echo: G.field("Scope", {
     args: { scope: Scope },
     resolve: (_, args) => args.scope,
   }),
-  input: t.list("Scope", {
+  input: G.list("Scope", {
     args: { input: ScopeInput },
     resolve: (_, args) => args.input.scopes,
   }),
-  identity: t.field("Identity", () => ({ id: "alt-1" })),
-  item: t.field("Item", () => ({
+  identity: G.field("Identity", () => ({ id: "alt-1" })),
+  item: G.field("Item", () => ({
     id: "item-1",
     kind: "item" as const,
     name: "one",
   })),
-  change: t.nullable("Item", { errors: [Missing], resolve: () => null }),
+  change: G.nullable("Item", { errors: [Missing], resolve: () => null }),
 })
 export const mutation = G.mutation({
-  change: t.nullable("Success", {
+  change: G.nullable("Success", {
     errors: [Missing],
     result: {
       name: "ChangeResult",
@@ -133,18 +132,18 @@ export const mutation = G.mutation({
           ? { id: "alt-1", kind: "alternative" as const }
           : { id: "item-1", kind: "item" as const, name: "one" },
   }),
-  markAllRead: t.nullable("Item", {
+  markAllRead: G.nullable("Item", {
     result: { name: "MarkAllReadResult" },
     errors: [],
     resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
   }),
-  denied: t.nullable("Item", {
+  denied: G.nullable("Item", {
     errors: [Missing],
     authorize: () => false,
     resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
   }),
-  empty: t.nullable("Item", { errors: [Missing], resolve: () => null }),
-  broken: t.nullable("Item", {
+  empty: G.nullable("Item", { errors: [Missing], resolve: () => null }),
+  broken: G.nullable("Item", {
     errors: [Missing],
     resolve: () => Effect.die("private"),
   }),
@@ -162,4 +161,4 @@ export const definitions = {
   mutation,
 }
 export const schema = G.schema(definitions)
-export const literalProbe = t.field("Status", () => "ACTIVE")
+export const literalProbe = G.field("Status", () => "ACTIVE")
