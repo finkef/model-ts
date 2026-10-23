@@ -38,3 +38,4 @@ export {
   type DynamoDBReads,
   type DynamoDBStatics,
 } from "./Provider.ts"
+export { type ItemCache, RequestCache } from "./RequestCache.ts"

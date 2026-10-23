@@ -238,7 +238,7 @@ describe("bulk", () => {
             makePost(i + 2).operation("put"),
           ),
           makePost(1, { title: "Overwritten" }).operation("put", {
-            IgnoreExistence: true,
+            ignoreExistence: true,
           }),
           makePost(0).operation("put"),
         ]),

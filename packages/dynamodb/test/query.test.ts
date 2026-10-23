@@ -90,7 +90,7 @@ describe("query", () => {
     }),
   )
 
-  it.effect("follows every page with FetchAllPages", () =>
+  it.effect("follows every page with fetchAllPages", () =>
     Effect.gen(function* () {
       const sandbox = yield* Sandbox
       yield* sandbox.seed(...[1, 2, 3, 4, 5].map((n) => makePost(n)))
@@ -99,7 +99,7 @@ describe("query", () => {
       const all = yield* Post.query({
         ...byAuthor("ada"),
         Limit: 2,
-        FetchAllPages: true,
+        fetchAllPages: true,
       })
 
       expect(firstPage).toHaveLength(2)

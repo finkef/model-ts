@@ -39,7 +39,7 @@ export interface ConditionParams {
  */
 export interface PutOptions extends ConditionParams {
   /** Overwrite an existing item instead of failing with `KeyExistsError`. */
-  readonly IgnoreExistence?: boolean | undefined
+  readonly ignoreExistence?: boolean | undefined
 }
 
 /**
@@ -157,7 +157,7 @@ export const isTransactionOperation = (
  * Creates `item`, failing the transaction when its key exists. Rolled back
  * by deleting it, if it still has the version this write gave it.
  *
- * With `IgnoreExistence` or a condition of your own the put may replace an
+ * With `ignoreExistence` or a condition of your own the put may replace an
  * existing item, which a rollback could not restore, so it has no rollback:
  * it stays applied when a later transaction of the same `bulk` call fails.
  *
@@ -169,7 +169,7 @@ export const put = (
 ): TransactionOperation => ({
   action: { _tag: "Put", item, ...options },
   rollback:
-    options?.IgnoreExistence || options?.ConditionExpression !== undefined
+    options?.ignoreExistence || options?.ConditionExpression !== undefined
       ? undefined
       : undoCreate(item, docVersion(item) ?? 0),
 })
