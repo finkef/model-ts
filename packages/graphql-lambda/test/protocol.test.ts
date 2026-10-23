@@ -1,7 +1,7 @@
 import { expect, it } from "@effect/vitest"
 import { Deferred, Effect, Fiber, Tracer } from "effect"
-import { GatewayMessages, Topic, createWebSocketHandler } from "../src/index.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { Topic, createWebSocketHandler } from "../src/index.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import {
   publish,
   stream,

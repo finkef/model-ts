@@ -13,7 +13,6 @@ import {
 import {
   Gateway,
   GatewayError,
-  GatewayMessages,
   PublishedEvent,
   Subscription,
   SubscriptionOperation,
@@ -22,8 +21,8 @@ import {
 } from "../src/index.ts"
 import { operationPubSub } from "../src/internal/source.ts"
 import { withFilter } from "../src/PubSub.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import { Storage } from "../src/Storage.ts"
 import { loadOperation } from "./fixtures.ts"
 import { publish } from "./fixtures.ts"

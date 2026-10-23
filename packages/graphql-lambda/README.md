@@ -555,27 +555,30 @@ Effect interruption is preserved.
 
 ## Testing
 
-`PubSub.DynamoDB.layerMemory()` runs without AWS. `layerLocal()` uses a running
-DynamoDB Local instance and manages an isolated table for the layer's scope.
-Both expose `PubSub.DynamoDB.Sandbox` for inspection and seeding; use that service
-for the transport table when a test also has an application-table sandbox.
+Import test helpers from `@model-ts/graphql-lambda/Sandbox` and local adapters
+from `@model-ts/graphql-lambda/Local`. Production entry points do not import or
+re-export these modules, so production bundles do not load the sandbox engine,
+local HTTP server, or memory Gateway.
 
-`Gateway.layerMemory` records posts and closes without network calls.
+`Sandbox.layerMemory()` runs without AWS. `Sandbox.layerLocal()` uses a running
+DynamoDB Local instance and manages an isolated table for the layer's scope.
+Both expose `Sandbox` for inspection, seeding and raw-row removal
+with `remove(key)`; use that service for the transport table when a test also
+has an application-table sandbox.
+
+`Sandbox.layerGateway` records posts and closes without network calls.
 `GatewayMessages.all` and `.closed` expose them; `.markGone(connectionId)`
 simulates a 410 response on posts.
 
-A sandbox write does not invoke a Lambda automatically. Construct a stream
-record from the stored event using DynamoDB AttributeValue encoding and pass it
-to the delivery handler. This example exercises registration through delivery
-using the quick start's public schema:
+`Local.delivery` subscribes to the sandbox during layer construction and invokes
+the production stream handler for subsequent writes. `Local.Delivery.settled`
+waits until every write committed before the call has been attempted. This
+example exercises registration through delivery using the quick start's schema:
 
 ```ts
-import { marshall } from "@aws-sdk/util-dynamodb"
-import {
-  GatewayMessages,
-  PublishedEvent,
-  type WebSocketEvent,
-} from "@model-ts/graphql-lambda"
+import type { WebSocketEvent } from "@model-ts/graphql-lambda"
+import * as Local from "@model-ts/graphql-lambda/Local"
+import { Sandbox, GatewayMessages } from "@model-ts/graphql-lambda/Sandbox"
 
 const socketEvent = (
   routeKey: string,
@@ -607,42 +610,159 @@ export const deliveryExample = Effect.gen(function* () {
     invocation,
   )
 
-  const id = yield* PubSub.publish(announcements, "Hello")
-  const sandbox = yield* PubSub.DynamoDB.Sandbox
-  const stored = yield* sandbox.get({ PK: `GRAPHQL#EVENT#${id}`, SK: "EVENT" })
-  const event = yield* Schema.decodeUnknownEffect(PublishedEvent)(stored)
-  const result = yield* delivery(
-    {
-      Records: [
-        {
-          eventName: "INSERT",
-          dynamodb: {
-            NewImage: marshall(event.encode()),
-            SequenceNumber: "1",
-          },
-        },
-      ],
-    },
-    invocation,
-  )
-  const messages = yield* (yield* GatewayMessages).all
-  return { result, messages }
+  yield* PubSub.publish(announcements, "Hello")
+  yield* (yield* Local.Delivery).settled
+  return yield* (yield* GatewayMessages).all
 }).pipe(
   Effect.provide(
-    Layer.mergeAll(
-      PubSub.DynamoDB.layerMemory(),
-      Gateway.layerMemory,
-      errorReporting,
+    Local.delivery(delivery).pipe(
+      Layer.provideMerge(
+        Layer.mergeAll(
+          Sandbox.layerMemory(),
+          Sandbox.layerGateway,
+          errorReporting,
+        ),
+      ),
     ),
   ),
 )
 ```
 
 Run `deliveryExample` with `Effect.runPromise` or an Effect test runner. Expect
-an empty `result.batchItemFailures` array and two recorded messages:
-`connection_ack` and `next` with `data.announcement` equal to `"Hello"`.
-Replace `layerMemory()` with `layerLocal()` to exercise the same flow against a
-DynamoDB Local instance.
+two recorded messages: `connection_ack` and `next` with `data.announcement`
+equal to `"Hello"`. Replace `layerMemory()` with `layerLocal()` to exercise the
+same flow against DynamoDB Local.
+
+Delivery processes available records in commit order, in batches of at most
+100 (`batchSize` changes the limit). Each batch gets a fresh Lambda context.
+Failed batches and `batchItemFailures` are logged with their sequence numbers;
+local delivery makes one attempt and continues. `settled` confirms attempts,
+not successful delivery. Production retry configuration is unchanged.
+
+To provide a deterministic barrier even while the consumer is busy, `settled`
+writes a unique row under the reserved `GRAPHQL#LOCAL#DELIVERY#…` prefix and
+waits for it to pass through the consumer. Marker INSERT and REMOVE records are
+filtered before invoking the handler. The marker is deleted before `settled`
+returns, keeping sandbox snapshots and diffs clean. Cleanup also runs when a
+waiter is interrupted. A closed scope or stopped stream fails waiters with
+`Local.DeliveryStoppedError`. Calls with no intervening writes are safe, as are
+concurrent calls. Build the delivery layer before publishing; it does not replay old rows.
+
+## Local development
+
+`Local.layer` runs the same HTTP, WebSocket and stream handlers on an Effect HTTP
+server. HTTP payloads follow API Gateway format 2.0, including cookies. WebSocket
+connections use `$connect`, `$default` and `$disconnect`, the persisted-context
+codec, and the production delivery and filtering logic.
+
+Install a platform adapter in your application. With Effect `4.0.5`, use
+`@effect/platform-node@4.0.5` and pin `@effect/platform-node-shared@4.0.5` as well;
+the `4.0.6` adapters require Effect `^4.0.6`. This package has no platform runtime
+dependency. The following server extends the quick start's schema, `options`,
+and `errorReporting` application layer:
+
+```ts
+import { createServer } from "node:http"
+import { NodeHttpServer, NodeRuntime } from "@effect/platform-node"
+import * as Local from "@model-ts/graphql-lambda/Local"
+import { Sandbox } from "@model-ts/graphql-lambda/Sandbox"
+
+const port = 4000
+const local = Local.layer({
+  http: createHttpHandler({
+    ...options,
+    graphiql: { subscriptionUrl: `ws://localhost:${port}/graphql` },
+  }),
+  webSocket: createWebSocketHandler(options),
+  stream: PubSub.DynamoDB.streamHandler(options),
+  keepAlive: "30 seconds",
+}).pipe(
+  Layer.provide(
+    Layer.mergeAll(
+      Sandbox.layerMemory(),
+      errorReporting,
+      NodeHttpServer.layer(createServer, {
+        port,
+        websocket: {
+          handleProtocols: (protocols) =>
+            protocols.has("graphql-transport-ws")
+              ? "graphql-transport-ws"
+              : false,
+        },
+      }),
+    ),
+  ),
+)
+
+NodeRuntime.runMain(Layer.launch(local))
+```
+
+Open `http://localhost:4000/graphql` for GraphiQL. The default `path` is
+`/graphql` and the default `stage` is `local`. Both are configurable. Omit
+`http`, `webSocket`, or `stream` when the application does not use that transport.
+`path` is typed as an absolute path. Invalid batch sizes or keep-alive durations
+are configuration defects, not layer failures. Keep-alive pings are disabled
+unless `keepAlive` supplies an interval; they call
+the production `keepAlive` function for each open connection.
+
+`latency` delays HTTP requests before their handler runs, so the app's loading
+states can be exercised locally. Pass a duration, or a function that returns
+the delay for each request as an Effect. The function can read a `Ref` that
+the app or an end-to-end test changes at runtime, and can exempt requests that
+should stay fast; its services become requirements of the layer. WebSocket
+messages and stream delivery are never delayed, so `settled` stays fast.
+
+```ts
+const latency = yield * Ref.make<Duration.Input>(Duration.zero)
+
+Local.layer({
+  http,
+  webSocket,
+  latency: (event) =>
+    event.headers["x-skip-latency"]
+      ? Effect.succeed(Duration.zero)
+      : Ref.get(latency),
+})
+
+// Later, e.g. from a local-only control endpoint:
+yield * Ref.set(latency, "5 seconds")
+```
+
+The application supplies `HttpServer.HttpServer`; Effect's generic upgrade API
+does not expose subprotocol selection. Configure the platform's upgrade handler
+to select `graphql-transport-ws`, as above, especially when clients offer multiple
+protocols. Other Effect server adapters can be used with the same selection.
+
+The layer provides only `Local.Delivery` (`settled` is a no-op when `stream` is
+omitted). Its socket-backed `Gateway` is private to the handlers it runs, so it
+does not replace the application's Gateway. It requires all other services used
+by the handlers, and the PubSub sandbox when `stream` is supplied. Gateway
+posts and closes ignore the persisted management endpoint. Unknown or closed
+connections fail with `GatewayError` and `gone: true`. Server closes use 1000;
+`DeleteConnection` does not accept an application close code, and AWS does not
+document a guaranteed close code for that operation. Binary WebSocket messages
+close with 1003. Disconnect cleanup runs on either peer closing and on scope
+shutdown; one connection's failure is logged without stopping the server.
+
+`Local.LambdaContext` supplies a fresh `awsRequestId`, local function/log metadata,
+and a decreasing `getRemainingTimeInMillis` with a fifteen-minute budget. This is
+metadata, not an enforced invocation timeout. Handlers accepting that shape need
+no context configuration. For middleware-specific fields, both `Local.layer`
+and `Local.delivery` require a factory:
+
+```ts
+Local.layer({
+  http: middlewareHttpHandler,
+  lambdaContext: ({ context }) => ({
+    ...context,
+    user: localUser,
+  }),
+})
+```
+
+The factory runs for every HTTP request, WebSocket route invocation and stream
+batch. Its `event` is the Lambda-shaped event and `context` is the default local
+context. It must return a context accepted by all supplied handlers.
 
 ## Executors
 

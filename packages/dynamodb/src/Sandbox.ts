@@ -8,7 +8,8 @@
  * - `Sandbox.layerLocal()`: a new table on DynamoDB Local, deleted when the
  *   layer's scope closes.
  *
- * Both print the same diff, so snapshot tests pass against either.
+ * Both print the same diff, so snapshot tests pass against either, and both
+ * emit the table's change records as DynamoDB Streams would.
  *
  * ```ts
  * it.effect("renames a post", () =>
@@ -35,7 +36,7 @@ import {
   DynamoDBDocumentClient,
   ScanCommand,
 } from "@aws-sdk/lib-dynamodb"
-import { Context, Effect, Layer, Schema } from "effect"
+import { Context, Effect, Layer, Schema, type Scope, type Stream } from "effect"
 import { DynamoDB, type DynamoDBOptions } from "./DynamoDB.ts"
 import type { ItemEncodeError } from "./Errors.ts"
 import { formatSnapshotDiff } from "./internal/diff.ts"
@@ -45,11 +46,14 @@ import {
   type MemoryEngine,
 } from "./internal/memory/engine.ts"
 import { memoryClientConfig } from "./internal/memory/handler.ts"
+import { makeMemoryStream } from "./internal/memory/stream.ts"
 import { snapshotKey } from "./internal/snapshot.ts"
+import { streamChanges } from "./internal/streams.ts"
 import { createTableCommand, marshallOptions } from "./internal/table.ts"
 import type { RawItem } from "./Item.ts"
 import type { Key } from "./Keys.ts"
 import type { CursorOptions } from "./Pagination.ts"
+import type { StreamRecord } from "./Stream.ts"
 
 /**
  * Every item of a table, keyed by `JSON.stringify([PK, SK])`. Use
@@ -80,6 +84,27 @@ export interface SandboxService {
   readonly diff: (before: TableSnapshot) => Effect.Effect<string>
   /** The stored item at `key`. */
   readonly get: (key: Key) => Effect.Effect<RawItem | undefined>
+  /**
+   * Subscribes to the table's stream. The stream carries a record for every
+   * write committed after the subscription, in commit order, and ends with
+   * the scope. Subscribe before writing:
+   *
+   * ```ts
+   * const changes = yield* sandbox.changes
+   * yield* post.update({ title: "Renamed" })
+   * const [record] = yield* changes.pipe(Stream.take(1), Stream.runCollect)
+   * ```
+   *
+   * On DynamoDB Local this reads the table's real stream and needs
+   * `@aws-sdk/client-dynamodb-streams`.
+   *
+   * @since 7.1.0
+   */
+  readonly changes: Effect.Effect<
+    Stream.Stream<StreamRecord>,
+    never,
+    Scope.Scope
+  >
 }
 
 /**
@@ -118,16 +143,18 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
     options: SandboxOptions = {},
   ): Layer.Layer<Sandbox | DynamoDB> =>
     Layer.unwrap(
-      Effect.sync(() => {
-        const engine = makeMemoryEngine()
-        const client = memoryClientConfig(engine)
+      Effect.gen(function* () {
         const tableName = newTableName()
+        const stream = yield* makeMemoryStream(tableName)
+        const engine = makeMemoryEngine({ onChange: stream.onChange })
+        const client = memoryClientConfig(engine)
         return Layer.merge(
           Layer.succeed(
             Sandbox,
             make(tableName, {
               write: (items) => writeItems(engine, tableName, items),
               read: async () => structuredClone(engine.snapshot(tableName)),
+              changes: stream.changes,
             }),
           ),
           DynamoDB.layer({ ...withCursors(options), tableName, client }),
@@ -165,19 +192,28 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
           (documents) => Effect.sync(() => documents.destroy()),
         )
         const tableName = newTableName()
-        yield* Effect.acquireRelease(
-          Effect.promise(() => documents.send(createTableCommand(tableName))),
+        const { TableDescription } = yield* Effect.acquireRelease(
+          Effect.promise(() =>
+            documents.send(createTableCommand(tableName, { stream: true })),
+          ),
           () =>
             Effect.promise(() =>
               documents.send(new DeleteTableCommand({ TableName: tableName })),
             ),
         )
+        const streamArn = TableDescription?.LatestStreamArn
+        if (!streamArn) {
+          return yield* Effect.die(
+            new Error(`DynamoDB Local created ${tableName} without a stream`),
+          )
+        }
         return Layer.merge(
           Layer.succeed(
             Sandbox,
             make(tableName, {
               write: (items) => batchWrite(documents, tableName, items),
               read: () => scan(documents, tableName),
+              changes: streamChanges(client, streamArn),
             }),
           ),
           DynamoDB.layer({ ...withCursors(rest), tableName, client }),
@@ -202,6 +238,7 @@ const withCursors = <O extends SandboxOptions>(options: O) => ({
 interface Backend {
   readonly write: (items: ReadonlyArray<RawItem>) => Promise<void>
   readonly read: () => Promise<TableSnapshot>
+  readonly changes: SandboxService["changes"]
 }
 
 const make = (tableName: string, backend: Backend) => {
@@ -220,6 +257,7 @@ const make = (tableName: string, backend: Backend) => {
     diff: (before) =>
       Effect.map(snapshot, (after) => formatSnapshotDiff(before, after)),
     get: (key) => Effect.map(snapshot, (table) => table[snapshotKey(key)]),
+    changes: backend.changes,
   })
 }
 

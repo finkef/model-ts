@@ -8,11 +8,10 @@ import {
 } from "../src/Identifiers.ts"
 import {
   PublishedEvent,
-  GatewayMessages,
   createWebSocketHandler,
   keepAlive,
 } from "../src/index.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import { Storage } from "../src/Storage.ts"
 import { loadOperation } from "./fixtures.ts"
 import { loadConnection } from "./fixtures.ts"

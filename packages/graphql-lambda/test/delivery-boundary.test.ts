@@ -1,7 +1,6 @@
 import { expect, it } from "@effect/vitest"
 import { Cause, Deferred, Effect, Fiber, Logger } from "effect"
 import {
-  GatewayMessages,
   Gateway,
   GatewayError,
   ConnectionId,
@@ -11,6 +10,7 @@ import {
   createWebSocketHandler,
 } from "../src/index.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages } from "../src/Sandbox.ts"
 import { Storage } from "../src/Storage.ts"
 import { Greeting, Identity, builderOptions, builderTopic } from "./builder.ts"
 import { publish } from "./fixtures.ts"

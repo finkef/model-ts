@@ -3,12 +3,11 @@ import { Cause, Effect, Logger } from "effect"
 import {
   ConnectionId,
   ConnectionRejected,
-  GatewayMessages,
   TransportError,
   createWebSocketHandler,
   type JsonObject,
 } from "../src/index.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import { loadConnection } from "./fixtures.ts"
 import { options, testLayer, websocket, wsEvent } from "./fixtures.ts"
 

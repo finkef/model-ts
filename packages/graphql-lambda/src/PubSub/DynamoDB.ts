@@ -1,11 +1,5 @@
 import { DynamoDB, type DynamoDBOptions } from "@model-ts/dynamodb"
-import {
-  Sandbox as TableSandbox,
-  type SandboxService,
-  type SandboxOptions,
-  type LocalSandboxOptions,
-} from "@model-ts/dynamodb/Sandbox"
-import { Context, Effect, Layer } from "effect"
+import { Effect, Layer } from "effect"
 import { StorageError } from "../Errors.ts"
 import { createPublishedEvent } from "../internal/publication.ts"
 import { storageLayer } from "../internal/storage.ts"
@@ -44,22 +38,6 @@ export const layerFrom = <A, E, R>(
   database: Layer.Layer<DynamoDB | A, E, R>,
 ): Layer.Layer<Publisher | Storage, E, R> =>
   Layer.merge(storageLayer, publisherLayer).pipe(Layer.provide(database))
-
-export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
-  "@model-ts/graphql-lambda/PubSub/DynamoDB/Sandbox",
-) {}
-
-const sandboxLayer = (database: Layer.Layer<DynamoDB | TableSandbox>) =>
-  Layer.merge(
-    layerFrom(database),
-    Layer.effect(Sandbox, TableSandbox).pipe(Layer.provide(database)),
-  )
-
-export const layerMemory = (options: SandboxOptions = {}) =>
-  sandboxLayer(TableSandbox.layerMemory(options))
-
-export const layerLocal = (options: LocalSandboxOptions = {}) =>
-  sandboxLayer(TableSandbox.layerLocal(options))
 
 export type Options = Pick<DynamoDBOptions, "tableName" | "client">
 

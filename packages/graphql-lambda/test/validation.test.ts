@@ -16,7 +16,6 @@ import {
   ConnectionId,
   OperationId,
   Topic,
-  GatewayMessages,
   createHttpHandler,
   createWebSocketHandler,
   graphqlExecutor,
@@ -29,6 +28,7 @@ import {
   type Gateway,
 } from "../src/index.ts"
 import { JsonObject } from "../src/Models.ts"
+import { GatewayMessages } from "../src/Sandbox.ts"
 import { Storage } from "../src/Storage.ts"
 import { httpEvent, testLayer, wsEvent } from "./fixtures.ts"
 

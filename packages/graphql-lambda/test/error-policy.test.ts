@@ -17,12 +17,12 @@ import {
   createWebSocketHandler,
   graphqlExecutor,
   formatError,
-  GatewayMessages,
   Topic,
   type Result,
   TransportError,
 } from "../src/index.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages } from "../src/Sandbox.ts"
 import { publish } from "./fixtures.ts"
 import {
   connect,

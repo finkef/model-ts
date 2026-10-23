@@ -4,11 +4,10 @@ import {
   ConnectionId,
   OperationId,
   Topic,
-  GatewayMessages,
   createWebSocketHandler,
   type ContextRequest,
 } from "../src/index.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import { Storage } from "../src/Storage.ts"
 import {
   connect,

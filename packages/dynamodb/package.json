@@ -47,10 +47,16 @@
   },
   "peerDependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
+    "@aws-sdk/client-dynamodb-streams": "^3.0.0",
     "@aws-sdk/lib-dynamodb": "^3.0.0",
     "@aws-sdk/util-dynamodb": "^3.0.0",
     "@model-ts/core": "^7.0.0",
     "effect": "^4.0.5"
+  },
+  "peerDependenciesMeta": {
+    "@aws-sdk/client-dynamodb-streams": {
+      "optional": true
+    }
   },
   "engines": {
     "node": ">=22"

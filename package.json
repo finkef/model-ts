@@ -24,6 +24,7 @@
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1079.0",
+    "@aws-sdk/client-dynamodb-streams": "^3.1156.0",
     "@aws-sdk/client-eventbridge": "^3.1079.0",
     "@aws-sdk/lib-dynamodb": "^3.1079.0",
     "@aws-sdk/util-dynamodb": "^3.996.9",

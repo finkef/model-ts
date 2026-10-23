@@ -12,11 +12,23 @@ export const marshallOptions = (): MarshallOptions => ({
   removeUndefinedValues: true,
 })
 
-/** The table layout this library expects: PK/SK and GSI1 to GSI19. */
-export const createTableCommand = (TableName: string) =>
+/**
+ * The table layout this library expects: PK/SK and GSI1 to GSI19, with a
+ * stream of new and old images when `stream` is set.
+ */
+export const createTableCommand = (
+  TableName: string,
+  options: { readonly stream?: boolean } = {},
+) =>
   new CreateTableCommand({
     TableName,
     BillingMode: "PAY_PER_REQUEST",
+    ...(options.stream && {
+      StreamSpecification: {
+        StreamEnabled: true,
+        StreamViewType: "NEW_AND_OLD_IMAGES",
+      },
+    }),
     AttributeDefinitions: [
       { AttributeName: "PK", AttributeType: "S" },
       { AttributeName: "SK", AttributeType: "S" },

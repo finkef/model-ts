@@ -2,7 +2,6 @@ import { expect, it } from "@effect/vitest"
 import { Cause, Effect, Logger, Schema } from "effect"
 import {
   ConnectionId,
-  GatewayMessages,
   Gateway,
   GatewayError,
   OperationId,
@@ -12,7 +11,7 @@ import {
   type ContextRequest,
 } from "../src/index.ts"
 import { decodePersisted, encodePersisted } from "../src/internal/persisted.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import {
   options,
   publish,

@@ -26,6 +26,48 @@
   "env": { "builtin": true, "node": true },
   "overrides": [
     {
+      // Production modules never load test and local development code, so it
+      // stays out of application bundles.
+      "files": ["packages/*/src/**"],
+      "rules": {
+        "eslint/no-restricted-imports": [
+          "error",
+          {
+            "patterns": [
+              {
+                "group": [
+                  "**/Sandbox.ts",
+                  "**/Local.ts",
+                  "**/Testing.ts",
+                  "**/internal/memory/*",
+                  "**/internal/streams.ts",
+                  "**/internal/local/*",
+                  "@model-ts/*/Sandbox",
+                  "@model-ts/*/Local",
+                  "@model-ts/*/Testing",
+                  "@aws-sdk/client-dynamodb-streams",
+                  "effect/http",
+                  "effect/socket"
+                ],
+                "message": "Only Sandbox, Local and Testing modules may load test and local development code."
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "files": [
+        "packages/*/src/Sandbox.ts",
+        "packages/*/src/Local.ts",
+        "packages/*/src/Testing.ts",
+        "packages/*/src/internal/memory/**",
+        "packages/*/src/internal/streams.ts",
+        "packages/*/src/internal/local/**"
+      ],
+      "rules": { "eslint/no-restricted-imports": "off" }
+    },
+    {
       "files": ["**/test/**"],
       "plugins": ["vitest"],
       "env": { "vitest": true },
