@@ -24,6 +24,7 @@ import {
 } from "effect"
 import type { DynamoDB } from "../DynamoDB.ts"
 import { TableService } from "./service.ts"
+import { span } from "./tracing.ts"
 import {
   BulkWriteRollbackError,
   ConditionalCheckFailedError,
@@ -71,7 +72,7 @@ export const get: <A extends Key>(
   model: Decodable<A>,
   key: Key,
   options?: DynamoDB.ReadOptions,
-) => Effect.Effect<A, DynamoDB.GetError, DynamoDB> = Effect.fn("DynamoDB.get")(
+) => Effect.Effect<A, DynamoDB.GetError, DynamoDB> = Effect.fnUntraced(
   function* <A extends Key>(
     model: Decodable<A>,
     key: Key,
@@ -90,9 +91,10 @@ export const get: <A extends Key>(
     if (!Item) return yield* new ItemNotFoundError({ key: keyOf(key) })
     return yield* decodeItem(model, Item)
   },
+  span("DynamoDB.get"),
 )
 
-const loadItem = Effect.fn("DynamoDB.load")(function* <A extends Key>(
+const loadItem = Effect.fnUntraced(function* <A extends Key>(
   model: Decodable<A>,
   key: Key,
   options?: DynamoDB.LoadOptions,
@@ -107,7 +109,7 @@ const loadItem = Effect.fn("DynamoDB.load")(function* <A extends Key>(
     if (deleted) return markRecovered(yield* decodeItem(model, deleted))
   }
   return yield* new ItemNotFoundError({ key: keyOf(key) })
-})
+}, span("DynamoDB.load"))
 
 export function load<A extends Key>(
   model: Decodable<A>,
@@ -140,7 +142,7 @@ export const query: <const R extends DynamoDB.QueryModels>(
   params: DynamoDB.QueryParams,
   models: R,
 ) => Effect.Effect<DynamoDB.QueryResult<R>, DynamoDB.QueryError, DynamoDB> =
-  Effect.fn("DynamoDB.query")(function* <const R extends DynamoDB.QueryModels>(
+  Effect.fnUntraced(function* <const R extends DynamoDB.QueryModels>(
     params: DynamoDB.QueryParams,
     models: R,
   ) {
@@ -224,7 +226,7 @@ export const query: <const R extends DynamoDB.QueryModels>(
       _unknown: unknown,
       meta: { lastEvaluatedKey },
     } as DynamoDB.QueryResult<R>
-  })
+  }, span("DynamoDB.query"))
 
 export const queryItems = <A extends Key>(
   model: Decodable<A>,
@@ -251,7 +253,7 @@ export const paginate: <A extends Key>(
   input: PaginationInput,
   params: DynamoDB.PaginationParams,
 ) => Effect.Effect<PaginationResult<A>, DynamoDB.PaginateError, DynamoDB> =
-  Effect.fn("DynamoDB.paginate")(function* <A extends Key>(
+  Effect.fnUntraced(function* <A extends Key>(
     model: Decodable<A>,
     input: PaginationInput,
     params: DynamoDB.PaginationParams,
@@ -304,7 +306,7 @@ export const paginate: <A extends Key>(
       },
       edges,
     }
-  })
+  }, span("DynamoDB.paginate"))
 
 export const cursor = (
   item: ItemKeys,
@@ -337,7 +339,7 @@ const describeCause = (cause: unknown) =>
 export const put: <A extends TableItem>(
   item: A,
   options?: Operation.PutOptions,
-) => Effect.Effect<A, DynamoDB.PutError, DynamoDB> = Effect.fn("DynamoDB.put")(
+) => Effect.Effect<A, DynamoDB.PutError, DynamoDB> = Effect.fnUntraced(
   function* <A extends TableItem>(item: A, options?: Operation.PutOptions) {
     const db = yield* TableService
     yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
@@ -365,162 +367,170 @@ export const put: <A extends TableItem>(
     setDocVersion(item, Number(encoded._docVersion))
     return item
   },
+  span("DynamoDB.put"),
 )
 
 export const update: <A extends TableItem>(
   item: A,
   patch: Partial<ReturnType<A["values"]>>,
-) => Effect.Effect<A, DynamoDB.UpdateError, DynamoDB> = Effect.fn(
-  "DynamoDB.update",
-)(function* <A extends TableItem>(
-  item: A,
-  patch: Partial<ReturnType<A["values"]>>,
-) {
-  yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
-  const [next, operation] = Operation.update(item, patch)
-  if (isPair(operation)) {
-    yield* transaction(operation).pipe(
-      Effect.catchTag(
-        "TransactionCanceledError",
-        (
-          error,
-        ): Effect.Effect<
-          never,
-          RaceConditionError | KeyExistsError | TransactionCanceledError
-        > => {
-          const [created, removed] = error.cancellationReasons.map(
-            (reason) => reason.Code ?? "None",
-          )
-          if (error.cancellationReasons.length !== 2) return Effect.fail(error)
-          if (created === "ConditionalCheckFailed" && removed === "None") {
-            return Effect.fail(new KeyExistsError({ key: keyOf(next) }))
-          }
-          if (created === "None" && removed === "ConditionalCheckFailed") {
-            return Effect.fail(new RaceConditionError({ key: keyOf(item) }))
-          }
-          return Effect.fail(error)
-        },
+) => Effect.Effect<A, DynamoDB.UpdateError, DynamoDB> = Effect.fnUntraced(
+  function* <A extends TableItem>(
+    item: A,
+    patch: Partial<ReturnType<A["values"]>>,
+  ) {
+    yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
+    const [next, operation] = Operation.update(item, patch)
+    if (isPair(operation)) {
+      yield* transaction(operation).pipe(
+        Effect.catchTag(
+          "TransactionCanceledError",
+          (
+            error,
+          ): Effect.Effect<
+            never,
+            RaceConditionError | KeyExistsError | TransactionCanceledError
+          > => {
+            const [created, removed] = error.cancellationReasons.map(
+              (reason) => reason.Code ?? "None",
+            )
+            if (error.cancellationReasons.length !== 2)
+              return Effect.fail(error)
+            if (created === "ConditionalCheckFailed" && removed === "None") {
+              return Effect.fail(new KeyExistsError({ key: keyOf(next) }))
+            }
+            if (created === "None" && removed === "ConditionalCheckFailed") {
+              return Effect.fail(new RaceConditionError({ key: keyOf(item) }))
+            }
+            return Effect.fail(error)
+          },
+        ),
+      )
+      return next
+    }
+    const { _tag, item: _, ...options } = operation
+    return yield* put(next, options).pipe(
+      Effect.catchTag("ConditionalCheckFailedError", () =>
+        Effect.fail(new RaceConditionError({ key: keyOf(item) })),
       ),
     )
-    return next
-  }
-  const { _tag, item: _, ...options } = operation
-  return yield* put(next, options).pipe(
-    Effect.catchTag("ConditionalCheckFailedError", () =>
-      Effect.fail(new RaceConditionError({ key: keyOf(item) })),
-    ),
-  )
-})
+  },
+  span("DynamoDB.update"),
+)
 
 export const updateRaw: <A extends TableItem>(
   model: TableModel<A>,
   key: Key,
   attributes: Operation.UpdateRawAttributes<ReturnType<A["values"]>>,
   params?: Operation.UpdateRawParams,
-) => Effect.Effect<A, DynamoDB.UpdateRawError, DynamoDB> = Effect.fn(
-  "DynamoDB.updateRaw",
-)(function* <A extends TableItem>(
-  model: TableModel<A>,
-  key: Key,
-  attributes: Operation.UpdateRawAttributes<ReturnType<A["values"]>>,
-  params?: Operation.UpdateRawParams,
-) {
-  const db = yield* TableService
-  yield* Effect.annotateCurrentSpan(spanAttributes(model, key))
-  const update = yield* toUpdate(
-    Operation.updateRaw(model, key, attributes, params),
-  )
-  const { Attributes } = yield* db
-    .send(
-      "UpdateItem",
-      new UpdateCommand({
-        TableName: db.tableName,
-        ...update,
-        ReturnValues: "ALL_NEW",
-      }),
+) => Effect.Effect<A, DynamoDB.UpdateRawError, DynamoDB> = Effect.fnUntraced(
+  function* <A extends TableItem>(
+    model: TableModel<A>,
+    key: Key,
+    attributes: Operation.UpdateRawAttributes<ReturnType<A["values"]>>,
+    params?: Operation.UpdateRawParams,
+  ) {
+    const db = yield* TableService
+    yield* Effect.annotateCurrentSpan(spanAttributes(model, key))
+    const update = yield* toUpdate(
+      Operation.updateRaw(model, key, attributes, params),
     )
-    .pipe(
-      catchConditionalCheck(() =>
-        params?.ConditionExpression
-          ? new ConditionalCheckFailedError({ key: keyOf(key) })
-          : new ItemNotFoundError({ key: keyOf(key) }),
-      ),
-    )
-  // ReturnValues ALL_NEW returns the item; a missing one means it is gone.
-  if (!Attributes) return yield* new ItemNotFoundError({ key: keyOf(key) })
-  return yield* decodeItem(model, Attributes)
-})
+    const { Attributes } = yield* db
+      .send(
+        "UpdateItem",
+        new UpdateCommand({
+          TableName: db.tableName,
+          ...update,
+          ReturnValues: "ALL_NEW",
+        }),
+      )
+      .pipe(
+        catchConditionalCheck(() =>
+          params?.ConditionExpression
+            ? new ConditionalCheckFailedError({ key: keyOf(key) })
+            : new ItemNotFoundError({ key: keyOf(key) }),
+        ),
+      )
+    // ReturnValues ALL_NEW returns the item; a missing one means it is gone.
+    if (!Attributes) return yield* new ItemNotFoundError({ key: keyOf(key) })
+    return yield* decodeItem(model, Attributes)
+  },
+  span("DynamoDB.updateRaw"),
+)
 
 export const remove: (
   key: Key,
   params?: Operation.ConditionParams,
-) => Effect.Effect<void, DynamoDB.DeleteError, DynamoDB> = Effect.fn(
-  "DynamoDB.delete",
-)(function* (key: Key, params?: Operation.ConditionParams) {
-  const db = yield* TableService
-  yield* Effect.annotateCurrentSpan({ "model_ts.key": formatKey(key) })
-  yield* db
-    .send(
-      "DeleteItem",
-      new DeleteCommand({
-        TableName: db.tableName,
-        Key: keyOf(key),
-        ...params,
-      }),
-    )
-    .pipe(
-      catchConditionalCheck(
-        () => new ConditionalCheckFailedError({ key: keyOf(key) }),
-      ),
-    )
-})
+) => Effect.Effect<void, DynamoDB.DeleteError, DynamoDB> = Effect.fnUntraced(
+  function* (key: Key, params?: Operation.ConditionParams) {
+    const db = yield* TableService
+    yield* Effect.annotateCurrentSpan({ "model_ts.key": formatKey(key) })
+    yield* db
+      .send(
+        "DeleteItem",
+        new DeleteCommand({
+          TableName: db.tableName,
+          Key: keyOf(key),
+          ...params,
+        }),
+      )
+      .pipe(
+        catchConditionalCheck(
+          () => new ConditionalCheckFailedError({ key: keyOf(key) }),
+        ),
+      )
+  },
+  span("DynamoDB.delete"),
+)
 
 export const deleteItem: (
   item: TableItem,
   options?: Operation.DeleteOptions,
-) => Effect.Effect<void, DynamoDB.DeleteItemError, DynamoDB> = Effect.fn(
-  "DynamoDB.deleteItem",
-)(function* (item: TableItem, options?: Operation.DeleteOptions) {
-  yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
-  const { key, ...params } = Operation.deleteItem(item, options)
-  yield* remove(key, params).pipe(
-    Effect.catchTag("ConditionalCheckFailedError", () =>
-      Effect.fail(new RaceConditionError({ key: keyOf(item) })),
-    ),
-  )
-})
+) => Effect.Effect<void, DynamoDB.DeleteItemError, DynamoDB> =
+  Effect.fnUntraced(function* (
+    item: TableItem,
+    options?: Operation.DeleteOptions,
+  ) {
+    yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
+    const { key, ...params } = Operation.deleteItem(item, options)
+    yield* remove(key, params).pipe(
+      Effect.catchTag("ConditionalCheckFailedError", () =>
+        Effect.fail(new RaceConditionError({ key: keyOf(item) })),
+      ),
+    )
+  }, span("DynamoDB.deleteItem"))
 
 export const softDelete: <A extends TableItem>(
   item: A,
   options?: Operation.DeleteOptions,
-) => Effect.Effect<A, DynamoDB.SoftDeleteError, DynamoDB> = Effect.fn(
-  "DynamoDB.softDelete",
-)(function* <A extends TableItem>(item: A, options?: Operation.DeleteOptions) {
-  yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
-  const pair = Operation.softDelete(item, options)
-  const guarded = pair[0].action.ConditionExpression !== undefined
-  yield* transaction(pair).pipe(
-    Effect.catchTag(
-      "TransactionCanceledError",
-      (
-        error,
-      ): Effect.Effect<
-        never,
-        RaceConditionError | TransactionCanceledError
-      > => {
-        const [live, archived] = error.cancellationReasons
-        // Only the live-item guard failed: someone changed or removed it.
-        return guarded &&
-          error.cancellationReasons.length === 2 &&
-          live?.Code === "ConditionalCheckFailed" &&
-          archived?.Code === "None"
-          ? Effect.fail(new RaceConditionError({ key: keyOf(item) }))
-          : Effect.fail(error)
-      },
-    ),
-  )
-  return item
-})
+) => Effect.Effect<A, DynamoDB.SoftDeleteError, DynamoDB> = Effect.fnUntraced(
+  function* <A extends TableItem>(item: A, options?: Operation.DeleteOptions) {
+    yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
+    const pair = Operation.softDelete(item, options)
+    const guarded = pair[0].action.ConditionExpression !== undefined
+    yield* transaction(pair).pipe(
+      Effect.catchTag(
+        "TransactionCanceledError",
+        (
+          error,
+        ): Effect.Effect<
+          never,
+          RaceConditionError | TransactionCanceledError
+        > => {
+          const [live, archived] = error.cancellationReasons
+          // Only the live-item guard failed: someone changed or removed it.
+          return guarded &&
+            error.cancellationReasons.length === 2 &&
+            live?.Code === "ConditionalCheckFailed" &&
+            archived?.Code === "None"
+            ? Effect.fail(new RaceConditionError({ key: keyOf(item) }))
+            : Effect.fail(error)
+        },
+      ),
+    )
+    return item
+  },
+  span("DynamoDB.softDelete"),
+)
 
 // -----------------------------------------------------------------------------
 // Transactions
@@ -530,26 +540,27 @@ const MAX_TRANSACTION_ITEMS = 100
 
 export const bulk: (
   operations: Operation.BulkInput,
-) => Effect.Effect<void, DynamoDB.BulkError, DynamoDB> = Effect.fn(
-  "DynamoDB.bulk",
-)(function* (operations: Operation.BulkInput) {
-  const batches = yield* toBatches(operations)
-  yield* Effect.annotateCurrentSpan({
-    "model_ts.operations": batches.reduce((n, batch) => n + batch.length, 0),
-    "model_ts.transactions": batches.length,
-  })
-  yield* Effect.uninterruptible(writeAll(batches))
-  // Like `put`, a stored instance carries the version it was written with,
-  // so its next update or delete is checked against it.
-  for (const operation of batches.flat()) {
-    const action = Operation.isTransactionOperation(operation)
-      ? operation.action
-      : operation
-    if (action._tag === "Put" && !action.softDeleted) {
-      setDocVersion(action.item, docVersion(action.item) ?? 0)
+) => Effect.Effect<void, DynamoDB.BulkError, DynamoDB> = Effect.fnUntraced(
+  function* (operations: Operation.BulkInput) {
+    const batches = yield* toBatches(operations)
+    yield* Effect.annotateCurrentSpan({
+      "model_ts.operations": batches.reduce((n, batch) => n + batch.length, 0),
+      "model_ts.transactions": batches.length,
+    })
+    yield* Effect.uninterruptible(writeAll(batches))
+    // Like `put`, a stored instance carries the version it was written with,
+    // so its next update or delete is checked against it.
+    for (const operation of batches.flat()) {
+      const action = Operation.isTransactionOperation(operation)
+        ? operation.action
+        : operation
+      if (action._tag === "Put" && !action.softDeleted) {
+        setDocVersion(action.item, docVersion(action.item) ?? 0)
+      }
     }
-  }
-})
+  },
+  span("DynamoDB.bulk"),
+)
 
 /** Operations that always share one transaction, written with `bulk`. */
 const transaction = (
@@ -644,9 +655,7 @@ type TransactItem = NonNullable<
 const transactWrite: (
   items: ReadonlyArray<TransactItem>,
 ) => Effect.Effect<void, TransactionCanceledError | DynamoDBError, DynamoDB> =
-  Effect.fn("DynamoDB.transactWrite")(function* (
-    items: ReadonlyArray<TransactItem>,
-  ) {
+  Effect.fnUntraced(function* (items: ReadonlyArray<TransactItem>) {
     const db = yield* TableService
     const ClientRequestToken = crypto.randomUUID()
     yield* db
@@ -673,7 +682,7 @@ const transactWrite: (
           while: isTransient,
         }),
       )
-  })
+  }, span("DynamoDB.transactWrite"))
 
 const toTransactItem = (
   operation: Operation.WriteOperation,

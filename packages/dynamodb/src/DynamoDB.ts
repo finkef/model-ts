@@ -68,6 +68,7 @@ import type { Key } from "./Keys.ts"
 import { keyOf } from "./internal/keys.ts"
 import type { CursorOptions, PaginationOptions } from "./Pagination.ts"
 import { parseCursorKeys } from "./internal/pagination.ts"
+import { span } from "./internal/tracing.ts"
 import { type DynamoDBProvider, provider } from "./Provider.ts"
 
 /**
@@ -538,7 +539,7 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
         }) as Promise<CommandOutput<Op>>,
       catch: (cause) => new DynamoDBError({ operation, cause }),
     }).pipe(
-      Effect.withSpan(`DynamoDB.${operation}`, {
+      span(`DynamoDB.${operation}`, {
         kind: "client",
         attributes: definedOnly({
           "db.system.name": "aws.dynamodb",
@@ -615,7 +616,7 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
     }),
   ).pipe(
     RequestResolver.batchN(options.maxBatchSize ?? 100),
-    RequestResolver.withSpan("DynamoDB.batchGet"),
+    RequestResolver.withSpan("DynamoDB.batchGet", { captureStackTrace: false }),
   )
 
   return DynamoDB.of({

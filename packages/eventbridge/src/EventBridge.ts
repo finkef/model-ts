@@ -12,7 +12,7 @@ import {
   type PutEventsRequestEntry,
 } from "@aws-sdk/client-eventbridge"
 import { Provider } from "@model-ts/core"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, type Tracer } from "effect"
 import {
   EventBridgeError,
   EventEncodeError,
@@ -21,6 +21,11 @@ import {
   type ResultEntry,
 } from "./Errors.ts"
 import type { EventBridgeMembers } from "./Provider.ts"
+
+// Spans without stack traces, as in Effect's own modules: a captured trace
+// would only point into model-ts and costs an Error per call.
+const span = (name: string, options?: Tracer.SpanOptionsNoTrace) =>
+  Effect.withSpan(name, options, { captureStackTrace: false })
 
 /**
  * Anything that can be published: an address and an encoder. Every model
@@ -224,7 +229,7 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
             )
           : Effect.succeed(Entries),
       ),
-      Effect.withSpan("EventBridge.PutEvents", {
+      span("EventBridge.PutEvents", {
         kind: "producer",
         attributes: {
           "rpc.system": "aws-api",
@@ -241,7 +246,7 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
       }),
     )
 
-  const publish = Effect.fn("EventBridge.publish")(function* (
+  const publish = Effect.fnUntraced(function* (
     events: ReadonlyArray<PublishableEvent>,
   ) {
     yield* Effect.annotateCurrentSpan({
@@ -265,7 +270,7 @@ const make = (eventBusName: string, putEvents: PutEvents) => {
       return yield* new PublishError({ failedEntryCount, entries: results })
     }
     return results
-  })
+  }, span("EventBridge.publish"))
 
   return EventBridge.of({ eventBusName, publish })
 }
