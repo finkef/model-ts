@@ -154,7 +154,7 @@ it once, for example in a `ManagedRuntime`, and not with `Effect.provide` in
 each resolver.
 
 Query parameters are those of the AWS `QueryCommand` without `TableName`. Pass
-`FetchAllPages: true` to follow `LastEvaluatedKey` to the end. Each item is
+`fetchAllPages: true` to follow `LastEvaluatedKey` to the end. Each item is
 decoded with the model its `_tag` names. A model's `query` leaves out items of
 other models; `DynamoDB.query` returns them in `_unknown`. An item tagged with a
 requested model that doesn't decode is never skipped: the query fails with an
@@ -175,11 +175,65 @@ const program = Effect.gen(function* () {
 })
 ```
 
+## Request cache
+
+A Lambda invocation often loads the same item several times: once to check a
+permission, again in a nested resolver, again after updating it. Wrap the
+request in `DynamoDB.withRequestCache` and each key is read at most once:
+
+```ts
+export const handler = (event: APIGatewayProxyEvent) =>
+  runtime.runPromise(handle(event).pipe(DynamoDB.withRequestCache))
+```
+
+Inside the request, `load` and `loadMany` return what the request already
+knows about a key, including that it holds no item, and a load of a key that is
+already being read waits for that read. Keys the cache doesn't know still go
+through the batched read, so a GraphQL level of partly cached items costs one
+BatchGetItem for the rest.
+
+Writes keep the cache current. A successful `put`, `update`, `updateRaw`,
+`delete`, `softDelete` or bulk transaction (including its rollback) records the
+item it stored, as a read would return it, or that the key is now empty. The
+cache forgets a key instead when it can't know what the table holds:
+
+- after a failed or interrupted write, for example one that failed with
+  `RaceConditionError`, so a retry loads fresh data;
+- after writes of the key that ran at the same time, since their responses
+  don't show which one DynamoDB applied last;
+- after an `updateRaw` inside `bulk`, because transactions don't return items.
+
+A read never replaces what a write, an invalidation or a consistent read that
+started after it recorded. Every load gets its own copy of the item, so changing
+one instance never changes what the next load returns.
+
+`get`, `query`, `stream` and `paginate` always read the table, and
+`load(key, { consistentRead: true })` reads the table and refreshes the entry.
+
+The cache only sees writes made through model-ts in the same request. After
+writing some other way, call `RequestCache.invalidate(...keys)` (include
+`deletedKey(key)` when the write moved a soft-deleted item) or
+`RequestCache.clear`, or load with `consistentRead: true`. Create one cache per
+request, never one for the container: another invocation's writes would never
+reach it. When one request runs several effects, as GraphQL resolvers that each
+call `runPromise` do, make the cache once per request and provide it to each of
+them. Keep the `DynamoDB` layer in the shared runtime, so resolvers still share
+batches:
+
+```ts
+const execute = async (request: GraphQLRequest) => {
+  const cache = await runtime.runPromise(RequestCache.make)
+  const run = <A, E>(effect: Effect.Effect<A, E, AppServices>) =>
+    runtime.runPromise(Effect.provideService(effect, RequestCache, cache))
+  return graphql({ schema, source: request.query, contextValue: { run } })
+}
+```
+
 ## Writes
 
 | Member                                     | Does                                                                                                  | Fails with                 |
 | ------------------------------------------ | ----------------------------------------------------------------------------------------------------- | -------------------------- |
-| `post.put(options?)`                       | Stores a new item. Fails if the key exists unless `IgnoreExistence`.                                  | `DynamoDB.PutError`        |
+| `post.put(options?)`                       | Stores a new item. Fails if the key exists unless `ignoreExistence`.                                  | `DynamoDB.PutError`        |
 | `post.update(patch)`                       | Stores `post` with `patch` applied and returns the new instance. Moves the item when its keys change. | `DynamoDB.UpdateError`     |
 | `Post.updateRaw(key, attributes, params?)` | One UpdateItem without reading first; returns the updated item.                                       | `DynamoDB.UpdateRawError`  |
 | `post.delete(options?)`                    | Deletes `post` if it was not changed since it was read.                                               | `DynamoDB.DeleteItemError` |
@@ -263,7 +317,7 @@ Rolling back undoes the operations that know how: `put`, `softDelete` and an
 rollback that deletes an item it created only does so while the item still has
 the version it was written with; if something changed it since, the rollback
 fails and you get a `BulkWriteRollbackError` rather than a lost change. A `put`
-with `IgnoreExistence` or a condition of your own may replace an item, which
+with `ignoreExistence` or a condition of your own may replace an item, which
 cannot be restored, so it has no rollback. A same-key `update`, `updateRaw`,
 `delete` and `condition` have none, and a committed one stays applied. To make
 your own operation reversible, pass `{ action, rollback }`.

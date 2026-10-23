@@ -367,7 +367,7 @@ const program = Effect.gen(function* () {
 | Error                         | Raised when                                                                         |
 | ----------------------------- | ----------------------------------------------------------------------------------- |
 | `ItemNotFoundError`           | No item is stored under the key.                                                    |
-| `KeyExistsError`              | `put` found an item at the key (pass `IgnoreExistence: true` to overwrite).         |
+| `KeyExistsError`              | `put` found an item at the key (pass `ignoreExistence: true` to overwrite).         |
 | `ConditionalCheckFailedError` | A condition you passed was false.                                                   |
 | `RaceConditionError`          | The stored item changed since it was read (optimistic locking).                     |
 | `TransactionCanceledError`    | DynamoDB cancelled a transaction; `cancellationReasons` says why.                   |

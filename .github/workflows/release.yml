@@ -21,6 +21,8 @@ jobs:
       - name: Publish to npm
         uses: changesets/action@v1
         with:
+          # Bumps the versions and updates bun.lock to match.
+          version: bun run version
           publish: bun run release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

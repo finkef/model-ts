@@ -1,5 +1,16 @@
 import { CreateTableCommand } from "@aws-sdk/client-dynamodb"
+import type { marshallOptions as MarshallOptions } from "@aws-sdk/util-dynamodb"
 import { GSI_NAMES } from "./keys.ts"
+
+/**
+ * How the document client turns items into attribute values. The request
+ * cache stores written items with the same options, so they read back as the
+ * table returns them. A function, because the client adds its own settings
+ * to the object it is given.
+ */
+export const marshallOptions = (): MarshallOptions => ({
+  removeUndefinedValues: true,
+})
 
 /** The table layout this library expects: PK/SK and GSI1 to GSI19. */
 export const createTableCommand = (TableName: string) =>

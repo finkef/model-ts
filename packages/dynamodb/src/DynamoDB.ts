@@ -65,11 +65,13 @@ import { keyOf } from "./internal/keys.ts"
 import * as Table from "./internal/operations.ts"
 import { parseCursorKeys } from "./internal/pagination.ts"
 import { KEY } from "./internal/service.ts"
+import { marshallOptions } from "./internal/table.ts"
 import { span } from "./internal/tracing.ts"
 import type { Decodable, RawItem } from "./Item.ts"
 import type { Key } from "./Keys.ts"
 import type { CursorOptions, PaginationOptions } from "./Pagination.ts"
 import { type DynamoDBProvider, provider } from "./Provider.ts"
+import { RequestCache } from "./RequestCache.ts"
 
 /**
  * The DynamoDB operations this library sends, by name.
@@ -187,6 +189,23 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
   static readonly layer = (options: DynamoDBOptions): Layer.Layer<DynamoDB> =>
     Layer.effect(DynamoDB, make(options))
 
+  /**
+   * Runs `self` with a new, empty `RequestCache`: loads of a key that was
+   * already loaded or written in `self` return the known item without
+   * reading the table. Wrap one request with it, never the whole container.
+   *
+   * ```ts
+   * export const handler = (event: APIGatewayProxyEvent) =>
+   *   runtime.runPromise(handle(event).pipe(DynamoDB.withRequestCache))
+   * ```
+   *
+   * @since 7.0.0
+   */
+  static readonly withRequestCache = <A, E, R>(
+    self: Effect.Effect<A, E, R>,
+  ): Effect.Effect<A, E, Exclude<R, RequestCache>> =>
+    Effect.provideServiceEffect(self, RequestCache, RequestCache.make)
+
   // Reads
 
   /**
@@ -199,7 +218,8 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
   /**
    * Reads one item. Loads that run concurrently, e.g. inside
    * `Effect.forEach(..., { concurrency: "unbounded" })` or `Effect.all`, share
-   * BatchGetItem calls of up to 100 keys.
+   * BatchGetItem calls of up to 100 keys. With a `RequestCache`, a key the
+   * request already loaded or wrote is not read again.
    *
    * @since 7.0.0
    */
@@ -276,7 +296,7 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
 
   /**
    * Stores `item`. Fails with `KeyExistsError` when the key exists, unless
-   * `IgnoreExistence` is set or `options` bring their own condition (which
+   * `ignoreExistence` is set or `options` bring their own condition (which
    * fails with `ConditionalCheckFailedError`).
    *
    * @since 7.0.0
@@ -429,7 +449,7 @@ export declare namespace DynamoDB {
   > &
     Required<Pick<QueryCommandInput, "KeyConditionExpression">> & {
       /** Follow `LastEvaluatedKey` until every page is read. */
-      readonly FetchAllPages?: boolean | undefined
+      readonly fetchAllPages?: boolean | undefined
     }
 
   /** @since 7.0.0 */
@@ -470,7 +490,7 @@ export declare namespace DynamoDB {
   export type QueryItems<A> = Array<A> & { readonly meta: QueryMeta }
 
   /** @since 7.0.0 */
-  export type StreamParams = Omit<QueryParams, "FetchAllPages">
+  export type StreamParams = Omit<QueryParams, "fetchAllPages">
 
   /**
    * Query parameters for `paginate`. Page size, start key and direction come
@@ -480,7 +500,7 @@ export declare namespace DynamoDB {
    */
   export type PaginationParams = Omit<
     QueryParams,
-    "FetchAllPages" | "Limit" | "ExclusiveStartKey" | "ScanIndexForward"
+    "fetchAllPages" | "Limit" | "ExclusiveStartKey" | "ScanIndexForward"
   >
 }
 
@@ -521,7 +541,7 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
   const client = yield* Effect.acquireRelease(
     Effect.sync(() =>
       DynamoDBDocumentClient.from(new DynamoDBClient(options.client ?? {}), {
-        marshallOptions: { removeUndefinedValues: true },
+        marshallOptions: marshallOptions(),
       }),
     ),
     (client) => Effect.sync(() => client.destroy()),
@@ -610,12 +630,19 @@ const make = Effect.fnUntraced(function* (options: DynamoDBOptions) {
       const byKey = new Map(
         items.map((item) => [identify(item.PK, item.SK), item]),
       )
+      // Loads of the same key, perhaps from different requests, each get their
+      // own item, so that one cannot change what another decodes or caches.
+      const handedOut = new Set<RawItem>()
       for (const entry of entries) {
-        entry.completeUnsafe(
-          Exit.succeed(
-            byKey.get(identify(entry.request.key.PK, entry.request.key.SK)),
-          ),
+        const item = byKey.get(
+          identify(entry.request.key.PK, entry.request.key.SK),
         )
+        if (item && handedOut.has(item)) {
+          entry.completeUnsafe(Exit.succeed(structuredClone(item)))
+          continue
+        }
+        if (item) handedOut.add(item)
+        entry.completeUnsafe(Exit.succeed(item))
       }
     }),
   ).pipe(

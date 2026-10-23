@@ -44,10 +44,10 @@ describe("put", () => {
     }),
   )
 
-  it.effect("overwrites with IgnoreExistence", () =>
+  it.effect("overwrites with ignoreExistence", () =>
     Effect.gen(function* () {
       yield* makePost(1).put()
-      yield* makePost(1, { title: "Again" }).put({ IgnoreExistence: true })
+      yield* makePost(1, { title: "Again" }).put({ ignoreExistence: true })
       expect((yield* Post.get(makePost(1))).title).toBe("Again")
     }),
   )

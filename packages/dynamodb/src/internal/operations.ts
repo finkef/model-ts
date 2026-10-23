@@ -15,7 +15,9 @@ import {
 import {
   Cause,
   Clock,
+  Deferred,
   Effect,
+  Exit,
   Option,
   Result,
   Schedule,
@@ -45,6 +47,15 @@ import type {
 import type { ItemKeys, Key } from "../Keys.ts"
 import * as Operation from "../Operation.ts"
 import type { PaginationInput, PaginationResult } from "../Pagination.ts"
+import {
+  type Change,
+  copy,
+  currentCache,
+  keyOfRecord,
+  type ReadKind,
+  type SharedRead,
+  stored,
+} from "./cache.ts"
 import {
   applySoftDeletionFields,
   decodeItem,
@@ -99,17 +110,76 @@ const loadItem = Effect.fnUntraced(function* <A extends Key>(
   key: Key,
   options?: DynamoDB.LoadOptions,
 ) {
-  const db = yield* TableService
   yield* Effect.annotateCurrentSpan(spanAttributes(model, key))
   const consistentRead = options?.consistentRead ?? false
-  const raw = yield* db.getBatched(keyOf(key), consistentRead)
+  const raw = yield* read(keyOf(key), consistentRead)
   if (raw) return yield* decodeItem(model, raw)
   if (options?.recover) {
-    const deleted = yield* db.getBatched(deletedKey(key), consistentRead)
+    const deleted = yield* read(deletedKey(key), consistentRead)
     if (deleted) return markRecovered(yield* decodeItem(model, deleted))
   }
   return yield* new ItemNotFoundError({ key: keyOf(key) })
 }, span("DynamoDB.load"))
+
+/**
+ * The stored item at `key`. With a request cache, an eventually consistent
+ * read returns what the cache knows or waits for the read of the key in
+ * flight; otherwise it sends a batched read and records the result.
+ */
+const read = (
+  key: Key,
+  consistentRead: boolean,
+): Effect.Effect<RawItem | undefined, DynamoDBError, DynamoDB> =>
+  Effect.gen(function* () {
+    const db = yield* TableService
+    const cache = yield* currentCache
+    if (!cache) return yield* db.getBatched(key, consistentRead)
+    if (!consistentRead) {
+      const known = cache.lookup(db, key)
+      if (known) return known.item
+      const pending = cache.pending(db, key)
+      if (pending) {
+        const shared = yield* Deferred.await(pending)
+        // The load that sent the read was interrupted, so read again.
+        if (Option.isNone(shared)) return yield* read(key, consistentRead)
+        return copy(shared.value)
+      }
+    }
+    // Only the read itself can be interrupted, so a read the cache knows
+    // about always ends and never leaves the loads waiting for it hanging.
+    const item = yield* Effect.uninterruptibleMask((restore) =>
+      Effect.gen(function* () {
+        const kind: ReadKind = consistentRead
+          ? { _tag: "Consistent" }
+          : {
+              _tag: "Shared",
+              pending: yield* Deferred.make<SharedRead, DynamoDBError>(),
+            }
+        const token = cache.beginRead(db, key, kind)
+        return yield* restore(db.getBatched(key, consistentRead)).pipe(
+          Effect.onExit((exit) => {
+            cache.endRead(
+              db,
+              key,
+              token,
+              kind,
+              Exit.isSuccess(exit) ? { item: exit.value } : undefined,
+            )
+            if (kind._tag === "Consistent") return Effect.void
+            return Deferred.done(
+              kind.pending,
+              Exit.isSuccess(exit)
+                ? Exit.succeed(Option.some(exit.value))
+                : Cause.hasInterruptsOnly(exit.cause)
+                  ? Exit.succeed(Option.none())
+                  : Exit.failCause(exit.cause),
+            )
+          }),
+        )
+      }),
+    )
+    return copy(item)
+  })
 
 export function load<A extends Key>(
   model: Decodable<A>,
@@ -154,7 +224,7 @@ export const query: <const R extends DynamoDB.QueryModels>(
       }
     }
     const db = yield* TableService
-    const { FetchAllPages, ...input } = params
+    const { fetchAllPages, ...input } = params
     yield* Effect.annotateCurrentSpan({
       "model_ts.models": Object.values(models).map(nameOf),
       ...(input.IndexName && { "aws.dynamodb.index_name": input.IndexName }),
@@ -178,7 +248,7 @@ export const query: <const R extends DynamoDB.QueryModels>(
       )
       items.push(...(page.Items ?? []))
       lastEvaluatedKey = page.LastEvaluatedKey
-      if (!FetchAllPages) break
+      if (!fetchAllPages) break
     } while (lastEvaluatedKey)
 
     const entries: Array<[string, Decodable]> = Object.entries(models)
@@ -344,15 +414,17 @@ export const put: <A extends TableItem>(
   function* <A extends TableItem>(item: A, options?: Operation.PutOptions) {
     const db = yield* TableService
     yield* Effect.annotateCurrentSpan(spanAttributes(modelOf(item), item))
-    const { IgnoreExistence, ...params } = options ?? {}
+    const { ignoreExistence, ...params } = options ?? {}
     const encoded = yield* encodeItem(item)
+    // Taken before sending, so that changes to `item` meanwhile don't reach it.
+    const change = storedChange(keyOf(item), encoded)
     yield* db
       .send(
         "PutItem",
         new PutCommand({
           TableName: db.tableName,
           Item: encoded,
-          ConditionExpression: IgnoreExistence
+          ConditionExpression: ignoreExistence
             ? undefined
             : "attribute_not_exists(PK)",
           ...params,
@@ -364,6 +436,7 @@ export const put: <A extends TableItem>(
             ? new ConditionalCheckFailedError({ key: keyOf(item) })
             : new KeyExistsError({ key: keyOf(item) }),
         ),
+        cached([keyOf(item)], () => [change]),
       )
     setDocVersion(item, Number(encoded._docVersion))
     return item
@@ -450,6 +523,11 @@ export const updateRaw: <A extends TableItem>(
             ? new ConditionalCheckFailedError({ key: keyOf(key) })
             : new ItemNotFoundError({ key: keyOf(key) }),
         ),
+        cached([keyOf(key)], ({ Attributes }) => [
+          Attributes
+            ? storedChange(keyOf(key), Attributes)
+            : { _tag: "Changed", key: keyOf(key) },
+        ]),
       )
     // ReturnValues ALL_NEW returns the item; a missing one means it is gone.
     if (!Attributes) return yield* new ItemNotFoundError({ key: keyOf(key) })
@@ -478,6 +556,7 @@ export const remove: (
         catchConditionalCheck(
           () => new ConditionalCheckFailedError({ key: keyOf(key) }),
         ),
+        cached([keyOf(key)], () => [{ _tag: "Deleted", key: keyOf(key) }]),
       )
   },
   span("DynamoDB.delete"),
@@ -659,6 +738,7 @@ const transactWrite: (
   Effect.fnUntraced(function* (items: ReadonlyArray<TransactItem>) {
     const db = yield* TableService
     const ClientRequestToken = crypto.randomUUID()
+    const changes = items.flatMap(transactChange)
     yield* db
       .send(
         "TransactWriteItems",
@@ -682,6 +762,7 @@ const transactWrite: (
           times: 3,
           while: isTransient,
         }),
+        cached(items.flatMap(transactKey), () => changes),
       )
   }, span("DynamoDB.transactWrite"))
 
@@ -692,7 +773,7 @@ const toTransactItem = (
     const db = yield* TableService
     switch (operation._tag) {
       case "Put": {
-        const { _tag, item, softDeleted, IgnoreExistence, ...params } =
+        const { _tag, item, softDeleted, ignoreExistence, ...params } =
           operation
         const encoded = yield* encodeItem(item)
         return {
@@ -704,7 +785,7 @@ const toTransactItem = (
                   new Date(yield* Clock.currentTimeMillis).toISOString(),
                 )
               : encoded,
-            ConditionExpression: IgnoreExistence
+            ConditionExpression: ignoreExistence
               ? undefined
               : "attribute_not_exists(PK)",
             ...params,
@@ -727,6 +808,63 @@ const toTransactItem = (
       }
     }
   })
+
+// -----------------------------------------------------------------------------
+// Request cache
+// -----------------------------------------------------------------------------
+
+/**
+ * Records a write of `keys` in the request cache, if there is one, from
+ * before it is sent until it ends. A failed or interrupted write may or may
+ * not have reached the table, so the cache forgets every key it touched.
+ */
+const cached =
+  <A>(keys: ReadonlyArray<Key>, changes: (value: A) => ReadonlyArray<Change>) =>
+  <E, R>(write: Effect.Effect<A, E, R>): Effect.Effect<A, E, R | DynamoDB> =>
+    Effect.gen(function* () {
+      const cache = yield* currentCache
+      if (!cache) return yield* write
+      const db = yield* TableService
+      // Only the write itself can be interrupted, so a write the cache knows
+      // about always ends.
+      return yield* Effect.uninterruptibleMask((restore) => {
+        const ticket = cache.beginWrite(db, keys)
+        return Effect.onExit(restore(write), (exit) =>
+          Effect.sync(() =>
+            cache.endWrite(
+              ticket,
+              Exit.isSuccess(exit) ? changes(exit.value) : undefined,
+            ),
+          ),
+        )
+      })
+    })
+
+/** The item a write stores, as a read would return it. */
+const storedChange = (key: Key, item: RawItem): Change => {
+  const snapshot = stored(item)
+  return snapshot
+    ? { _tag: "Stored", key, item: snapshot }
+    : { _tag: "Changed", key }
+}
+
+/** The key a transaction item writes or checks. */
+const transactKey = (item: TransactItem): Array<Key> => {
+  const key = keyOfRecord(
+    item.Put?.Item ??
+      item.Update?.Key ??
+      item.Delete?.Key ??
+      item.ConditionCheck?.Key,
+  )
+  return key ? [key] : []
+}
+
+const transactChange = (item: TransactItem): Array<Change> => {
+  const [key] = transactKey(item)
+  if (!key || item.ConditionCheck) return []
+  if (item.Put?.Item) return [storedChange(key, item.Put.Item)]
+  return [{ _tag: item.Delete ? "Deleted" : "Changed", key }]
+}
 
 // -----------------------------------------------------------------------------
 // Helpers
