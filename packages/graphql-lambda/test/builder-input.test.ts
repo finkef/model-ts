@@ -9,12 +9,12 @@ import {
 import { Cause, Effect, Schema } from "effect"
 import { GraphQLError, GraphQLScalarType, parse } from "graphql"
 import {
-  GatewayMessages,
   TransportError,
   createHttpHandler,
   createWebSocketHandler,
 } from "../src/index.ts"
 import { JsonObject } from "../src/Models.ts"
+import { GatewayMessages } from "../src/Sandbox.ts"
 import { httpEvent, testLayer, wsEvent } from "./fixtures.ts"
 
 class PublicInput extends Schema.TaggedError<PublicInput>()("PublicInput", {

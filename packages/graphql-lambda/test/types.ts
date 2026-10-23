@@ -1,6 +1,7 @@
 import type { DynamoDB } from "@model-ts/dynamodb"
 import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Context, Effect, Layer, Schema, Stream } from "effect"
+import type { HttpServer } from "effect/http"
 import { GraphQLSchema } from "graphql"
 import { expectTypeOf } from "vitest"
 import { PubSub } from "../src/index.ts"
@@ -25,10 +26,12 @@ import {
   type HttpEvent,
   type GraphiQLOptions,
 } from "../src/index.ts"
+import * as GraphQLLocal from "../src/Local.ts"
 import { JsonObject } from "../src/Models.ts"
 import { publish } from "../src/PubSub.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
 import type * as Request from "../src/Request.ts"
+import { Sandbox as PubSubSandbox } from "../src/Sandbox.ts"
 import type { Storage, StorageService } from "../src/Storage.ts"
 import {
   builderOptions,
@@ -365,9 +368,9 @@ createWebSocketHandler({
   persistedContext: Schema.Unknown,
 })
 
-const memoryPubSub = PubSub.DynamoDB.layerMemory()
+const memoryPubSub = PubSubSandbox.layerMemory()
 expectTypeOf<Layer.Success<typeof memoryPubSub>>().toEqualTypeOf<
-  PubSub.Storage | PubSub.Publisher | PubSub.DynamoDB.Sandbox
+  PubSub.Storage | PubSub.Publisher | PubSubSandbox
 >()
 expectTypeOf<
   Extract<Layer.Success<typeof memoryPubSub>, DynamoDB | Sandbox>
@@ -375,3 +378,93 @@ expectTypeOf<
 
 // @ts-expect-error A supplied layer must provide the DynamoDB table service.
 PubSub.DynamoDB.layerFrom(Layer.empty)
+
+// Local adapters retain every application requirement and provide their own Gateway.
+const localHttp = GraphQLLocal.layer({ http: handler })
+expectTypeOf<Layer.Services<typeof localHttp>>().toEqualTypeOf<
+  ResolverService | IdentityService | HttpServer.HttpServer
+>()
+const localSocket = GraphQLLocal.layer({ webSocket: websocket })
+expectTypeOf<Layer.Services<typeof localSocket>>().toEqualTypeOf<
+  ResolverService | IdentityService | Storage | HttpServer.HttpServer
+>()
+const localAll = GraphQLLocal.layer({
+  http: allHttp,
+  webSocket: allHooks,
+  stream: PubSub.DynamoDB.streamHandler(independentOptions),
+  lambdaContext: ({ context }) => ({ cookie: context.awsRequestId }),
+})
+expectTypeOf<Layer.Services<typeof localAll>>().toEqualTypeOf<
+  | ResolverService
+  | IdentityService
+  | UpgradeService
+  | InitService
+  | Storage
+  | PubSubSandbox
+  | HttpServer.HttpServer
+>()
+// @ts-expect-error Middleware contexts cannot be replaced with the default Lambda context.
+GraphQLLocal.layer({ http: allHttp })
+GraphQLLocal.layer({
+  webSocket: allHooks,
+  // @ts-expect-error A custom context factory must supply the middleware fields.
+  lambdaContext: () => ({ cookie: 123 }),
+})
+const localCodec = GraphQLLocal.layer({
+  webSocket: schemaWebsocket,
+  stream: schemaDelivery,
+  lambdaContext: () => ({ cookie: "local" }),
+})
+expectTypeOf<Layer.Services<typeof localCodec>>().toEqualTypeOf<
+  | ResolverService
+  | ContextDecoder
+  | ContextEncoder
+  | Storage
+  | PubSubSandbox
+  | HttpServer.HttpServer
+>()
+const localDelivery = GraphQLLocal.delivery(schemaDelivery, {
+  lambdaContext: () => ({ cookie: "local" }),
+})
+expectTypeOf<Layer.Services<typeof localDelivery>>().toEqualTypeOf<
+  ResolverService | ContextDecoder | Storage | Gateway | PubSubSandbox
+>()
+// @ts-expect-error Standalone delivery retains its Gateway requirement.
+const missingLocalGateway: Layer.Layer<
+  GraphQLLocal.Delivery,
+  never,
+  ResolverService | ContextDecoder | Storage | PubSubSandbox
+> = localDelivery
+void missingLocalGateway
+// @ts-expect-error Standalone delivery also requires a factory for custom middleware context.
+GraphQLLocal.delivery(PubSub.DynamoDB.streamHandler(independentOptions))
+const customLocalDelivery = GraphQLLocal.delivery(
+  PubSub.DynamoDB.streamHandler(independentOptions),
+  { lambdaContext: () => ({ cookie: "local" }) },
+)
+expectTypeOf<Layer.Services<typeof customLocalDelivery>>().toEqualTypeOf<
+  ResolverService | IdentityService | Storage | Gateway | PubSubSandbox
+>()
+
+expectTypeOf<
+  Layer.Success<typeof localAll>
+>().toEqualTypeOf<GraphQLLocal.Delivery>()
+// @ts-expect-error Local's socket Gateway is private to its handlers.
+const exportedLocalGateway: Layer.Layer<
+  Gateway,
+  never,
+  Layer.Services<typeof localAll>
+> = localAll
+void exportedLocalGateway
+// @ts-expect-error Local paths are absolute.
+GraphQLLocal.layer({ path: "graphql", http: handler })
+
+expectTypeOf<
+  Extract<keyof typeof GraphQLLambda, "Local" | "Sandbox" | "GatewayMessages">
+>().toEqualTypeOf<never>()
+expectTypeOf<
+  Extract<
+    keyof typeof PubSub.DynamoDB,
+    "Sandbox" | "layerMemory" | "layerLocal"
+  >
+>().toEqualTypeOf<never>()

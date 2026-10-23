@@ -6,12 +6,11 @@ import { Context, Effect, Layer, Schema } from "effect"
 import {
   ConnectionId,
   EventId,
-  Gateway,
-  GatewayMessages,
   PubSub,
   Topic,
   createWebSocketHandler,
 } from "../src/index.ts"
+import { GatewayMessages, Sandbox as PubSubSandbox } from "../src/Sandbox.ts"
 import { connect, options, publish, streamEvent, wsEvent } from "./fixtures.ts"
 
 class Note extends Model.Class<Note>()("Note", DynamoDB.provider, {
@@ -29,7 +28,7 @@ for (const order of ["app-first", "pubsub-first"] as const) {
   it.effect(`merged sandboxes isolate app and PubSub tables (${order})`, () =>
     Effect.gen(function* () {
       const app = yield* Sandbox
-      const transport = yield* PubSub.DynamoDB.Sandbox
+      const transport = yield* PubSubSandbox
       expect(app.tableName).not.toBe(transport.tableName)
       expect((yield* DynamoDB).tableName).toBe(app.tableName)
       yield* new Note({ text: "application data" }).put()
@@ -93,12 +92,9 @@ for (const order of ["app-first", "pubsub-first"] as const) {
       Effect.provide(
         Layer.mergeAll(
           ...(order === "app-first"
-            ? ([Sandbox.layerMemory(), PubSub.DynamoDB.layerMemory()] as const)
-            : ([
-                PubSub.DynamoDB.layerMemory(),
-                Sandbox.layerMemory(),
-              ] as const)),
-          Gateway.layerMemory,
+            ? ([Sandbox.layerMemory(), PubSubSandbox.layerMemory()] as const)
+            : ([PubSubSandbox.layerMemory(), Sandbox.layerMemory()] as const)),
+          PubSubSandbox.layerGateway,
         ),
       ),
     ),

@@ -1,9 +1,9 @@
 import { it, expect } from "@effect/vitest"
 import { Context, Deferred, Effect, Fiber, Layer, Stream } from "effect"
 import { Topic } from "../src/Identifiers.ts"
-import { GatewayMessages, createWebSocketHandler } from "../src/index.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { createWebSocketHandler } from "../src/index.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages, Sandbox } from "../src/Sandbox.ts"
 import { publish } from "./fixtures.ts"
 import {
   connect,

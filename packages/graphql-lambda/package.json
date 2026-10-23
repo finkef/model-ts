@@ -30,6 +30,8 @@
   },
   "devDependencies": {
     "@aws-sdk/client-apigatewaymanagementapi": "^3.1079.0",
+    "@effect/platform-node": "4.0.5",
+    "@effect/platform-node-shared": "4.0.5",
     "@model-ts/core": "*",
     "@model-ts/dynamodb": "*",
     "@model-ts/graphql": "*",

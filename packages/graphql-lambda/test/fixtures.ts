@@ -13,7 +13,6 @@ import {
   type OperationId,
 } from "../src/Identifiers.ts"
 import {
-  Gateway,
   ConnectionRejected,
   TransportError,
   createHttpHandler,
@@ -30,8 +29,8 @@ import { header } from "../src/internal/request.ts"
 import { JsonObject } from "../src/Models.ts"
 import type { OperationRequest } from "../src/Models.ts"
 import { withFilter } from "../src/PubSub.ts"
-import { Sandbox } from "../src/PubSub/DynamoDB.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { Sandbox } from "../src/Sandbox.ts"
 import { Storage } from "../src/Storage.ts"
 
 declare module "vitest" {
@@ -42,9 +41,9 @@ declare module "vitest" {
 export const testLayer = () =>
   Layer.merge(
     inject("graphqlDynamoDB") === "local"
-      ? PubSub.DynamoDB.layerLocal()
-      : PubSub.DynamoDB.layerMemory(),
-    Gateway.layerMemory,
+      ? Sandbox.layerLocal()
+      : Sandbox.layerMemory(),
+    Sandbox.layerGateway,
   )
 
 export const loadConnection = (id: ConnectionId) =>

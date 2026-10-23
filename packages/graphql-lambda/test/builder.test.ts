@@ -1,12 +1,9 @@
 import { expect, it } from "@effect/vitest"
 import { ErrorReporter, type ErrorReport } from "@model-ts/graphql"
 import { Cause, Effect } from "effect"
-import {
-  GatewayMessages,
-  createHttpHandler,
-  createWebSocketHandler,
-} from "../src/index.ts"
+import { createHttpHandler, createWebSocketHandler } from "../src/index.ts"
 import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { GatewayMessages } from "../src/Sandbox.ts"
 import {
   Greeting,
   Identity,
