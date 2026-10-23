@@ -1,6 +1,6 @@
 {
   "name": "@model-ts/graphql",
-  "version": "7.0.0",
+  "version": "7.1.0",
   "description": "Effect-native GraphQL schemas, typed model registration and resolver services.",
   "keywords": [
     "effect",

@@ -1,5 +1,7 @@
 # @model-ts/eventbridge
 
+## 7.1.0
+
 ## 7.0.0
 
 ### Major Changes
