@@ -61,9 +61,12 @@ const program = Effect.gen(function* () {
 | [`@model-ts/core`](packages/core/README.md)               | `Model.Class`, `Model.Union` and the provider API.                         |
 | [`@model-ts/dynamodb`](packages/dynamodb/README.md)       | Single-table DynamoDB: reads, writes, transactions, pagination, sandboxes. |
 | [`@model-ts/eventbridge`](packages/eventbridge/README.md) | Publishing models as EventBridge events, now or later.                     |
+| [`@model-ts/graphql`](packages/graphql/README.md)         | Effect-native GraphQL definitions, model registration and execution.       |
 
-All three are versioned together, so `@model-ts/core@7.1.0` goes with
+All four are versioned together, so `@model-ts/core@7.1.0` goes with
 `@model-ts/dynamodb@7.1.0`.
+
+The `@model-ts/graphql-lambda` transport will be added on top in a separate PR.
 
 ## Installation
 
@@ -606,15 +609,17 @@ A few behaviours changed:
 
 The repository is a Bun workspace.
 
-| Command                  | Does                                                      |
-| ------------------------ | --------------------------------------------------------- |
-| `bun install`            | Installs dependencies.                                    |
-| `bun run build`          | Compiles every package to `dist/`.                        |
-| `bun run typecheck`      | Type-checks sources and tests, including the type tests.  |
-| `bun run test`           | Runs the test suite with the in-memory DynamoDB engine.   |
-| `bun run dynamodb:start` | Starts DynamoDB Local in Docker on port 8000.             |
-| `bun run test:local`     | Runs the DynamoDB suite and conformance tests against it. |
-| `bun run format`         | Formats with Prettier.                                    |
+| Command                  | Does                                                     |
+| ------------------------ | -------------------------------------------------------- |
+| `bun install`            | Installs dependencies.                                   |
+| `bun run build`          | Compiles every package to `dist/`.                       |
+| `bun run typecheck`      | Type-checks sources and tests, including the type tests. |
+| `bun run test`           | Runs the test suite with the in-memory DynamoDB engine.  |
+| `bun run dynamodb:start` | Starts DynamoDB Local in Docker on port 8000.            |
+| `bun run test:local`     | Runs DynamoDB and GraphQL tests against DynamoDB Local.  |
+| `bun run lint`           | Checks sources and tests with oxlint.                    |
+| `bun run format`         | Formats with oxfmt.                                      |
+| `bun run format:check`   | Checks formatting with oxfmt.                            |
 
 Releases go through [Changesets](https://github.com/changesets/changesets):
 add a changeset with `bunx changeset`, and the release workflow versions and

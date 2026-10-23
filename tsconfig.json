@@ -1,11 +1,29 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/core/tsconfig.test.json" },
-    { "path": "./packages/dynamodb" },
-    { "path": "./packages/dynamodb/tsconfig.test.json" },
-    { "path": "./packages/eventbridge" },
-    { "path": "./packages/eventbridge/tsconfig.test.json" }
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/core/tsconfig.test.json"
+    },
+    {
+      "path": "./packages/dynamodb"
+    },
+    {
+      "path": "./packages/dynamodb/tsconfig.test.json"
+    },
+    {
+      "path": "./packages/eventbridge"
+    },
+    {
+      "path": "./packages/eventbridge/tsconfig.test.json"
+    },
+    {
+      "path": "./packages/graphql"
+    },
+    {
+      "path": "./packages/graphql/tsconfig.test.json"
+    }
   ]
 }

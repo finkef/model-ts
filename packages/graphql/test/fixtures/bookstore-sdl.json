@@ -1,0 +1,19 @@
+{
+  "Scope": "enum Scope {\n  AUTHOR_READ\n  BOOK_CREATE\n  BOOK_DELETE\n  BOOK_READ\n  BOOK_UPDATE\n  REVIEW_READ\n  REVIEW_WRITE\n  SHELF_READ\n  SHELF_UPDATE\n  STORE_INVENTORY_READ\n}",
+  "Error": "interface Error {\n  message: String!\n}",
+  "NotFoundError": "type NotFoundError implements Error {\n  message: String!\n}",
+  "BookCreateResult": "union BookCreateResult = Book | NotFoundError | UserInputError",
+  "SearchResult": "\"\"\"An entity returned from catalog search.\"\"\"\nunion SearchResult = Author | Book | Publisher | Review | Series | Shelf",
+  "OrderPlaceResult": "union OrderPlaceResult = Backorder | OrderConfirmation | OutOfStockError | UserInputError",
+  "WishlistClearResult": "union WishlistClearResult = WishlistClearSuccess",
+  "AdminRefundResult": "union AdminRefundResult = Refund | UserInputError",
+  "Mutation.bookCreate": "BookCreateResult",
+  "Mutation.orderPlace": "OrderPlaceResult",
+  "Mutation.adminRefundIssue": "AdminRefundResult",
+  "Mutation.wishlistClear": "WishlistClearResult",
+  "Author.portrait": {
+    "type": "String",
+    "description": "The URL of the author's portrait.",
+    "deprecationReason": "Use photo instead."
+  }
+}

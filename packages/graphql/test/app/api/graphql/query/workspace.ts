@@ -1,0 +1,12 @@
+import { WorkspaceId } from "../../../store/ids.ts"
+import { Workspace } from "../../../store/models.ts"
+import { GraphQL, t } from "../../graphql.ts"
+
+export const WorkspaceQuery = GraphQL.query({
+  workspace: t.field("Workspace", {
+    args: { id: GraphQL.id(WorkspaceId) },
+    authorize: (_, { id }, { identity }) =>
+      identity.hasWorkspaceScope(id, "workspace:read"),
+    resolve: (_, { id }) => Workspace.load(Workspace.key(id)),
+  }),
+})

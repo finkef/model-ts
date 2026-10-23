@@ -1,0 +1,58 @@
+{
+  "name": "@model-ts/graphql",
+  "version": "6.0.0",
+  "description": "Effect-native GraphQL schemas, typed model registration and resolver services.",
+  "keywords": [
+    "effect",
+    "graphql",
+    "model"
+  ],
+  "license": "MIT",
+  "author": "Fabian Finke <finkef@icloud.com>",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/finkef/model-ts.git",
+    "directory": "packages/graphql"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run --project graphql --project graphql:memory --root ../..",
+    "test:local": "vitest run --project graphql:local --root ../..",
+    "test:compiler": "bun test/compiler.ts",
+    "test:scale": "bun test/scale.ts",
+    "test:types": "vitest run --project graphql:types --root ../.."
+  },
+  "devDependencies": {
+    "@model-ts/core": "workspace:*",
+    "@model-ts/dynamodb": "workspace:*",
+    "effect": "4.0.5",
+    "graphql": "16.11.0"
+  },
+  "peerDependencies": {
+    "effect": "^4.0.5",
+    "graphql": "^16.11.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

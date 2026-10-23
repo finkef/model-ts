@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.test.json",
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false
+  },
+  "include": ["test/inference.test-d.ts", "test/types.ts"],
+  "references": [
+    {
+      "path": "./tsconfig.json"
+    },
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../dynamodb"
+    }
+  ]
+}

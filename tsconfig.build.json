@@ -1,8 +1,17 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/core" },
-    { "path": "./packages/dynamodb" },
-    { "path": "./packages/eventbridge" }
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/dynamodb"
+    },
+    {
+      "path": "./packages/eventbridge"
+    },
+    {
+      "path": "./packages/graphql"
+    }
   ]
 }

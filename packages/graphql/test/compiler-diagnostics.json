@@ -1,0 +1,1380 @@
+[
+  {
+    "name": "formatted executor query errors expose message and extensions, not originalError",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 79,
+        "column": 92,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "formatted executor event errors expose message and extensions, not originalError",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 82,
+        "column": 93,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "connection args cannot redeclare first",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/search.ts",
+        "line": 9,
+        "column": 49,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "connection args cannot redeclare last",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/search.ts",
+        "line": 9,
+        "column": 49,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "connection args cannot redeclare before",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/search.ts",
+        "line": 9,
+        "column": 49,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "connection args cannot redeclare after",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/search.ts",
+        "line": 9,
+        "column": 49,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "abstract connection list args preserve element type",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/search.ts",
+        "line": 11,
+        "column": 16,
+        "code": 2551
+      }
+    ]
+  },
+  {
+    "name": "abstract edge validates node model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/search.ts",
+        "line": 22,
+        "column": 45,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "public wire codes require public error declarations",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql.ts",
+        "line": 27,
+        "column": 3,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "builder execution rejects another schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 68,
+        "column": 42,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "builder subscription rejects another schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 73,
+        "column": 45,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "subscription authorization receives the emitted value",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 28,
+        "column": 68,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "public wire codes must name a declared public error",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql.ts",
+        "line": 27,
+        "column": 64,
+        "code": 2353
+      }
+    ]
+  },
+  {
+    "name": "execution requires the schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 33,
+        "column": 25,
+        "code": 2554
+      }
+    ]
+  },
+  {
+    "name": "execution cannot widen the schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 33,
+        "column": 66,
+        "code": 2353
+      }
+    ]
+  },
+  {
+    "name": "subscription requires the schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 38,
+        "column": 26,
+        "code": 2554
+      }
+    ]
+  },
+  {
+    "name": "subscription cannot widen the schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 38,
+        "column": 82,
+        "code": 2353
+      }
+    ]
+  },
+  {
+    "name": "subscription definition retains its context at assembly",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 32,
+        "column": 37,
+        "code": 2322
+      },
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 32,
+        "column": 44,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "subscription field retains its context at composition",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 27,
+        "column": 3,
+        "code": 2322
+      },
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 32,
+        "column": 46,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "executor query requires its schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 47,
+        "column": 14,
+        "code": 2353
+      }
+    ]
+  },
+  {
+    "name": "executor subscription requires its schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 52,
+        "column": 14,
+        "code": 2353
+      }
+    ]
+  },
+  {
+    "name": "testing query requires its schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 54,
+        "column": 38,
+        "code": 2554
+      }
+    ]
+  },
+  {
+    "name": "testing subscription requires its schema context",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 59,
+        "column": 39,
+        "code": 2554
+      }
+    ]
+  },
+  {
+    "name": "subscription authorization services reach execution",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 66,
+        "column": 5,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "subscription authorization rejects promises",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 28,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "resolvers remain value or Effect",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/execution.ts",
+        "line": 24,
+        "column": 40,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "methods cannot default to scalars",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 15,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "ID argument wrapper preserves wrong brand",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/mutation/list/list-update.ts",
+        "line": 29,
+        "column": 48,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "enum literal sets must match",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 54,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "missing model key",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 17,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "string versus Int",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 15,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "optional boolean versus non-null",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 17,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "optional string versus non-null",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 60,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "wrong ID brand",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/mutation/list/list-update.ts",
+        "line": 29,
+        "column": 58,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "missing layer",
+    "diagnostics": [
+      {
+        "file": "test/app/api/handler.ts",
+        "line": 19,
+        "column": 22,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "missing request context",
+    "diagnostics": [
+      {
+        "file": "test/app/api/handler.ts",
+        "line": 9,
+        "column": 11,
+        "code": 2554
+      }
+    ]
+  },
+  {
+    "name": "unknown context field",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 24,
+        "column": 30,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "wrong Effect object result",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 23,
+        "column": 5,
+        "code": 2322
+      },
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 27,
+        "column": 9,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "parent inferred as model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 27,
+        "column": 43,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "decoded input remains class typed",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/mutation/list/list-update.ts",
+        "line": 37,
+        "column": 50,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "typed error must be declared",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/mutation/list/list-update.ts",
+        "line": 27,
+        "column": 7,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong mutation edge",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/mutation/list/list-update.ts",
+        "line": 27,
+        "column": 7,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong connection page",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/workspace.ts",
+        "line": 15,
+        "column": 33,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "misspelled named enum",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 18,
+        "column": 21,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "misspelled object ref",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 23,
+        "column": 27,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "misspelled derived edge",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/mutation/list/list-update.ts",
+        "line": 19,
+        "column": 23,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "misspelled connection node",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/workspace.ts",
+        "line": 15,
+        "column": 25,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong authorize result",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/workspace.ts",
+        "line": 8,
+        "column": 5,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong default authorization result",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 15,
+        "column": 27,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "interface ref checked locally",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 11,
+        "column": 18,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "malformed field rejected locally",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/workspace.ts",
+        "line": 12,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default ID rejects number",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 48,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default String rejects boolean",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 50,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default Float rejects string",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 43,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default Boolean rejects string",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 43,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default DateTime rejects number",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 48,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "nullable DateTime rejects number",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 48,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default custom scalar checks brand",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 43,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default enum checks literals",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 43,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default object checks model",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 55,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default list checks elements",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 56,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default connection checks model",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 58,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default edge checks model",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 57,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "default PageInfo checks shape",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 55,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "null requires nullable",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 61,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "Option requires nullable",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 62,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "nullable still checks value",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 60,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "nullable object checks model",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 64,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "nullable list checks elements",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 63,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "nullable list elements checked",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 69,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "enum cannot be connection node",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 58,
+        "column": 24,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "misspelled built-in scalar",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 53,
+        "column": 21,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "misspelled custom scalar",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 53,
+        "column": 21,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "misspelled list ref",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 56,
+        "column": 19,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "misspelled PageInfo",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 59,
+        "column": 23,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "misspelled derived connection",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 58,
+        "column": 19,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "wrong plain scalar resolver",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 70,
+        "column": 30,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong enum resolver",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 70,
+        "column": 33,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong custom scalar resolver",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 70,
+        "column": 32,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong list resolver",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 71,
+        "column": 5,
+        "code": 2322
+      },
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 71,
+        "column": 34,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "wrong nodes resolver",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 72,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "wrong connection count",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 72,
+        "column": 46,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "undefined rejected by non-null resolver",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 70,
+        "column": 33,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "nullable Effect still checks result",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/definitions/objects.ts",
+        "line": 81,
+        "column": 42,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "4a missing Workspace registration errors at reference",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 23,
+        "column": 27,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "4b unregistered Workspace definition",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/workspace.ts",
+        "line": 7,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b unregistered ListStatus definition",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list-status.ts",
+        "line": 7,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b unregistered Slug definition",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/slug.ts",
+        "line": 5,
+        "column": 40,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b unregistered Node definition",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/node.ts",
+        "line": 8,
+        "column": 43,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b unregistered FavoriteTarget definition",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/favorite-target.ts",
+        "line": 8,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b wrong registered object model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/workspace.ts",
+        "line": 9,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b wrong registered enum model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list-status.ts",
+        "line": 9,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b wrong registered scalar model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/slug.ts",
+        "line": 7,
+        "column": 40,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b wrong registered interface model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/node.ts",
+        "line": 10,
+        "column": 43,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4b wrong registered union model",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/favorite-target.ts",
+        "line": 10,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4c registered type without definition",
+    "diagnostics": [
+      {
+        "file": "test/app/api/schema.ts",
+        "line": 4,
+        "column": 38,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4c definition omitted from barrel",
+    "diagnostics": [
+      {
+        "file": "test/app/api/schema.ts",
+        "line": 4,
+        "column": 38,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4d conflicting registrations in two files",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql.ts",
+        "line": 15,
+        "column": 18,
+        "code": 2320
+      }
+    ]
+  },
+  {
+    "name": "4e enum cannot be connection node (app)",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/workspace.ts",
+        "line": 15,
+        "column": 25,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "4e object cannot be implemented",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 11,
+        "column": 18,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "4e enum cannot be a union member",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/favorite-target.ts",
+        "line": 12,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4e enum registration cannot define an object",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 9,
+        "column": 40,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "4e enum has no derived edge",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 18,
+        "column": 21,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "union members must be registered objects",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/favorite-target.ts",
+        "line": 11,
+        "column": 3,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "wrong union resolver result",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/query/examples.ts",
+        "line": 8,
+        "column": 3,
+        "code": 2322
+      },
+      {
+        "file": "test/app/api/graphql/query/examples.ts",
+        "line": 8,
+        "column": 39,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "subscription result checked",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/subscription/list-changed.ts",
+        "line": 11,
+        "column": 31,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "subscription args preserve ID brand",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/subscription/list-changed.ts",
+        "line": 11,
+        "column": 68,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "boolean authorize parent inferred",
+    "diagnostics": [
+      {
+        "file": "test/app/api/graphql/list.ts",
+        "line": 15,
+        "column": 52,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "mapped enum requires every internal value",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 41,
+        "column": 3,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "mapped enum rejects unknown internal values",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 42,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "enum shorthand rejects wrong literal",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 104,
+        "column": 29,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "interface resolver returns registered objects",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 55,
+        "column": 5,
+        "code": 2322
+      }
+    ]
+  },
+  {
+    "name": "interface resolver parent is typed",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 56,
+        "column": 13,
+        "code": 2339
+      }
+    ]
+  },
+  {
+    "name": "inherited default field needs compatible source",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 163,
+        "column": 32,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "inherited resolver needs compatible source",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 164,
+        "column": 32,
+        "code": 2345
+      }
+    ]
+  },
+  {
+    "name": "named union members match their registered models",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 94,
+        "column": 13,
+        "code": 2769
+      },
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 94,
+        "column": 28,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "named union members must be registered",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 94,
+        "column": 21,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "named union members must be objects",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 94,
+        "column": 21,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "named union requires one name per model",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 94,
+        "column": 3,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "named union resolver stays within members",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 95,
+        "column": 3,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "nullable typed results reject scalar successes",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 146,
+        "column": 33,
+        "code": 2769
+      }
+    ]
+  },
+  {
+    "name": "no-error result wrapper rejects scalar successes",
+    "diagnostics": [
+      {
+        "file": "test/fixtures/type-contracts.ts",
+        "line": 104,
+        "column": 31,
+        "code": 2769
+      }
+    ]
+  }
+]
