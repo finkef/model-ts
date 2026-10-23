@@ -143,9 +143,15 @@ closes.
 | `Post.paginate(input, params)`                  | a Relay connection (see [Pagination](#pagination)) | `DynamoDB.PaginateError` |
 | `DynamoDB.query(params, { posts: Post, ... })`  | items grouped by model, plus `_unknown` and `meta` | `DynamoDB.QueryError`    |
 
-`load` is the read to reach for. Loads that run concurrently, for example in
-`Effect.forEach(ids, load, { concurrency: "unbounded" })`, are combined into
-BatchGetItem calls.
+`load` is the read to reach for. Loads issued in the same tick are combined
+into BatchGetItem calls, as DataLoader combines them in the io-ts versions.
+That holds for concurrent fibers, as in
+`Effect.forEach(ids, load, { concurrency: "unbounded" })`, and for separate
+`runtime.runPromise` calls, such as GraphQL resolvers that each run their own
+Effect: every level of a nested query reads its items in one BatchGetItem.
+Loads only share a batch when they run on the same `DynamoDB` layer, so build
+it once, for example in a `ManagedRuntime`, and not with `Effect.provide` in
+each resolver.
 
 Query parameters are those of the AWS `QueryCommand` without `TableName`. Pass
 `FetchAllPages: true` to follow `LastEvaluatedKey` to the end. Each item is

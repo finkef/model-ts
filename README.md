@@ -495,7 +495,10 @@ repository's `vitest.config.ts` does.
 ## Running in AWS Lambda
 
 Build the layers once per container with `ManagedRuntime` and run each
-invocation on it. Clients and connections are reused across warm invocations.
+invocation on it. Clients and connections are reused across warm invocations,
+and loads from separate `runPromise` calls, such as GraphQL resolvers, share
+BatchGetItem calls. Providing the layer per call instead builds a new client
+and a new batch for every call.
 
 ```ts
 import { Config, Effect, Layer, ManagedRuntime } from "effect"

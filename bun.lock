@@ -20,7 +20,7 @@
     },
     "packages/core": {
       "name": "@model-ts/core",
-      "version": "7.0.0",
+      "version": "0.4.2",
       "devDependencies": {
         "effect": "4.0.5",
       },
@@ -30,10 +30,11 @@
     },
     "packages/dynamodb": {
       "name": "@model-ts/dynamodb",
-      "version": "7.0.0",
+      "version": "6.0.0",
       "devDependencies": {
         "@model-ts/core": "*",
         "effect": "4.0.5",
+        "graphql": "16.11.0",
       },
       "peerDependencies": {
         "@aws-sdk/client-dynamodb": "^3.0.0",
@@ -45,7 +46,7 @@
     },
     "packages/eventbridge": {
       "name": "@model-ts/eventbridge",
-      "version": "7.0.0",
+      "version": "3.0.0",
       "devDependencies": {
         "@model-ts/core": "*",
         "effect": "4.0.5",
@@ -283,6 +284,8 @@
     "globby": ["globby@11.1.0", "", { "dependencies": { "array-union": "^2.1.0", "dir-glob": "^3.0.1", "fast-glob": "^3.2.9", "ignore": "^5.2.0", "merge2": "^1.4.1", "slash": "^3.0.0" } }, "sha512-jhIXaOzy1sb8IyocaruWSn1TjmnBVs8Ayhcy83rmxNJ8q2uWKCAj3CnJY+KpGSXCueAPc0i05kVvVKtP1t9S3g=="],
 
     "graceful-fs": ["graceful-fs@4.2.11", "", {}, "sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ=="],
+
+    "graphql": ["graphql@16.11.0", "", {}, "sha512-mS1lbMsxgQj6hge1XZ6p7GPhbrtFwUFYi3wRzXAC/FmYnyXMTvvI3td3rjmQ2u8ewXueaSvRPWaEcgVVOT9Jnw=="],
 
     "human-id": ["human-id@4.2.2", "", { "bin": { "human-id": "dist/cli.js" } }, "sha512-Z+8unD6em/MJwyrkWQ2M3wygRGI1+MztbutiNwk1DCuEPXOZRWGjtcMPZYP1exY9iNZMhd7ZOSMQSo9WYtiQRw=="],
 
