@@ -19,9 +19,14 @@ class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
   }
 }
 
-const post =
-  yield * new Post({ id: "1", title: "Hello", publishedAt: null }).put()
-const renamed = yield * post.update({ title: "Hello, world" })
+const program = Effect.gen(function* () {
+  const post = yield* new Post({
+    id: "1",
+    title: "Hello",
+    publishedAt: null,
+  }).put()
+  const renamed = yield* post.update({ title: "Hello, world" })
+})
 ```
 
 > [!IMPORTANT]
@@ -231,12 +236,12 @@ reads mixed items, for example a post and its comments in one partition:
 
 ```ts
 const PostContent = Model.Union([Post, Comment], DynamoDB.provider)
-const items =
-  yield *
-  PostContent.query({
+const program = Effect.gen(function* () {
+  const items = yield* PostContent.query({
     KeyConditionExpression: "PK = :pk",
     ExpressionAttributeValues: { ":pk": post.PK },
   }) // Array<Post | Comment>
+})
 ```
 
 ## Providers
@@ -266,8 +271,10 @@ class InvoiceSent extends Model.Class<InvoiceSent>()(
   }
 }
 
-const sent = yield * new InvoiceSent({ invoiceId }).put()
-yield * sent.publish()
+const program = Effect.gen(function* () {
+  const sent = yield* new InvoiceSent({ invoiceId }).put()
+  yield* sent.publish()
+})
 ```
 
 Providers are constant values. They never hold a client or configuration;
@@ -350,11 +357,11 @@ Every failure is a tagged error in the Effect error channel, a
 an operation can produce, and `Effect.catchTag` handles them one by one:
 
 ```ts
-const post =
-  yield *
-  Post.load(key).pipe(
+const program = Effect.gen(function* () {
+  const post = yield* Post.load(key).pipe(
     Effect.catchTag("ItemNotFoundError", () => Effect.succeed(null)),
   )
+})
 ```
 
 | Error                         | Raised when                                                                         |
@@ -501,9 +508,9 @@ BatchGetItem calls. Providing the layer per call instead builds a new client
 and a new batch for every call.
 
 ```ts
-import { Config, Effect, Layer, ManagedRuntime } from "effect"
 import { DynamoDB } from "@model-ts/dynamodb"
 import { EventBridge } from "@model-ts/eventbridge"
+import { Config, Effect, Layer, ManagedRuntime } from "effect"
 
 const AppLayer = Layer.unwrap(
   Effect.gen(function* () {

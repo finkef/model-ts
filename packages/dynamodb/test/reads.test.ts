@@ -1,5 +1,5 @@
-import { describe, expect, it as vitest } from "@effect/vitest"
 import { marshall } from "@aws-sdk/util-dynamodb"
+import { describe, expect, it as vitest } from "@effect/vitest"
 import { Effect, Exit, Option } from "effect"
 import { docVersion, DynamoDB, ItemDecodeError } from "../src/index.ts"
 import { Sandbox } from "../src/Sandbox.ts"
@@ -129,8 +129,8 @@ describe("load", () => {
       // The batch span links to every load it served.
       const batch = spans.find((span) => span.name === "DynamoDB.batchGet")!
       const loads = spans.filter((span) => span.name === "DynamoDB.load")
-      expect(batch.links.map((link) => link.span.spanId).sort()).toEqual(
-        loads.map((span) => span.spanId).sort(),
+      expect(batch.links.map((link) => link.span.spanId).toSorted()).toEqual(
+        loads.map((span) => span.spanId).toSorted(),
       )
       expect(Option.getOrUndefined(calls[0]!.parent)?.spanId).toBe(batch.spanId)
     }),

@@ -8,6 +8,7 @@ import {
   parseUpdateExpression,
   type RangeCondition,
 } from "./expression.ts"
+import { IN_MEMORY_SPEC, type InMemoryIndexName } from "./spec.ts"
 import {
   InMemoryTableState,
   PRIMARY_INDEX_NAME,
@@ -15,7 +16,6 @@ import {
   matchesKeyConditionDescriptor,
   isGSI,
 } from "./store.ts"
-import { IN_MEMORY_SPEC, type InMemoryIndexName } from "./spec.ts"
 import {
   cloneItem,
   compareStrings,
@@ -228,15 +228,14 @@ class MemoryEngineImpl implements MemoryEngine {
         )
       : undefined
 
-    const iterator = table
-      .iterateQueryCandidates({
-        indexName,
-        hashKey: condition.hashValue,
-        rangeCondition: condition.range?.condition,
-        scanIndexForward,
-        exclusiveStartKey,
-      })
-      [Symbol.iterator]()
+    const candidates = table.iterateQueryCandidates({
+      indexName,
+      hashKey: condition.hashValue,
+      rangeCondition: condition.range?.condition,
+      scanIndexForward,
+      exclusiveStartKey,
+    })
+    const iterator = candidates[Symbol.iterator]()
 
     const items: any[] = []
     let scannedCount = 0
@@ -519,7 +518,7 @@ class MemoryEngineImpl implements MemoryEngine {
     }
 
     const rollback = () => {
-      for (const entry of [...journal.values()].reverse()) {
+      for (const entry of [...journal.values()].toReversed()) {
         const table = this.getTable(entry.tableName)
 
         if (entry.before === null) {
@@ -811,7 +810,7 @@ class MemoryEngineImpl implements MemoryEngine {
     // Every path names an element of the item as it was before the update,
     // so list elements are removed from the highest index down: removing
     // a[0] first would move the element a[1] names.
-    const removals = [...parsed.remove].sort((left, right) => {
+    const removals = [...parsed.remove].toSorted((left, right) => {
       const parents = compareStrings(
         parentPathKey(left.path),
         parentPathKey(right.path),
@@ -1228,7 +1227,7 @@ class MemoryEngineImpl implements MemoryEngine {
 
       const unusedValues = valueKeys
         .filter((token) => !usedValueTokens.has(token))
-        .sort()
+        .toSorted()
       if (unusedValues.length > 0) {
         throw this.validationError(
           `Value provided in ExpressionAttributeValues unused in expressions: keys: {${unusedValues.join(", ")}}`,
@@ -1257,7 +1256,7 @@ class MemoryEngineImpl implements MemoryEngine {
 
       const unusedNames = nameKeys
         .filter((token) => !usedNameTokens.has(token))
-        .sort()
+        .toSorted()
       if (unusedNames.length > 0) {
         throw this.validationError(
           `Value provided in ExpressionAttributeNames unused in expressions: keys: {${unusedNames.join(", ")}}`,

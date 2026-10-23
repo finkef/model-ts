@@ -23,8 +23,6 @@ import {
   Stream,
 } from "effect"
 import type { DynamoDB } from "../DynamoDB.ts"
-import { TableService } from "./service.ts"
-import { span } from "./tracing.ts"
 import {
   BulkWriteRollbackError,
   ConditionalCheckFailedError,
@@ -44,6 +42,9 @@ import type {
   TableItem,
   TableModel,
 } from "../Item.ts"
+import type { ItemKeys, Key } from "../Keys.ts"
+import * as Operation from "../Operation.ts"
+import type { PaginationInput, PaginationResult } from "../Pagination.ts"
 import {
   applySoftDeletionFields,
   decodeItem,
@@ -57,12 +58,11 @@ import {
   storedKeysOf,
   tagsOf,
 } from "./item.ts"
-import type { ItemKeys, Key } from "../Keys.ts"
 import { formatKey, isGSI, keyOf } from "./keys.ts"
-import * as Operation from "../Operation.ts"
-import type { PaginationInput, PaginationResult } from "../Pagination.ts"
 import { decodeCursor, encodeCursor } from "./pagination.ts"
 import { decodePagination } from "./pagination.ts"
+import { TableService } from "./service.ts"
+import { span } from "./tracing.ts"
 
 // -----------------------------------------------------------------------------
 // Reads
@@ -178,7 +178,8 @@ export const query: <const R extends DynamoDB.QueryModels>(
       )
       items.push(...(page.Items ?? []))
       lastEvaluatedKey = page.LastEvaluatedKey
-    } while (FetchAllPages && lastEvaluatedKey)
+      if (!FetchAllPages) break
+    } while (lastEvaluatedKey)
 
     const entries: Array<[string, Decodable]> = Object.entries(models)
     const byTag = new Map<string, Array<[string, Decodable]>>()

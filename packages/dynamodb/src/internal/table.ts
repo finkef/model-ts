@@ -18,14 +18,12 @@ export const createTableCommand = (TableName: string) =>
       { AttributeName: "PK", KeyType: "HASH" },
       { AttributeName: "SK", KeyType: "RANGE" },
     ],
-    GlobalSecondaryIndexes: [
-      ...GSI_NAMES.map((gsi) => ({
-        IndexName: gsi,
-        KeySchema: [
-          { AttributeName: `${gsi}PK`, KeyType: "HASH" as const },
-          { AttributeName: `${gsi}SK`, KeyType: "RANGE" as const },
-        ],
-        Projection: { ProjectionType: "ALL" as const },
-      })),
-    ],
+    GlobalSecondaryIndexes: GSI_NAMES.map((gsi) => ({
+      IndexName: gsi,
+      KeySchema: [
+        { AttributeName: `${gsi}PK`, KeyType: "HASH" as const },
+        { AttributeName: `${gsi}SK`, KeyType: "RANGE" as const },
+      ],
+      Projection: { ProjectionType: "ALL" as const },
+    })),
   })

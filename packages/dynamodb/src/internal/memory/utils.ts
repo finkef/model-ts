@@ -54,7 +54,7 @@ export const stablePriority = (
 }
 
 export const sortItemsByPKSK = (items: InMemoryItem[]): InMemoryItem[] =>
-  [...items].sort(
+  [...items].toSorted(
     (a, b) =>
       compareStrings(String(a.PK ?? ""), String(b.PK ?? "")) ||
       compareStrings(String(a.SK ?? ""), String(b.SK ?? "")),

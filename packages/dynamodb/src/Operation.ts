@@ -19,9 +19,9 @@ import {
   modelOf,
   setDocVersion,
 } from "./internal/item.ts"
+import { keyOf } from "./internal/keys.ts"
 import type { TableItem, TableModel } from "./Item.ts"
 import type { GSIKeys, Key } from "./Keys.ts"
-import { keyOf } from "./internal/keys.ts"
 
 /**
  * Condition parameters shared by write operations.
@@ -105,7 +105,10 @@ export interface ConditionCheckOperation extends ConditionParams {
  * @since 7.0.0
  */
 export type WriteOperation =
-  PutOperation | UpdateRawOperation | DeleteOperation | ConditionCheckOperation
+  | PutOperation
+  | UpdateRawOperation
+  | DeleteOperation
+  | ConditionCheckOperation
 
 /**
  * A write with the write that undoes it, used when a later transaction of
@@ -116,7 +119,10 @@ export type WriteOperation =
 export interface TransactionOperation {
   readonly action: WriteOperation
   readonly rollback?:
-    PutOperation | UpdateRawOperation | DeleteOperation | undefined
+    | PutOperation
+    | UpdateRawOperation
+    | DeleteOperation
+    | undefined
 }
 
 /** @since 7.0.0 */
@@ -139,7 +145,8 @@ export type BulkInput = ReadonlyArray<
  * @since 7.0.0
  */
 export type UpdateOperation =
-  PutOperation | readonly [TransactionOperation, TransactionOperation]
+  | PutOperation
+  | readonly [TransactionOperation, TransactionOperation]
 
 /** @since 7.0.0 */
 export const isTransactionOperation = (

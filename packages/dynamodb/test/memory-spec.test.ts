@@ -236,7 +236,7 @@ describe("in-memory spec", () => {
           .promise()
         const snapshot = await harness.sandbox.snapshot()
         return {
-          snapshot: Object.keys(snapshot).sort(),
+          snapshot: Object.keys(snapshot).toSorted(),
           queryKeys: (page.Items ?? []).map(
             (entry: { PK: string; SK: string }) => `${entry.PK}::${entry.SK}`,
           ),

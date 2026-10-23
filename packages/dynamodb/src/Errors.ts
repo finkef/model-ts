@@ -12,8 +12,8 @@
  * @since 7.0.0
  */
 import { Predicate, Schema } from "effect"
-import { Key } from "./Keys.ts"
 import { formatKey } from "./internal/keys.ts"
+import { Key } from "./Keys.ts"
 import type { BulkOperation } from "./Operation.ts"
 
 const describe = (cause: unknown) =>

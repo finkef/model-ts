@@ -38,18 +38,18 @@ import {
 import { Context, Effect, Layer, Schema } from "effect"
 import { DynamoDB, type DynamoDBOptions } from "./DynamoDB.ts"
 import type { ItemEncodeError } from "./Errors.ts"
-import { encodeItem } from "./internal/item.ts"
-import type { RawItem } from "./Item.ts"
-import type { Key } from "./Keys.ts"
-import type { CursorOptions } from "./Pagination.ts"
 import { formatSnapshotDiff } from "./internal/diff.ts"
+import { encodeItem } from "./internal/item.ts"
 import {
   makeMemoryEngine,
   type MemoryEngine,
 } from "./internal/memory/engine.ts"
 import { memoryClientConfig } from "./internal/memory/handler.ts"
-import { createTableCommand } from "./internal/table.ts"
 import { snapshotKey } from "./internal/snapshot.ts"
+import { createTableCommand } from "./internal/table.ts"
+import type { RawItem } from "./Item.ts"
+import type { Key } from "./Keys.ts"
+import type { CursorOptions } from "./Pagination.ts"
 
 /**
  * Every item of a table, keyed by `JSON.stringify([PK, SK])`. Use

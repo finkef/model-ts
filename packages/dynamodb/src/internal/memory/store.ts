@@ -1,11 +1,12 @@
 import type { GSI } from "../../Keys.ts"
 import { GSI_NAMES, isGSI as isTableGSI } from "../keys.ts"
+import { snapshotKey } from "../snapshot.ts"
 import {
   type ParsedKeyCondition,
   type RangeCondition,
   matchesRangeCondition,
 } from "./expression.ts"
-import { snapshotKey } from "../snapshot.ts"
+import type { InMemoryIndexName } from "./spec.ts"
 import { DeterministicTreap, type TreapBounds } from "./treap.ts"
 import {
   type InMemoryItem,
@@ -16,7 +17,6 @@ import {
   stablePriority,
   sortItemsByPKSK,
 } from "./utils.ts"
-import type { InMemoryIndexName } from "./spec.ts"
 
 interface IndexDescriptor {
   name: InMemoryIndexName
@@ -124,6 +124,8 @@ export class InMemoryTableState {
         )
       : undefined
 
+    // A generator function cannot capture `this` lexically.
+    // oxlint-disable-next-line typescript/no-this-alias
     const table = this
 
     function* generate(): IterableIterator<QueryCandidate> {

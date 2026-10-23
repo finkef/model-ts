@@ -1,0 +1,45 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": ["typescript", "unicorn", "oxc", "import"],
+  "categories": { "correctness": "error", "suspicious": "error" },
+  "rules": {
+    "eslint/eqeqeq": ["error", "always", { "null": "ignore" }],
+    "eslint/no-unused-vars": [
+      "error",
+      {
+        "argsIgnorePattern": "^_",
+        "caughtErrorsIgnorePattern": "^_",
+        "varsIgnorePattern": "^_"
+      }
+    ],
+    "import/no-cycle": "error",
+    "typescript/consistent-type-imports": "error",
+    // Effect and model-ts name fields `_tag`, `_docVersion` and so on.
+    "eslint/no-underscore-dangle": "off",
+    // Style rules that would flag deliberate code: helpers kept next to their
+    // only caller, and `client` or `params` names reused in a nested scope.
+    "unicorn/consistent-function-scoping": "off",
+    "eslint/no-shadow": "off",
+    // Type tests construct values only to check that they compile.
+    "eslint/no-new": "off"
+  },
+  "env": { "builtin": true, "node": true },
+  "overrides": [
+    {
+      "files": ["**/test/**"],
+      "plugins": ["vitest"],
+      "env": { "vitest": true },
+      "rules": {
+        // Tests run in functions that testEffect(layer) creates, such as
+        // `encrypted.effect(...)`, which the rule cannot recognise.
+        "vitest/no-standalone-expect": "off",
+        "vitest/require-to-throw-message": "off"
+      }
+    },
+    {
+      "files": ["**/test/types.ts"],
+      "rules": { "eslint/no-unused-expressions": "off" }
+    }
+  ],
+  "ignorePatterns": ["**/dist/", "**/node_modules/"]
+}

@@ -24,7 +24,9 @@ const isPlainObject = (value: any): value is Record<string, any> =>
 const orderKeys = (keys: string[]) => {
   const uniqueKeys = Array.from(new Set(keys))
   const prioritized = PRIORITY_FIELDS.filter((key) => uniqueKeys.includes(key))
-  const rest = uniqueKeys.filter((key) => !PRIORITY_FIELD_SET.has(key)).sort()
+  const rest = uniqueKeys
+    .filter((key) => !PRIORITY_FIELD_SET.has(key))
+    .toSorted()
   return [...prioritized, ...rest]
 }
 
@@ -43,8 +45,8 @@ const isEqual = (left: any, right: any): boolean => {
     return true
   }
   if (isPlainObject(left) && isPlainObject(right)) {
-    const leftKeys = Object.keys(left).sort()
-    const rightKeys = Object.keys(right).sort()
+    const leftKeys = Object.keys(left).toSorted()
+    const rightKeys = Object.keys(right).toSorted()
     if (leftKeys.length !== rightKeys.length) return false
     for (let i = 0; i < leftKeys.length; i += 1) {
       const key = leftKeys[i]
@@ -72,7 +74,7 @@ const formatScalar = (value: any): string => {
   }
   if (value instanceof Set) {
     // Sets have no order; sorting their entries keeps snapshots stable.
-    const entries = [...value].map(formatScalar).sort()
+    const entries = [...value].map(formatScalar).toSorted()
     return `Set [${entries.join(", ")}]`
   }
 
@@ -432,7 +434,7 @@ const renderItemFieldsDiff = (
 
 export const formatSnapshotDiff = (before: Snapshot, after: Snapshot) => {
   const keys = new Set([...Object.keys(before), ...Object.keys(after)])
-  const sortedKeys = Array.from(keys).sort((a, b) => {
+  const sortedKeys = Array.from(keys).toSorted((a, b) => {
     const itemA = after[a] ?? before[a]
     const itemB = after[b] ?? before[b]
     return formatItemHeader(a, itemA).localeCompare(formatItemHeader(b, itemB))

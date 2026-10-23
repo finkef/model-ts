@@ -2,6 +2,12 @@
   "name": "@model-ts/eventbridge",
   "version": "3.0.0",
   "description": "Publish @model-ts/core models as EventBridge events, built on Effect.",
+  "keywords": [
+    "effect",
+    "eventbridge",
+    "events",
+    "model"
+  ],
   "license": "MIT",
   "author": "Fabian Finke <finkef@icloud.com>",
   "repository": {
@@ -9,17 +15,14 @@
     "url": "git+https://github.com/finkef/model-ts.git",
     "directory": "packages/eventbridge"
   },
-  "keywords": [
-    "effect",
-    "eventbridge",
-    "events",
-    "model"
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "type": "module",
   "sideEffects": false,
-  "engines": {
-    "node": ">=22"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -32,23 +35,20 @@
     "./internal/*": null,
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "src",
-    "README.md",
-    "CHANGELOG.md"
-  ],
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run --project eventbridge --root ../.."
+  },
+  "devDependencies": {
+    "@model-ts/core": "*",
+    "effect": "4.0.5"
   },
   "peerDependencies": {
     "@aws-sdk/client-eventbridge": "^3.0.0",
     "@model-ts/core": "^7.0.0",
     "effect": "^4.0.5"
   },
-  "devDependencies": {
-    "@model-ts/core": "*",
-    "effect": "4.0.5"
+  "engines": {
+    "node": ">=22"
   }
 }

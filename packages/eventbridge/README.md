@@ -53,10 +53,12 @@ error.
 ```ts
 import { EventBridge } from "@model-ts/eventbridge"
 
-yield * new OrderPlaced({ orderId, total: 42 }).publish()
+const program = Effect.gen(function* () {
+  yield* new OrderPlaced({ orderId, total: 42 }).publish()
 
-// Several events at once, in PutEvents calls of up to 10.
-yield * EventBridge.publish(orderPlaced, invoiceCreated, stockReserved)
+  // Several events at once, in PutEvents calls of up to 10.
+  yield* EventBridge.publish(orderPlaced, invoiceCreated, stockReserved)
+})
 ```
 
 `EventBridge.publish` encodes every event before it sends anything, so an event that cannot

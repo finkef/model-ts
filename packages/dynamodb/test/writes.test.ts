@@ -1,5 +1,5 @@
-import { describe, expect } from "@effect/vitest"
 import { GetCommand, PutCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb"
+import { describe, expect } from "@effect/vitest"
 import { Model } from "@model-ts/core"
 import { Effect, Schema } from "effect"
 import { docVersion, DynamoDB, RaceConditionError } from "../src/index.ts"

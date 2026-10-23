@@ -2,6 +2,12 @@
   "name": "@model-ts/dynamodb",
   "version": "6.0.0",
   "description": "Single-table DynamoDB for @model-ts/core models, built on Effect: typed errors, batching, transactions, tracing and an in-memory sandbox.",
+  "keywords": [
+    "dynamodb",
+    "effect",
+    "model",
+    "single-table"
+  ],
   "license": "MIT",
   "author": "Fabian Finke <finkef@icloud.com>",
   "repository": {
@@ -9,17 +15,14 @@
     "url": "git+https://github.com/finkef/model-ts.git",
     "directory": "packages/dynamodb"
   },
-  "keywords": [
-    "effect",
-    "dynamodb",
-    "single-table",
-    "model"
+  "files": [
+    "dist",
+    "src",
+    "README.md",
+    "CHANGELOG.md"
   ],
   "type": "module",
   "sideEffects": false,
-  "engines": {
-    "node": ">=22"
-  },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
@@ -32,16 +35,15 @@
     "./internal/*": null,
     "./package.json": "./package.json"
   },
-  "files": [
-    "dist",
-    "src",
-    "README.md",
-    "CHANGELOG.md"
-  ],
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run --project dynamodb:memory --root ../..",
     "test:local": "vitest run --project dynamodb:local --root ../.."
+  },
+  "devDependencies": {
+    "@model-ts/core": "*",
+    "effect": "4.0.5",
+    "graphql": "16.11.0"
   },
   "peerDependencies": {
     "@aws-sdk/client-dynamodb": "^3.0.0",
@@ -50,9 +52,7 @@
     "@model-ts/core": "^7.0.0",
     "effect": "^4.0.5"
   },
-  "devDependencies": {
-    "@model-ts/core": "*",
-    "effect": "4.0.5",
-    "graphql": "16.11.0"
+  "engines": {
+    "node": ">=22"
   }
 }

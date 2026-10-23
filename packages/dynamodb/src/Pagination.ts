@@ -57,7 +57,9 @@ export interface PaginationOptions {
  * @since 7.0.0
  */
 export type CursorKey =
-  Uint8Array | string | Redacted.Redacted<Uint8Array | string>
+  | Uint8Array
+  | string
+  | Redacted.Redacted<Uint8Array | string>
 
 /**
  * How pagination cursors are written. A cursor holds the item's `PK`, `SK`

@@ -1,10 +1,10 @@
+import { Context, Effect, Layer } from "effect"
 /**
  * An EventBridge endpoint inside the process, plugged into the real AWS SDK
  * client as its request handler. It records every PutEvents request as the
  * SDK serialized it and accepts every entry unless told otherwise.
  */
 import { EventBridge } from "../src/index.ts"
-import { Context, Effect, Layer } from "effect"
 
 interface PutEventsBody {
   readonly Entries: ReadonlyArray<{

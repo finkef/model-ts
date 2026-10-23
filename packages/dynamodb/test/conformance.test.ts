@@ -51,7 +51,7 @@ const normalizeObject = (value: any): any => {
   if (value && typeof value === "object") {
     return Object.fromEntries(
       Object.keys(value)
-        .sort()
+        .toSorted()
         .filter((key) => typeof value[key] !== "undefined")
         .map((key) => [normalizeScalar(key), normalizeObject(value[key])]),
     )
@@ -63,7 +63,7 @@ const normalizeObject = (value: any): any => {
 const normalizeSnapshot = (snapshot: { [key: string]: any }) =>
   Object.fromEntries(
     Object.keys(snapshot)
-      .sort()
+      .toSorted()
       .map((key) => [key, normalizeObject(snapshot[key])]),
   )
 
@@ -128,11 +128,11 @@ const normalizeResult = (method: Vector["method"], value: any): any => {
     const responses = value.Responses ?? {}
     const normalizedResponses = Object.fromEntries(
       Object.keys(responses)
-        .sort()
+        .toSorted()
         .map((tableName) => [
           normalizeScalar(tableName),
           [...responses[tableName]]
-            .sort(compareItemsByPKSK)
+            .toSorted(compareItemsByPKSK)
             .map(normalizeObject),
         ]),
     )
@@ -140,7 +140,7 @@ const normalizeResult = (method: Vector["method"], value: any): any => {
     const unprocessed = value.UnprocessedKeys ?? value.UnprocessedItems ?? {}
     const normalizedUnprocessed = Object.fromEntries(
       Object.keys(unprocessed)
-        .sort()
+        .toSorted()
         .map((tableName) => [
           normalizeScalar(tableName),
           normalizeObject(unprocessed[tableName]),
@@ -164,7 +164,7 @@ const normalizeResult = (method: Vector["method"], value: any): any => {
     return {
       ...normalizeObject(value),
       Items: [...(value.Items ?? [])]
-        .sort(compareItemsByPKSK)
+        .toSorted(compareItemsByPKSK)
         .map(normalizeObject),
     }
   }
@@ -1244,21 +1244,21 @@ const additionalDifferentialVectors: Vector[] = [
     normalizeResult: (value) => ({
       ...normalizeObject(value),
       pagedItems: [...(value.pagedItems ?? [])]
-        .sort(compareItemsByPKSK)
+        .toSorted(compareItemsByPKSK)
         .map(normalizeObject),
       fullItems: [...(value.fullItems ?? [])]
-        .sort(compareItemsByPKSK)
+        .toSorted(compareItemsByPKSK)
         .map(normalizeObject),
       pageCount: value.pageCount,
       pagedMatchesFull:
         JSON.stringify(
           [...(value.pagedItems ?? [])]
-            .sort(compareItemsByPKSK)
+            .toSorted(compareItemsByPKSK)
             .map(normalizeObject),
         ) ===
         JSON.stringify(
           [...(value.fullItems ?? [])]
-            .sort(compareItemsByPKSK)
+            .toSorted(compareItemsByPKSK)
             .map(normalizeObject),
         ),
     }),
@@ -1796,109 +1796,109 @@ const supportedParamCoverageVectors: Vector[] = [
   },
 ]
 
-const unsupportedParamVectors: Vector[] = [
-  ...Object.entries(IN_MEMORY_SPEC.methods).flatMap(([method, spec]) =>
-    (spec.unsupportedParams ?? []).map((param) => ({
-      id: `unsupported.${method}.${param}`,
-      method: method as keyof typeof IN_MEMORY_SPEC.methods,
-      coverage: { unsupported: [param] },
-      setup:
-        method === "get" ||
-        method === "put" ||
-        method === "update" ||
-        method === "delete" ||
-        method === "query" ||
-        method === "scan" ||
-        method === "batchGet" ||
-        method === "batchWrite" ||
-        method === "transactWrite"
-          ? createSeed
-          : undefined,
-      execute: (ctx: Context) => {
-        const baseByMethod: Record<string, any> = {
-          get: {
-            TableName: ctx.tableName,
-            Key: { PK: "USER#1", SK: "PROFILE#001" },
-          },
-          put: {
-            TableName: ctx.tableName,
-            Item: { PK: "UNSUPPORTED#PUT", SK: "1" },
-          },
-          update: {
-            TableName: ctx.tableName,
-            Key: { PK: "USER#1", SK: "PROFILE#001" },
-            UpdateExpression: "SET #name = :name",
-            ExpressionAttributeNames: { "#name": "name" },
-            ExpressionAttributeValues: { ":name": "x" },
-          },
-          delete: {
-            TableName: ctx.tableName,
-            Key: { PK: "USER#1", SK: "PROFILE#001" },
-          },
-          query: {
-            TableName: ctx.tableName,
-            KeyConditionExpression: "PK = :pk",
-            ExpressionAttributeValues: { ":pk": "USER#1" },
-          },
-          scan: {
-            TableName: ctx.tableName,
-          },
-          batchGet: {
-            RequestItems: {
-              [ctx.tableName]: {
-                Keys: [{ PK: "USER#1", SK: "PROFILE#001" }],
-              },
+const unsupportedParamVectors: Vector[] = Object.entries(
+  IN_MEMORY_SPEC.methods,
+).flatMap(([method, spec]) =>
+  (spec.unsupportedParams ?? []).map((param) => ({
+    id: `unsupported.${method}.${param}`,
+    method: method as keyof typeof IN_MEMORY_SPEC.methods,
+    coverage: { unsupported: [param] },
+    setup:
+      method === "get" ||
+      method === "put" ||
+      method === "update" ||
+      method === "delete" ||
+      method === "query" ||
+      method === "scan" ||
+      method === "batchGet" ||
+      method === "batchWrite" ||
+      method === "transactWrite"
+        ? createSeed
+        : undefined,
+    execute: (ctx: Context) => {
+      const baseByMethod: Record<string, any> = {
+        get: {
+          TableName: ctx.tableName,
+          Key: { PK: "USER#1", SK: "PROFILE#001" },
+        },
+        put: {
+          TableName: ctx.tableName,
+          Item: { PK: "UNSUPPORTED#PUT", SK: "1" },
+        },
+        update: {
+          TableName: ctx.tableName,
+          Key: { PK: "USER#1", SK: "PROFILE#001" },
+          UpdateExpression: "SET #name = :name",
+          ExpressionAttributeNames: { "#name": "name" },
+          ExpressionAttributeValues: { ":name": "x" },
+        },
+        delete: {
+          TableName: ctx.tableName,
+          Key: { PK: "USER#1", SK: "PROFILE#001" },
+        },
+        query: {
+          TableName: ctx.tableName,
+          KeyConditionExpression: "PK = :pk",
+          ExpressionAttributeValues: { ":pk": "USER#1" },
+        },
+        scan: {
+          TableName: ctx.tableName,
+        },
+        batchGet: {
+          RequestItems: {
+            [ctx.tableName]: {
+              Keys: [{ PK: "USER#1", SK: "PROFILE#001" }],
             },
           },
-          batchWrite: {
-            RequestItems: {
-              [ctx.tableName]: [
-                { PutRequest: { Item: { PK: "UNSUPPORTED#BW", SK: "1" } } },
-              ],
-            },
-          },
-          transactWrite: {
-            TransactItems: [
-              {
-                ConditionCheck: {
-                  TableName: ctx.tableName,
-                  Key: { PK: "USER#1", SK: "PROFILE#001" },
-                  ConditionExpression: "attribute_exists(PK)",
-                },
-              },
+        },
+        batchWrite: {
+          RequestItems: {
+            [ctx.tableName]: [
+              { PutRequest: { Item: { PK: "UNSUPPORTED#BW", SK: "1" } } },
             ],
           },
-        }
+        },
+        transactWrite: {
+          TransactItems: [
+            {
+              ConditionCheck: {
+                TableName: ctx.tableName,
+                Key: { PK: "USER#1", SK: "PROFILE#001" },
+                ConditionExpression: "attribute_exists(PK)",
+              },
+            },
+          ],
+        },
+      }
 
-        const valueByParam: Record<string, any> = {
-          AttributesToGet: ["PK"],
-          ProjectionExpression: "PK",
-          ExpressionAttributeNames: { "#pk": "PK" },
-          Expected: {},
-          ReturnValues: "ALL_OLD",
-          ReturnConsumedCapacity: "TOTAL",
-          ReturnItemCollectionMetrics: "SIZE",
-          AttributeUpdates: {},
-          Select: "ALL_ATTRIBUTES",
-          KeyConditions: {},
-          QueryFilter: {},
-          ConditionalOperator: "AND",
-          Segment: 1,
-          TotalSegments: 2,
-          ScanFilter: {},
-          ClientRequestToken: "token-1",
-        }
+      const valueByParam: Record<string, any> = {
+        AttributesToGet: ["PK"],
+        ProjectionExpression: "PK",
+        ExpressionAttributeNames: { "#pk": "PK" },
+        Expected: {},
+        ReturnValues: "ALL_OLD",
+        ReturnConsumedCapacity: "TOTAL",
+        ReturnItemCollectionMetrics: "SIZE",
+        AttributeUpdates: {},
+        Select: "ALL_ATTRIBUTES",
+        KeyConditions: {},
+        QueryFilter: {},
+        ConditionalOperator: "AND",
+        Segment: 1,
+        TotalSegments: 2,
+        ScanFilter: {},
+        ClientRequestToken: "token-1",
+      }
 
-        const params = {
-          ...baseByMethod[method],
-          [param]: valueByParam[param],
-        }
+      const params = {
+        ...baseByMethod[method],
+        [param]: valueByParam[param],
+      }
 
-        return (ctx.client.documentClient as any)[method](params).promise()
-      },
-    })),
-  ),
-]
+      return (ctx.client.documentClient as any)[method](params).promise()
+    },
+  })),
+)
 
 const seededFuzzVectors: Vector[] = [11, 42, 99].map((seed) => ({
   id: `fuzz.seed-${seed}`,

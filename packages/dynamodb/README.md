@@ -164,15 +164,15 @@ Because the result has `_unknown` and `meta`, those two names cannot be used for
 a group.
 
 ```ts
-const { posts, comments, _unknown } =
-  yield *
-  DynamoDB.query(
+const program = Effect.gen(function* () {
+  const { posts, comments, _unknown } = yield* DynamoDB.query(
     {
       KeyConditionExpression: "PK = :pk",
       ExpressionAttributeValues: { ":pk": post.PK },
     },
     { posts: Post, comments: Comment },
   )
+})
 ```
 
 ## Writes
@@ -205,11 +205,12 @@ item's version before moving it, and fails with `KeyExistsError` when the new
 keys are taken. Read the version with `docVersion(item)`.
 
 ```ts
-const post = yield * Post.load(key)
-yield *
-  post
+const program = Effect.gen(function* () {
+  const post = yield* Post.load(key)
+  yield* post
     .update({ title: "New title" })
     .pipe(Effect.catchTag("RaceConditionError", () => retryWithFreshRead(key)))
+})
 ```
 
 `post.delete({ ignoreVersion: true })` deletes regardless of the version. An
@@ -223,8 +224,10 @@ check, so it writes without a condition.
 or queries of the live keys. To read it back:
 
 ```ts
-const deleted = yield * Post.load(key, { recover: true })
-deleted.isDeleted // true when the item came from its deleted keys
+const program = Effect.gen(function* () {
+  const deleted = yield* Post.load(key, { recover: true })
+  deleted.isDeleted // true when the item came from its deleted keys
+})
 ```
 
 `deletedKey(key)` returns the deleted keys of a key.
@@ -236,8 +239,8 @@ Build operations, then run them together with `DynamoDB.bulk`:
 ```ts
 const [renamed, renameOp] = post.applyUpdate({ title: "Renamed" })
 
-yield *
-  DynamoDB.bulk([
+const program = Effect.gen(function* () {
+  yield* DynamoDB.bulk([
     draft.operation("put"),
     renameOp,
     Post.operation("delete", oldPost),
@@ -245,6 +248,7 @@ yield *
       ConditionExpression: "attribute_exists(PK)",
     }),
   ])
+})
 ```
 
 `bulk` writes up to 100 operations per TransactWriteItems call. A nested array
@@ -275,9 +279,8 @@ transaction only once. Cancellations and client errors fail right away.
 page forward and `last`/`before` page backward.
 
 ```ts
-const page =
-  yield *
-  Post.paginate(
+const program = Effect.gen(function* () {
+  const page = yield* Post.paginate(
     { first: 20, after: args.after },
     {
       IndexName: "GSI2",
@@ -286,8 +289,9 @@ const page =
     },
   )
 
-page.edges // [{ node: Post, cursor: string }, ...]
-page.pageInfo // { hasNextPage, hasPreviousPage, startCursor, endCursor }
+  page.edges // [{ node: Post, cursor: string }, ...]
+  page.pageInfo // { hasNextPage, hasPreviousPage, startCursor, endCursor }
+})
 ```
 
 A page is full even when a filter or items of other models leave a Query short:

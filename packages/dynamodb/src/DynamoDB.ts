@@ -61,14 +61,14 @@ import {
   type RaceConditionError,
   type TransactionCanceledError,
 } from "./Errors.ts"
+import { keyOf } from "./internal/keys.ts"
 import * as Table from "./internal/operations.ts"
+import { parseCursorKeys } from "./internal/pagination.ts"
 import { KEY } from "./internal/service.ts"
+import { span } from "./internal/tracing.ts"
 import type { Decodable, RawItem } from "./Item.ts"
 import type { Key } from "./Keys.ts"
-import { keyOf } from "./internal/keys.ts"
 import type { CursorOptions, PaginationOptions } from "./Pagination.ts"
-import { parseCursorKeys } from "./internal/pagination.ts"
-import { span } from "./internal/tracing.ts"
 import { type DynamoDBProvider, provider } from "./Provider.ts"
 
 /**
@@ -381,10 +381,14 @@ export declare namespace DynamoDB {
    * @since 7.0.0
    */
   export type TransactionError =
-    TransactionCanceledError | ItemEncodeError | DynamoDBError
+    | TransactionCanceledError
+    | ItemEncodeError
+    | DynamoDBError
   /** @since 7.0.0 */
   export type UpdateError =
-    RaceConditionError | KeyExistsError | TransactionError
+    | RaceConditionError
+    | KeyExistsError
+    | TransactionError
   /** @since 7.0.0 */
   export type UpdateRawError =
     | ItemNotFoundError

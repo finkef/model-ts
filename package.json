@@ -1,25 +1,22 @@
 {
   "name": "model-ts",
-  "repository": "git@github.com:finkef/model-ts.git",
-  "author": "Fabian Finke <finkef@icloud.com>",
-  "license": "MIT",
   "private": true,
-  "type": "module",
-  "packageManager": "bun@1.3.14",
-  "engines": {
-    "node": ">=22"
-  },
+  "license": "MIT",
+  "author": "Fabian Finke <finkef@icloud.com>",
+  "repository": "git@github.com:finkef/model-ts.git",
   "workspaces": [
     "packages/*"
   ],
+  "type": "module",
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "clean": "tsc -b tsconfig.build.json --clean && node -e \"for (const name of ['core', 'dynamodb', 'eventbridge']) require('node:fs').rmSync('packages/' + name + '/dist', { recursive: true, force: true })\"",
     "typecheck": "tsc -b tsconfig.json",
     "test": "vitest run --project core --project eventbridge --project dynamodb:memory",
     "test:local": "vitest run --project dynamodb:local",
-    "format": "prettier --write .",
-    "format:check": "prettier --check .",
+    "lint": "oxlint",
+    "format": "oxfmt",
+    "format:check": "oxfmt --check",
     "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
     "dynamodb:stop": "docker stop dynamodb",
     "release": "bun run clean && bun run build && changeset publish"
@@ -33,8 +30,13 @@
     "@effect/vitest": "4.0.5",
     "@types/node": "^22.0.0",
     "effect": "4.0.5",
-    "prettier": "^3.6.0",
+    "oxfmt": "0.74.0",
+    "oxlint": "1.89.0",
     "typescript": "~5.9.3",
     "vitest": "^5.0.5"
-  }
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "bun@1.3.14"
 }

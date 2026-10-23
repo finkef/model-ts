@@ -514,7 +514,8 @@ const ATTRIBUTE_SEGMENT = /^[A-Za-z_][A-Za-z0-9_-]*/
 const PLACEHOLDER_SEGMENT = /^#[A-Za-z_][A-Za-z0-9_]*/
 
 export type DocumentPathPart =
-  { type: "attribute"; value: string } | { type: "index"; value: number }
+  | { type: "attribute"; value: string }
+  | { type: "index"; value: number }
 
 function resolveUpdatePathToken(
   token: string,

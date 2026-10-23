@@ -4,7 +4,8 @@
  */
 import { Context, Effect, Schema } from "effect"
 import { Model, Provider } from "../src/index.ts"
-import { Address, User, UserId } from "./fixtures.ts"
+import type { UserId } from "./fixtures.ts"
+import { Address, User } from "./fixtures.ts"
 
 declare const user: User
 
