@@ -16,7 +16,6 @@ import {
   ConnectionId,
   OperationId,
   Topic,
-  Storage,
   GatewayMessages,
   createHttpHandler,
   createWebSocketHandler,
@@ -29,10 +28,12 @@ import {
   type ProxyResponse,
   type Gateway,
 } from "../src/index.ts"
+import { JsonObject } from "../src/Models.ts"
+import { Storage } from "../src/Storage.ts"
 import { httpEvent, testLayer, wsEvent } from "./fixtures.ts"
 
 const topic = Topic.make("validation/events")
-type AppContext = { readonly pubSub: PubSub }
+type AppContext = { readonly pubSub: PubSub.Source }
 const fixture = (kind: "builder" | "plain") => {
   const calls = { contexts: 0, sources: 0, resolvers: 0 }
   let adapter: Executor<AppContext, ExecutionError>
@@ -92,6 +93,7 @@ const fixture = (kind: "builder" | "plain") => {
   return {
     calls,
     options: {
+      persistedContext: JsonObject,
       executor: adapter,
       context: (request: ContextRequest<{}>) => {
         calls.contexts++
@@ -107,7 +109,7 @@ type Handler = (
 const start = (handler: Handler, query: string, operationName?: string) =>
   handler(
     wsEvent("validation", "$default", {
-      type: "start",
+      type: "subscribe",
       id: "operation",
       payload: { query, operationName },
     }),
@@ -136,7 +138,7 @@ const noRegistration = Effect.gen(function* () {
   ).toHaveLength(0)
 })
 
-// Like legacy depth rules, this visitor requires fragment existence and acyclicity.
+// This visitor requires fragment existence and acyclicity.
 // Running it before standard validation would throw or exhaust the call stack.
 const assumesValidFragments =
   (called: () => void): ValidationRule =>
@@ -297,7 +299,7 @@ for (const kind of ["builder", "plain"] as const) {
                 yield* connect(websocket)
                 const response = yield* websocket(
                   wsEvent("validation", "$default", {
-                    type: "start",
+                    type: "subscribe",
                     id: "operation",
                     payload: request,
                   }),
@@ -362,7 +364,7 @@ for (const kind of ["builder", "plain"] as const) {
             const replies = frames
               .map((frame) => JSON.parse(frame.data))
               .filter(
-                (frame) => frame.type === "data" || frame.type === "error",
+                (frame) => frame.type === "next" || frame.type === "error",
               )
             const reply = replies[replies.length - 1]
             expect(
@@ -467,7 +469,7 @@ it.effect("allows conditional directives below the subscription root", () =>
     yield* connect(websocket)
     yield* websocket(
       wsEvent("validation", "$default", {
-        type: "start",
+        type: "subscribe",
         id: "operation",
         payload: {
           query:

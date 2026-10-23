@@ -1,17 +1,15 @@
 import { expect, it } from "@effect/vitest"
 import { Cause, Deferred, Effect, Fiber, Logger } from "effect"
 import {
-  DeliveryError,
   GatewayMessages,
-  Storage,
   StorageError,
   TransportError,
-  createDirectPublisher,
-  createStreamHandler,
   createWebSocketHandler,
-  publish,
 } from "../src/index.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { Storage } from "../src/Storage.ts"
 import { Greeting, Identity, builderOptions, builderTopic } from "./builder.ts"
+import { publish } from "./fixtures.ts"
 import { streamEvent, testLayer, wsEvent } from "./fixtures.ts"
 
 const invocation = { requestId: "delivery-boundary" }
@@ -25,7 +23,7 @@ const register = Effect.gen(function* () {
     )
     yield* websocket(
       wsEvent(id, "$default", {
-        type: "start",
+        type: "subscribe",
         id: "s",
         payload: { query: "subscription { message }" },
       }),
@@ -35,9 +33,9 @@ const register = Effect.gen(function* () {
 })
 const payload = { user: "Ada", message: "event" }
 
-for (const path of ["direct", "stream"] as const) {
+{
   it.effect(
-    `${path} isolates context and formatter defects, reports the cause and delivers to the next subscriber`,
+    `stream isolates context and formatter defects, reports the cause and delivers to the next subscriber`,
     () =>
       Effect.gen(function* () {
         yield* register
@@ -68,24 +66,14 @@ for (const path of ["direct", "stream"] as const) {
               throw formatterSecret
             },
           }
-          const deliver =
-            path === "direct"
-              ? createDirectPublisher(options)(
-                  builderTopic,
-                  payload,
-                  invocation,
-                ).pipe(Effect.asVoid)
-              : Effect.gen(function* () {
-                  const event = yield* publish(builderTopic, payload)
-                  expect(
-                    yield* createStreamHandler(options)(
-                      streamEvent(event),
-                      invocation,
-                    ),
-                  ).toEqual({
-                    batchItemFailures: [],
-                  })
-                })
+          const deliver = Effect.gen(function* () {
+            const event = yield* publish(builderTopic, payload)
+            expect(
+              yield* streamHandler(options)(streamEvent(event), invocation),
+            ).toEqual({
+              batchItemFailures: [],
+            })
+          })
           yield* deliver.pipe(
             Effect.provide(
               Logger.layer([
@@ -103,7 +91,7 @@ for (const path of ["direct", "stream"] as const) {
             {
               id: "a-bad",
               frame: {
-                type: "data",
+                type: "next",
                 id: "s",
                 payload: {
                   errors: [
@@ -118,7 +106,7 @@ for (const path of ["direct", "stream"] as const) {
             {
               id: "z-good",
               frame: {
-                type: "data",
+                type: "next",
                 id: "s",
                 payload: { data: { message: "Hello event" } },
               },
@@ -141,7 +129,7 @@ for (const path of ["direct", "stream"] as const) {
   )
 
   it.effect(
-    `${path} retains storage retry semantics while delivering to other subscribers`,
+    `stream retains storage retry semantics while delivering to other subscribers`,
     () =>
       Effect.gen(function* () {
         yield* register
@@ -157,27 +145,14 @@ for (const path of ["direct", "stream"] as const) {
               ? Effect.fail(unavailable)
               : storage.operation(...args),
         }
-        if (path === "direct") {
-          const error = yield* createDirectPublisher(builderOptions)(
-            builderTopic,
-            payload,
+        const event = yield* publish(builderTopic, payload)
+        expect(
+          yield* streamHandler(builderOptions)(
+            streamEvent(event, "42"),
             invocation,
-          ).pipe(Effect.provideService(Storage, layer), Effect.flip)
-          expect(error).toBeInstanceOf(DeliveryError)
-          if (!(error instanceof DeliveryError))
-            throw new Error("Expected delivery failure")
-          expect(error.failures).toMatchObject([
-            { connectionId: "a-bad", cause: unavailable },
-          ])
-        } else {
-          const event = yield* publish(builderTopic, payload)
-          expect(
-            yield* createStreamHandler(builderOptions)(
-              streamEvent(event, "42"),
-              invocation,
-            ).pipe(Effect.provideService(Storage, layer)),
-          ).toEqual({ batchItemFailures: [{ itemIdentifier: "42" }] })
-        }
+          ).pipe(Effect.provideService(Storage, layer)),
+        ).toEqual({ batchItemFailures: [{ itemIdentifier: "42" }] })
+
         const frames = (yield* (yield* GatewayMessages).all).slice(2)
         expect(frames).toHaveLength(1)
         expect(frames[0].connectionId).toBe("z-good")
@@ -192,7 +167,7 @@ for (const path of ["direct", "stream"] as const) {
   )
 
   it.effect(
-    `${path} preserves interruption and awaits pending context cleanup`,
+    `stream preserves interruption and awaits pending context cleanup`,
     () =>
       Effect.gen(function* () {
         yield* register
@@ -206,20 +181,10 @@ for (const path of ["direct", "stream"] as const) {
               return yield* Effect.never
             }).pipe(Effect.ensuring(Deferred.succeed(finalized, undefined))),
         }
-        const deliver =
-          path === "direct"
-            ? createDirectPublisher(options)(
-                builderTopic,
-                payload,
-                invocation,
-              ).pipe(Effect.asVoid)
-            : Effect.gen(function* () {
-                const event = yield* publish(builderTopic, payload)
-                yield* createStreamHandler(options)(
-                  streamEvent(event),
-                  invocation,
-                )
-              })
+        const deliver = Effect.gen(function* () {
+          const event = yield* publish(builderTopic, payload)
+          yield* streamHandler(options)(streamEvent(event), invocation)
+        })
         const fiber = yield* deliver.pipe(Effect.forkChild)
         yield* Deferred.await(entered)
         yield* Fiber.interrupt(fiber)

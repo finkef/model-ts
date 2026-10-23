@@ -1,15 +1,15 @@
 import { expect, it } from "@effect/vitest"
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Deferred, Effect, Fiber, Stream } from "effect"
 import {
   ConnectionId,
   OperationId,
-  Storage,
   Topic,
   GatewayMessages,
   createWebSocketHandler,
   type ContextRequest,
 } from "../src/index.ts"
+import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { Storage } from "../src/Storage.ts"
 import {
   connect,
   options,
@@ -64,7 +64,7 @@ for (const phase of ["context", "subscribe"] as const) {
           const start = (domain: string) =>
             handler(
               wsEvent("c1", "$default", {
-                type: "start",
+                type: "subscribe",
                 id: "1",
                 payload: {
                   query:
@@ -86,10 +86,14 @@ for (const phase of ["context", "subscribe"] as const) {
           expect(pendingOperation?.topics).toEqual([])
           if (action === "stop") {
             yield* handler(
-              wsEvent("c1", "$default", { type: "stop", id: "1" }),
+              wsEvent("c1", "$default", { type: "complete", id: "1" }),
               {},
             )
           } else {
+            yield* handler(
+              wsEvent("c1", "$default", { type: "complete", id: "1" }),
+              {},
+            )
             yield* start("new-topic")
           }
           yield* Deferred.succeed(release, undefined)
@@ -111,10 +115,7 @@ for (const phase of ["context", "subscribe"] as const) {
             expect(
               Object.values(yield* (yield* Sandbox).snapshot),
             ).toHaveLength(1)
-            expect(frames).toEqual([
-              { type: "connection_ack" },
-              { type: "complete", id: "1" },
-            ])
+            expect(frames).toEqual([{ type: "connection_ack" }])
           } else {
             expect(operation?.state).toBe("active")
             expect(operation?.topics).toEqual(["new-topic"])
@@ -132,7 +133,7 @@ for (const phase of ["context", "subscribe"] as const) {
 }
 
 it.effect(
-  "replacement pauses delivery and changes topic membership only at conditional activation",
+  "completed ID reuse preserves generation guards and replaces topic membership",
   () =>
     Effect.gen(function* () {
       yield* connect("c1")
@@ -142,13 +143,14 @@ it.effect(
       const request = { query: 'subscription { message(domain: "a") }' }
       const first = yield* storage.reserve(id, operation, request, 10)
       yield* storage.activate(id, operation, first, [Topic.make("old")])
+      yield* storage.stop(id, operation)
       const replacement = yield* storage.reserve(id, operation, request, 10)
       expect((yield* storage.operation(id, operation))?.state).toBe("pending")
       expect(
         yield* storage
           .subscribers(Topic.make("old"), 0)
           .pipe(Stream.runCollect),
-      ).toHaveLength(1)
+      ).toHaveLength(0)
       expect(
         yield* storage
           .subscribers(Topic.make("new"), 0)

@@ -14,6 +14,7 @@ import {
   createHttpHandler,
   createWebSocketHandler,
 } from "../src/index.ts"
+import { JsonObject } from "../src/Models.ts"
 import { httpEvent, testLayer, wsEvent } from "./fixtures.ts"
 
 class PublicInput extends Schema.TaggedError<PublicInput>()("PublicInput", {
@@ -72,6 +73,7 @@ for (const rules of [false, true])
               : secret
           })
           const options = {
+            persistedContext: JsonObject,
             executor,
             context: () => Effect.succeed({}),
             validationRules: rules
@@ -131,20 +133,17 @@ for (const rules of [false, true])
                 }
                 yield* websocket(
                   wsEvent("input", "$default", {
-                    type: "start",
+                    type: "subscribe",
                     id: "q",
                     payload: request,
                   }),
                   {},
                 )
-                const frames = (yield* (yield* GatewayMessages).all)
-                  .slice(-2)
-                  .map((frame) => JSON.parse(frame.data))
-                expect(frames.map((frame) => frame.type)).toEqual([
-                  "data",
-                  "complete",
-                ])
-                return frames[0].payload
+                const frame = JSON.parse(
+                  (yield* (yield* GatewayMessages).all).at(-1)!.data,
+                )
+                expect(frame.type).toBe("error")
+                return { errors: frame.payload }
               }).pipe(Effect.provideService(ErrorReporter, reporter))
               expect(result).toEqual(expected)
               expect(expected.errors?.[0].locations).toHaveLength(1)

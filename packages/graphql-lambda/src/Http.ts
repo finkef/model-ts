@@ -15,7 +15,7 @@ import {
 } from "./internal/request.ts"
 import { RequestValidationError } from "./internal/RequestValidationError.ts"
 import type { HttpRequirements } from "./internal/requirements.ts"
-import { operationPubSub } from "./PubSub.ts"
+import { operationPubSub } from "./internal/source.ts"
 import type {
   ContextRequest,
   HttpEvent,

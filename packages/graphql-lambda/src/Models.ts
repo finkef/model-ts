@@ -30,9 +30,10 @@ export class Connection extends Model.Class<Connection>()(
   {
     id: ConnectionId,
     endpoint: Schema.String,
-    context: JsonObject,
+    context: Schema.optionalKey(Schema.Json),
     initParams: Schema.optionalKey(JsonObject),
     initialized: Schema.Boolean,
+    initReceived: Schema.Boolean,
     createdAt: Schema.Number,
     ttl: Schema.Number,
   },
@@ -109,7 +110,6 @@ export class PublishedEvent extends Model.Class<PublishedEvent>()(
   {
     id: EventId,
     topic: Topic,
-    // JSON text deliberately preserves the old production serialization contract.
     payload: Schema.String,
     ttl: Schema.Number,
   },

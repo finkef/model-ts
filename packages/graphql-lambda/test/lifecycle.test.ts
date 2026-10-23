@@ -1,5 +1,4 @@
 import { it, expect } from "@effect/vitest"
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Effect } from "effect"
 import {
   ConnectionId,
@@ -8,14 +7,16 @@ import {
   Topic,
 } from "../src/Identifiers.ts"
 import {
-  Connection,
   PublishedEvent,
   GatewayMessages,
-  SubscriptionOperation,
   createWebSocketHandler,
-  publish,
   keepAlive,
 } from "../src/index.ts"
+import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { Storage } from "../src/Storage.ts"
+import { loadOperation } from "./fixtures.ts"
+import { loadConnection } from "./fixtures.ts"
+import { publish } from "./fixtures.ts"
 import {
   connect,
   options,
@@ -35,7 +36,7 @@ it.effect(
       const sandbox = yield* Sandbox
       const upgrade = yield* websocket(wsEvent("c1", "$connect"), {})
       expect(upgrade.headers).toEqual({
-        "Sec-WebSocket-Protocol": "graphql-ws",
+        "Sec-WebSocket-Protocol": "graphql-transport-ws",
       })
       yield* websocket(
         wsEvent("c1", "$default", {
@@ -49,12 +50,8 @@ it.effect(
         (yield* messages.all).map((message) => JSON.parse(message.data)),
       ).toEqual([{ type: "connection_ack" }])
       expect(
-        (yield* SubscriptionOperation.get(
-          SubscriptionOperation.key(
-            ConnectionId.make("c1"),
-            OperationId.make("1"),
-          ),
-        )).topics,
+        (yield* loadOperation(ConnectionId.make("c1"), OperationId.make("1")))
+          .topics,
       ).toEqual(["user", "organization"])
       const skipped = yield* publish(Topic.make("organization"), {
         domainId: "b",
@@ -67,12 +64,12 @@ it.effect(
       const sent = yield* publish(Topic.make("user"), {
         domainId: "a",
         message: "delivered",
-        date: new Date("2026-01-01T00:00:00Z"),
+        date: "2026-01-01T00:00:00.000Z",
       })
       expect(sent.payload).toContain('"date":"2026-01-01T00:00:00.000Z"')
       yield* stream(streamEvent(sent), {})
       expect(JSON.parse((yield* messages.all)[1].data)).toEqual({
-        type: "data",
+        type: "next",
         id: "1",
         payload: { data: { message: "delivered" } },
       })
@@ -135,10 +132,7 @@ it.effect(
       expect(response.statusCode).toBe(401)
       expect(yield* messages.closed).toEqual(["c1"])
       expect(yield* sandbox.snapshot).toEqual({})
-      expect(JSON.parse((yield* messages.all)[0].data)).toMatchObject({
-        type: "error",
-        payload: { extensions: { code: "UNAUTHORIZED" } },
-      })
+      expect(yield* messages.all).toEqual([])
     }).pipe(Effect.provide(testLayer())),
 )
 
@@ -148,7 +142,7 @@ it.effect(
     Effect.gen(function* () {
       const handler = createWebSocketHandler({
         ...options,
-        onWebsocketConnect: () => Effect.succeed(false as const),
+        onConnect: () => Effect.succeed(false as const),
       })
       expect((yield* handler(wsEvent("c1", "$connect"), {})).statusCode).toBe(
         401,
@@ -156,7 +150,7 @@ it.effect(
       expect(yield* (yield* Sandbox).snapshot).toEqual({})
       const accepted = createWebSocketHandler({
         ...options,
-        onWebsocketConnect: () => Effect.succeed({ origin: "trusted" }),
+        onConnect: () => Effect.succeed({ origin: "trusted" }),
       })
       yield* accepted(wsEvent("c2", "$connect"), {})
       yield* accepted(
@@ -166,11 +160,7 @@ it.effect(
         }),
         {},
       )
-      expect(
-        (yield* Connection.get(Connection.key(ConnectionId.make("c2"))))
-          .context,
-      ).toEqual({
-        origin: "trusted",
+      expect((yield* loadConnection(ConnectionId.make("c2"))).context).toEqual({
         user: "ada",
         allowed: true,
       })
@@ -183,11 +173,9 @@ it.effect(
     Effect.gen(function* () {
       yield* connect("c1")
       yield* start("c1")
-      const connection = yield* Connection.get(
-        Connection.key(ConnectionId.make("c1")),
-      )
-      yield* connection.update({
-        context: { ...connection.context, allowed: false },
+      const connection = yield* loadConnection(ConnectionId.make("c1"))
+      yield* (yield* Storage).update(connection, {
+        context: { user: "ada", allowed: false },
       })
       yield* stream(
         streamEvent(
@@ -206,18 +194,20 @@ it.effect(
 )
 
 it.effect(
-  "repeat start is idempotent, stop removes every topic, and WS queries complete",
+  "client completion removes every topic and WebSocket queries complete",
   () =>
     Effect.gen(function* () {
       yield* connect("c1")
       yield* start("c1")
-      yield* start("c1")
       expect(Object.values(yield* (yield* Sandbox).snapshot)).toHaveLength(4)
-      yield* websocket(wsEvent("c1", "$default", { type: "stop", id: "1" }), {})
+      yield* websocket(
+        wsEvent("c1", "$default", { type: "complete", id: "1" }),
+        {},
+      )
       expect(Object.values(yield* (yield* Sandbox).snapshot)).toHaveLength(1)
       yield* websocket(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "q",
           payload: { query: "{ me }" },
         }),
@@ -228,7 +218,7 @@ it.effect(
           .slice(-2)
           .map((message) => JSON.parse(message.data)),
       ).toEqual([
-        { type: "data", id: "q", payload: { data: { me: "ada" } } },
+        { type: "next", id: "q", payload: { data: { me: "ada" } } },
         { type: "complete", id: "q" },
       ])
     }).pipe(Effect.provide(testLayer())),
@@ -243,7 +233,7 @@ it.effect(
       const limited = createWebSocketHandler({ ...options, maxOperations: 1 })
       yield* limited(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "2",
           payload: { query: 'subscription { message(domain: "a") }' },
         }),
@@ -256,7 +246,7 @@ it.effect(
       })
       yield* keepAlive(ConnectionId.make("c1"))
       expect(JSON.parse((yield* messages.all).at(-1)!.data)).toEqual({
-        type: "ka",
+        type: "ping",
       })
     }).pipe(Effect.provide(testLayer())),
 )
@@ -265,27 +255,32 @@ it.effect(
   "malformed messages are rejected and uninitialized clients are closed",
   () =>
     Effect.gen(function* () {
-      yield* websocket(wsEvent("c1", "$connect"), {})
-      for (const message of [
+      for (const [index, message] of [
         null,
         {},
         { type: "subscribe" },
-        { type: "start" },
-      ])
+        { type: "invalid" },
+      ].entries()) {
+        const id = `invalid-${index}`
+        yield* websocket(wsEvent(id, "$connect"), {})
         expect(
-          (yield* websocket(wsEvent("c1", "$default", message), {})).statusCode,
+          (yield* websocket(wsEvent(id, "$default", message), {})).statusCode,
         ).toBe(400)
-      const handler = createWebSocketHandler({ ...options, initRetries: 0 })
+        expect(yield* (yield* Sandbox).snapshot).toEqual({})
+        expect(yield* (yield* GatewayMessages).closed).toContain(id)
+      }
+      yield* websocket(wsEvent("uninitialized", "$connect"), {})
       expect(
-        (yield* handler(
-          wsEvent("c1", "$default", {
-            type: "start",
+        (yield* websocket(
+          wsEvent("uninitialized", "$default", {
+            type: "subscribe",
             id: "1",
             payload: { query: "{ me }" },
           }),
           {},
         )).statusCode,
       ).toBe(401)
-      expect(yield* (yield* GatewayMessages).closed).toEqual(["c1"])
+      expect(yield* (yield* GatewayMessages).closed).toContain("uninitialized")
+      expect(yield* (yield* GatewayMessages).all).toEqual([])
     }).pipe(Effect.provide(testLayer())),
 )

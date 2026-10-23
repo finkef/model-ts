@@ -1,15 +1,13 @@
 import { unmarshall } from "@aws-sdk/util-dynamodb"
 import { Clock, Effect, Schema, Stream } from "effect"
-import { badRequest, DeliveryError } from "./Errors.ts"
-import type { Gateway } from "./Gateway.ts"
-import type { Topic } from "./Identifiers.ts"
-import { createPublishedEvent } from "./internal/publication.ts"
-import { parseJson } from "./internal/request.ts"
-import type { DeliveryRequirements } from "./internal/requirements.ts"
-import { PublishedEvent } from "./Models.ts"
-import type { DirectEvent, StreamEvent, StreamRecord } from "./Request.ts"
-import { Storage, type StorageFailure } from "./Storage.ts"
-import { deliverOperation, type WebSocketOptions } from "./WebSocket.ts"
+import { badRequest, DeliveryError } from "../Errors.ts"
+import type { Gateway } from "../Gateway.ts"
+import { PublishedEvent } from "../Models.ts"
+import type { StreamEvent, StreamRecord } from "../Request.ts"
+import { Storage, type StorageFailure } from "../Storage.ts"
+import { deliverOperation, type WebSocketOptions } from "../WebSocket.ts"
+import { parseJson } from "./request.ts"
+import type { DeliveryRequirements } from "./requirements.ts"
 
 const PublishedTag = Schema.Struct({
   _tag: Schema.Struct({ S: Schema.Literal("GraphQLPublishedEvent") }),
@@ -25,11 +23,11 @@ const PublishedImage = Schema.Struct({
 
 type DeliveryFailure = Schema.SchemaError | StorageFailure | DeliveryError
 
-/** Both entry points use this loop, including context reconstruction and Gone cleanup. */
-const deliverEvent = <C, L, E, R>(
-  options: WebSocketOptions<C, L, E, R>,
+/** Delivery reconstructs current context for each subscriber. */
+const deliverEvent = <C, L, P, E, R>(
+  options: WebSocketOptions<C, L, P, E, R>,
   event: PublishedEvent,
-  record: StreamRecord | DirectEvent,
+  record: StreamRecord,
   lambdaContext: L,
 ) =>
   Effect.gen(function* () {
@@ -93,53 +91,17 @@ const deliverEvent = <C, L, E, R>(
       return yield* new DeliveryError({ eventId: event.id, failures })
   }).pipe(Effect.withSpan("GraphQL.deliver"))
 
-/** Deliver within the publishing invocation, without writing an Events row. */
-export function createDirectPublisher<
-  C,
-  L,
-  const O extends WebSocketOptions<C, L, unknown, unknown>,
->(
-  options: O & WebSocketOptions<C, L, unknown, unknown>,
-): (
-  topic: Topic,
-  payload: unknown,
-  lambdaContext: L,
-  ttlSeconds?: number,
-) => Effect.Effect<
-  PublishedEvent,
-  DeliveryFailure,
-  DeliveryRequirements<O> | Storage | Gateway
->
-export function createDirectPublisher<C, L>(
-  options: WebSocketOptions<C, L, unknown, unknown>,
-) {
-  return Effect.fn("GraphQL.publishDirect")(function* (
-    topic: Topic,
-    payload: unknown,
-    lambdaContext: L,
-    ttlSeconds = 7200,
-  ) {
-    const event = yield* createPublishedEvent(topic, payload, ttlSeconds)
-    yield* deliverEvent(
-      options,
-      event,
-      { delivery: "direct", publishedEvent: event },
-      lambdaContext,
-    )
-    return event
-  })
-}
-
 /**
  * Enable ReportBatchItemFailures on the event source. Failed records retry; successful
  * subscribers may receive duplicates. Configure retry age/count and a DLQ in CDK.
  */
-export function createStreamHandler<
+export function streamHandler<
   C,
   L,
-  const O extends WebSocketOptions<C, L, unknown, unknown>,
+  P,
+  const O extends WebSocketOptions<C, L, P, unknown, unknown>,
 >(
-  options: O & WebSocketOptions<C, L, unknown, unknown>,
+  options: O & WebSocketOptions<C, L, P, unknown, unknown>,
 ): (
   event: StreamEvent,
   lambdaContext: L,
@@ -148,8 +110,8 @@ export function createStreamHandler<
   DeliveryFailure,
   DeliveryRequirements<O> | Storage | Gateway
 >
-export function createStreamHandler<C, L>(
-  options: WebSocketOptions<C, L, unknown, unknown>,
+export function streamHandler<C, L, P>(
+  options: WebSocketOptions<C, L, P, unknown, unknown>,
 ) {
   const process = Effect.fn("GraphQL.streamRecord")(function* (
     record: StreamRecord,

@@ -1,10 +1,11 @@
 import { createBuilder, executor } from "@model-ts/graphql"
 import { Context, Effect, Schema, Stream } from "effect"
 import { Topic, type ContextRequest, type PubSub } from "../src/index.ts"
+import { JsonObject } from "../src/Models.ts"
 
 export interface BuilderContext {
   readonly user: string
-  readonly pubSub: PubSub
+  readonly pubSub: PubSub.Source
 }
 export class Greeting extends Context.Service<
   Greeting,
@@ -69,6 +70,7 @@ export const built = GraphQL.schema({
   message,
 })
 export const builderOptions = {
+  persistedContext: JsonObject,
   // No adapter: the builder owns error formatting and both sides consume Streams.
   executor: executor(built),
   context: (request: ContextRequest<{ readonly requestId: string }>) =>

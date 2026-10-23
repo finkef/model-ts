@@ -15,16 +15,15 @@ import {
 import {
   createHttpHandler,
   createWebSocketHandler,
-  createDirectPublisher,
-  createStreamHandler,
   graphqlExecutor,
   formatError,
   GatewayMessages,
   Topic,
-  publish,
   type Result,
   TransportError,
 } from "../src/index.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { publish } from "./fixtures.ts"
 import {
   connect,
   httpEvent,
@@ -210,7 +209,7 @@ it.effect(
 )
 
 it.effect(
-  "executor-formatted public errors survive HTTP, WebSocket, registration and both delivery paths",
+  "executor-formatted public errors survive HTTP, WebSocket, registration and stream delivery",
   () =>
     Effect.gen(function* () {
       const publicResult: Result = {
@@ -247,7 +246,7 @@ it.effect(
       const ws = createWebSocketHandler(settings)
       yield* ws(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "query",
           payload: { query: "{ me }" },
         }),
@@ -255,15 +254,13 @@ it.effect(
       )
       yield* ws(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "live",
           payload: { query: 'subscription { message(domain: "a") }' },
         }),
         {},
       )
-      const direct = createDirectPublisher(settings)
-      yield* direct(Topic.make("public"), {}, {})
-      yield* createStreamHandler(settings)(
+      yield* streamHandler(settings)(
         streamEvent(yield* publish(Topic.make("public"), {})),
         {},
       )
@@ -276,7 +273,7 @@ it.effect(
       })
       yield* rejected(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "rejected",
           payload: { query: 'subscription { message(domain: "a") }' },
         }),
@@ -284,8 +281,8 @@ it.effect(
       )
       const data = (yield* (yield* GatewayMessages).all)
         .map((frame) => JSON.parse(frame.data))
-        .filter((frame) => frame.type === "data")
-      expect(data).toHaveLength(4)
+        .filter((frame) => frame.type === "next")
+      expect(data).toHaveLength(3)
       for (const frame of data) expect(frame.payload).toEqual(publicResult)
     }).pipe(Effect.provide(testLayer())),
 )

@@ -1,4 +1,4 @@
-import type { Effect, Stream } from "effect"
+import type { Effect, Stream, Schema } from "effect"
 
 /** Extract each callback independently: TypeScript otherwise infers the first E/R only. */
 type Requirements<A> = A extends (...args: never[]) => infer Value
@@ -19,11 +19,37 @@ type Subscribe<O> = O extends { readonly executor: infer Executor }
   ? From<Executor, "subscribe">
   : never
 
+type DecodeRequirements<O> = O extends {
+  readonly persistedContext: Schema.Codec<
+    infer _P,
+    infer _I,
+    infer RD,
+    infer _RE
+  >
+}
+  ? RD
+  : never
+type EncodeRequirements<O> = O extends {
+  readonly persistedContext: Schema.Codec<
+    infer _P,
+    infer _I,
+    infer _RD,
+    infer RE
+  >
+}
+  ? RE
+  : never
+
 export type HttpRequirements<O> =
   | Execute<O>
   | From<O, "context" | "healthCheck">
 export type WebSocketRequirements<O> =
+  | DecodeRequirements<O>
+  | EncodeRequirements<O>
   | Execute<O>
   | Subscribe<O>
-  | From<O, "context" | "onWebsocketConnect" | "onConnect">
-export type DeliveryRequirements<O> = Subscribe<O> | From<O, "context">
+  | From<O, "context" | "onConnect" | "onInit">
+export type DeliveryRequirements<O> =
+  | Subscribe<O>
+  | From<O, "context">
+  | DecodeRequirements<O>

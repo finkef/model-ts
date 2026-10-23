@@ -1,18 +1,16 @@
 import { marshall } from "@aws-sdk/util-dynamodb"
 import { it, expect } from "@effect/vitest"
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
-import { Effect, Fiber, Layer, Stream } from "effect"
+import { Effect, Layer, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { GraphQLError } from "graphql"
 import {
   ConnectionId,
   OperationId,
+  OperationGeneration,
   EventId,
   Topic,
 } from "../src/Identifiers.ts"
 import {
-  Connection,
-  Storage,
   Gateway,
   GatewayError,
   GatewayMessages,
@@ -20,12 +18,15 @@ import {
   Subscription,
   SubscriptionOperation,
   TransportError,
-  createStreamHandler,
   createWebSocketHandler,
-  operationPubSub,
-  publish,
-  withFilter,
 } from "../src/index.ts"
+import { operationPubSub } from "../src/internal/source.ts"
+import { withFilter } from "../src/PubSub.ts"
+import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { Storage } from "../src/Storage.ts"
+import { loadOperation } from "./fixtures.ts"
+import { publish } from "./fixtures.ts"
 import {
   connect,
   register,
@@ -38,30 +39,6 @@ import {
   wsEvent,
 } from "./fixtures.ts"
 
-it.effect("start waits for a concurrent connection_init invocation", () =>
-  Effect.gen(function* () {
-    yield* websocket(wsEvent("race", "$connect"), {})
-    const pending = yield* start("race").pipe(Effect.forkChild)
-    yield* websocket(
-      wsEvent("race", "$default", {
-        type: "connection_init",
-        payload: { token: "valid" },
-      }),
-      {},
-    )
-    yield* TestClock.adjust(50)
-    expect((yield* Fiber.join(pending)).statusCode).toBe(200)
-    expect(
-      (yield* SubscriptionOperation.get(
-        SubscriptionOperation.key(
-          ConnectionId.make("race"),
-          OperationId.make("1"),
-        ),
-      )).topics,
-    ).toHaveLength(2)
-  }).pipe(Effect.provide(testLayer())),
-)
-
 it.effect("concurrent starts cannot exceed the operation limit", () =>
   Effect.gen(function* () {
     yield* connect("race")
@@ -71,7 +48,7 @@ it.effect("concurrent starts cannot exceed the operation limit", () =>
       (id) =>
         handler(
           wsEvent("race", "$default", {
-            type: "start",
+            type: "subscribe",
             id,
             payload: { query: 'subscription { message(domain: "a") }' },
           }),
@@ -95,7 +72,7 @@ it.effect("concurrent starts cannot exceed the operation limit", () =>
 )
 
 it.effect(
-  "replacing topics removes obsolete memberships atomically and keys cannot collide",
+  "completed IDs can be reused with different topics and keys cannot collide",
   () =>
     Effect.gen(function* () {
       yield* connect("a:b")
@@ -114,6 +91,10 @@ it.effect(
         request,
         ["first"].map((name) => Topic.make(name)),
         10,
+      )
+      yield* (yield* Storage).stop(
+        ConnectionId.make("a:b"),
+        OperationId.make("c"),
       )
       yield* register(
         ConnectionId.make("a:b"),
@@ -137,12 +118,8 @@ it.effect(
         OperationId.make("c"),
       )
       expect(
-        (yield* SubscriptionOperation.get(
-          SubscriptionOperation.key(
-            ConnectionId.make("a"),
-            OperationId.make("b:c"),
-          ),
-        )).topics,
+        (yield* loadOperation(ConnectionId.make("a"), OperationId.make("b:c")))
+          .topics,
       ).toEqual(["first"])
     }).pipe(Effect.provide(testLayer())),
 )
@@ -151,9 +128,23 @@ it.effect(
   "disconnect cleans up a missing/expired connection and never resurrects it",
   () =>
     Effect.gen(function* () {
-      yield* connect("expired")
-      yield* start("expired")
-      yield* Connection.delete(Connection.key(ConnectionId.make("expired")))
+      yield* (yield* Sandbox).seed(
+        new SubscriptionOperation({
+          connectionId: ConnectionId.make("expired"),
+          operationId: OperationId.make("1"),
+          generation: OperationGeneration.make("orphan"),
+          request: { query: "{ me }" },
+          state: "active",
+          topics: [Topic.make("user")],
+          ttl: 7200,
+        }),
+        new Subscription({
+          connectionId: ConnectionId.make("expired"),
+          operationId: OperationId.make("1"),
+          topic: Topic.make("user"),
+          ttl: 7200,
+        }),
+      )
       yield* (yield* Storage).disconnect(ConnectionId.make("expired"))
       expect(yield* (yield* Sandbox).snapshot).toEqual({})
       const attempt = yield* register(
@@ -176,12 +167,8 @@ it.effect(
       yield* TestClock.adjust("1 hour")
       yield* start("c1")
       expect(
-        (yield* SubscriptionOperation.get(
-          SubscriptionOperation.key(
-            ConnectionId.make("c1"),
-            OperationId.make("1"),
-          ),
-        )).ttl,
+        (yield* loadOperation(ConnectionId.make("c1"), OperationId.make("1")))
+          .ttl,
       ).toBe(7200)
       const event = yield* publish(
         Topic.make("user"),
@@ -261,12 +248,8 @@ it.effect(
         ),
       ).toEqual({ batchItemFailures: [{ itemIdentifier: "42" }] })
       expect(
-        (yield* SubscriptionOperation.get(
-          SubscriptionOperation.key(
-            ConnectionId.make("c1"),
-            OperationId.make("1"),
-          ),
-        )).topics,
+        (yield* loadOperation(ConnectionId.make("c1"), OperationId.make("1")))
+          .topics,
       ).toHaveLength(2)
     }).pipe(Effect.provide(testLayer())),
 )
@@ -312,7 +295,7 @@ it.effect(
     Effect.gen(function* () {
       yield* connect("c1")
       yield* start("c1")
-      const handler = createStreamHandler({
+      const handler = streamHandler({
         ...options,
         context: () =>
           Effect.fail(
@@ -346,6 +329,7 @@ it.effect("publish refuses invalid JSON and empty topics before writing", () =>
     circular.self = circular
     for (const payload of [undefined, 1n, circular])
       expect(
+        // @ts-expect-error Runtime callers can bypass the JSON payload boundary.
         (yield* publish(Topic.make("topic"), payload).pipe(Effect.result))._tag,
       ).toBe("Failure")
     expect((yield* publish(Topic.make(""), {}).pipe(Effect.result))._tag).toBe(
@@ -386,15 +370,12 @@ it.effect(
 )
 
 it.effect(
-  "connection_terminate closes immediately and expired event inserts are ignored",
+  "invalid message types close immediately and expired event inserts are ignored",
   () =>
     Effect.gen(function* () {
       yield* connect("c1")
       yield* start("c1")
-      yield* websocket(
-        wsEvent("c1", "$default", { type: "connection_terminate" }),
-        {},
-      )
+      yield* websocket(wsEvent("c1", "$default", { type: "unsupported" }), {})
       expect(yield* (yield* Sandbox).snapshot).toEqual({})
       expect(yield* (yield* GatewayMessages).closed).toEqual(["c1"])
       const expired = new PublishedEvent({
@@ -415,7 +396,7 @@ it.effect(
     Effect.gen(function* () {
       yield* connect("c1")
       yield* start("c1")
-      const handler = createStreamHandler({
+      const handler = streamHandler({
         ...options,
         validationRules: [
           (context) => ({

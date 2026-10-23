@@ -62,6 +62,40 @@ export class DeliveryError extends Schema.TaggedError<DeliveryError>()(
   },
 ) {}
 
+const reasons = {
+  InvalidMessage: 4400,
+  Unauthorized: 4401,
+  Forbidden: 4403,
+  Subprotocol: 4406,
+  DuplicateSubscriber: 4409,
+  TooManyInitRequests: 4429,
+  Internal: 4500,
+} as const
+
+export class ProtocolClose extends Schema.TaggedError<ProtocolClose>()(
+  "ProtocolClose",
+  {
+    reason: Schema.Literals([
+      "InvalidMessage",
+      "Unauthorized",
+      "Forbidden",
+      "Subprotocol",
+      "DuplicateSubscriber",
+      "TooManyInitRequests",
+      "Internal",
+    ]),
+  },
+) {
+  get code() {
+    return reasons[this.reason]
+  }
+}
+
+export class PersistedContextError extends Schema.TaggedError<PersistedContextError>()(
+  "PersistedContextError",
+  { operation: Schema.Literals(["encode", "decode"]), cause: Schema.Defect() },
+) {}
+
 export class ExecutionError extends Schema.TaggedError<ExecutionError>()(
   "ExecutionError",
   {

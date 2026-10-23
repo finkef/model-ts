@@ -1,13 +1,10 @@
 import { it, expect } from "@effect/vitest"
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Context, Deferred, Effect, Fiber, Layer, Stream } from "effect"
 import { Topic } from "../src/Identifiers.ts"
-import {
-  GatewayMessages,
-  createStreamHandler,
-  createWebSocketHandler,
-  publish,
-} from "../src/index.ts"
+import { GatewayMessages, createWebSocketHandler } from "../src/index.ts"
+import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { publish } from "./fixtures.ts"
 import {
   connect,
   options,
@@ -49,11 +46,11 @@ it.effect(
           ),
       }
       const handler = createWebSocketHandler({ ...options, executor })
-      const delivery = createStreamHandler({ ...options, executor })
+      const delivery = streamHandler({ ...options, executor })
       yield* connect("c1")
       yield* handler(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "1",
           payload: { query: 'subscription { message(domain: "a") }' },
         }),
@@ -70,7 +67,7 @@ it.effect(
       expect(
         JSON.parse((yield* (yield* GatewayMessages).all).at(-1)!.data),
       ).toEqual({
-        type: "data",
+        type: "next",
         id: "1",
         payload: { data: { message: "from service" } },
       })
@@ -110,7 +107,7 @@ it.effect(
       const handler = createWebSocketHandler({ ...options, executor })
       const running = yield* handler(
         wsEvent("c1", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "1",
           payload: { query: 'subscription { message(domain: "a") }' },
         }),

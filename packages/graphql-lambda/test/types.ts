@@ -1,8 +1,11 @@
-import { Context, Effect, Stream } from "effect"
+import type { DynamoDB } from "@model-ts/dynamodb"
+import { Sandbox } from "@model-ts/dynamodb/Sandbox"
+import { Context, Effect, Layer, Schema, Stream } from "effect"
 import { GraphQLSchema } from "graphql"
 import { expectTypeOf } from "vitest"
+import { PubSub } from "../src/index.ts"
 import type * as GraphQLLambda from "../src/index.ts"
-import type { Gateway, Storage } from "../src/index.ts"
+import type { Gateway } from "../src/index.ts"
 import {
   ConnectionId,
   OperationId,
@@ -13,19 +16,18 @@ import {
   PublishedEvent,
   ConnectionRejected,
   TransportError,
-  createStreamHandler,
-  createDirectPublisher,
-  publish,
-  type StorageService,
   type ContextRequest,
-  type PubSub,
   type GatewayService,
   createHttpHandler,
   createWebSocketHandler,
   type Executor,
   type ProxyResponse,
 } from "../src/index.ts"
+import { JsonObject } from "../src/Models.ts"
+import { publish } from "../src/PubSub.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
 import type * as Request from "../src/Request.ts"
+import type { Storage, StorageService } from "../src/Storage.ts"
 import {
   builderOptions,
   type BuilderContext,
@@ -33,7 +35,7 @@ import {
   type Identity,
 } from "./builder.ts"
 
-declare const pubSub: PubSub
+declare const pubSub: PubSub.Source
 declare const gateway: GatewayService
 
 class ResolverService extends Context.Service<
@@ -68,9 +70,10 @@ export const missingLayers: Effect.Effect<ProxyResponse> = handler(request, {})
 // @ts-expect-error Typed context must match the executor's context, locally at the option.
 createHttpHandler({ executor, context: () => Effect.succeed({ user: 123 }) })
 const websocket = createWebSocketHandler({
+  persistedContext: JsonObject,
   executor,
   context: () => Effect.succeed({ user: "ada" }),
-  onConnect: () =>
+  onInit: () =>
     IdentityService.use((identity) => Effect.succeed({ user: identity.user })),
 })
 declare const wsRequest: Parameters<typeof websocket>[0]
@@ -91,17 +94,17 @@ class HealthService extends Context.Service<
   { healthy: boolean }
 >()("HealthService") {}
 const independentOptions = {
+  persistedContext: JsonObject,
   executor,
   context: (request: ContextRequest<{ cookie: string }>) =>
     IdentityService.use((identity) =>
       Effect.succeed({ user: identity.user + request.lambdaContext.cookie }),
     ),
-  onWebsocketConnect: () =>
+  onConnect: () =>
     UpgradeService.use(() =>
       Effect.fail(new Error("origin store unavailable")),
     ),
-  onConnect: () =>
-    InitService.use(() => Effect.fail(new ConnectionRejected({}))),
+  onInit: () => InitService.use(() => Effect.fail(new ConnectionRejected({}))),
   healthCheck: HealthService.use(() =>
     Effect.fail(
       new TransportError({
@@ -144,7 +147,7 @@ export const missingHealth: Effect.Effect<
   never,
   ResolverService | IdentityService
 > = allHttp(request, { cookie: "session" })
-const delivery = createStreamHandler(independentOptions)
+const delivery = streamHandler(independentOptions)
 // Delivery does not require authentication or health services from the same options object.
 export const deliveryServices: Effect.Effect<
   { batchItemFailures: Array<{ itemIdentifier: string }> },
@@ -181,24 +184,6 @@ pubSub.subscribe("topic")
 // @ts-expect-error AWS gateway calls retain the connection ID brand.
 gateway.close("https://example.test/ws", eventId)
 
-const direct = createDirectPublisher(independentOptions)
-// Inline publication needs the storage abstraction, not the DynamoDB implementation.
-export const directServices: Effect.Effect<
-  PublishedEvent,
-  unknown,
-  ResolverService | IdentityService | Storage | Gateway
-> = direct(topic, {}, { cookie: "session" })
-// @ts-expect-error Resolver requirements survive direct publication.
-export const missingDirectResolver: Effect.Effect<
-  PublishedEvent,
-  unknown,
-  IdentityService | Storage | Gateway
-> = direct(topic, {}, { cookie: "session" })
-// @ts-expect-error Direct publication retains its invocation context.
-direct(topic, {}, { cookie: 123 })
-// @ts-expect-error Inline publishing requires a branded topic.
-direct("topic", {}, { cookie: "session" })
-
 createHttpHandler({
   executor,
   context: () => Effect.succeed({ user: "ada" }),
@@ -215,8 +200,7 @@ createHttpHandler({
 // Exercise the actual builder seam, including resolver and context requirements.
 const builderHttp = createHttpHandler(builderOptions)
 const builderWebSocket = createWebSocketHandler(builderOptions)
-const builderDelivery = createStreamHandler(builderOptions)
-const builderDirect = createDirectPublisher(builderOptions)
+const builderDelivery = streamHandler(builderOptions)
 expectTypeOf(builderOptions.executor).toExtend<
   Executor<BuilderContext, never, Greeting>
 >()
@@ -229,9 +213,6 @@ expectTypeOf<
 expectTypeOf<
   Effect.Services<ReturnType<typeof builderDelivery>>
 >().toEqualTypeOf<Greeting | Identity | Storage | Gateway>()
-expectTypeOf<Effect.Services<ReturnType<typeof builderDirect>>>().toEqualTypeOf<
-  Greeting | Identity | Storage | Gateway
->()
 createHttpHandler({
   executor: builderOptions.executor,
   // @ts-expect-error The builder's typed context cannot be replaced with an incomplete value.
@@ -253,3 +234,120 @@ expectTypeOf<
 expectTypeOf<
   Extract<keyof typeof Request, InternalRequestExports>
 >().toEqualTypeOf<never>()
+
+const persistedSchema = Schema.Struct({
+  user: Schema.String,
+  since: Schema.DateFromString,
+})
+const typedPersistedOptions = {
+  executor,
+  persistedContext: persistedSchema,
+  context: (
+    request: ContextRequest<{ cookie: string }, typeof persistedSchema.Type>,
+  ) => {
+    expectTypeOf(request.persisted.since).toEqualTypeOf<Date>()
+    return Effect.succeed({ user: request.persisted.user })
+  },
+  onConnect: () => Effect.succeed({ user: "Ada", since: new Date() }),
+  onInit: (
+    _payload: JsonObject,
+    previous: typeof persistedSchema.Type | undefined,
+  ) => Effect.succeed({ user: previous?.user ?? "Ada", since: new Date() }),
+}
+const typedPersistedWebsocket = createWebSocketHandler(typedPersistedOptions)
+const typedPersistedStream = PubSub.DynamoDB.streamHandler(
+  typedPersistedOptions,
+)
+expectTypeOf<
+  Effect.Services<ReturnType<typeof typedPersistedWebsocket>>
+>().toEqualTypeOf<ResolverService | Storage | Gateway>()
+expectTypeOf<
+  Effect.Services<ReturnType<typeof typedPersistedStream>>
+>().toEqualTypeOf<ResolverService | Storage | Gateway>()
+createWebSocketHandler({
+  executor,
+  persistedContext: persistedSchema,
+  context: (request) => {
+    expectTypeOf(request.persisted.since).toEqualTypeOf<Date>()
+    return Effect.succeed({ user: request.persisted.user })
+  },
+  onInit: (_payload, previous) => {
+    expectTypeOf(previous).toEqualTypeOf<
+      typeof persistedSchema.Type | undefined
+    >()
+    return Effect.succeed({ user: "Ada", since: new Date() })
+  },
+})
+createWebSocketHandler({
+  ...typedPersistedOptions,
+  // @ts-expect-error The encoded side must be JSON; a Date requires a JSON codec.
+  persistedContext: Schema.Struct({ user: Schema.String, since: Schema.Date }),
+})
+PubSub.DynamoDB.streamHandler({
+  ...typedPersistedOptions,
+  // @ts-expect-error Stream delivery enforces the same JSON boundary.
+  persistedContext: Schema.Struct({ user: Schema.String, since: Schema.Date }),
+})
+createWebSocketHandler({
+  ...typedPersistedOptions,
+  // @ts-expect-error Hooks return decoded P, not its encoded representation.
+  onInit: () => Effect.succeed({ user: "Ada", since: "2026-01-01" }),
+})
+const publication = PubSub.publish(topic, {})
+expectTypeOf<
+  Effect.Services<typeof publication>
+>().toEqualTypeOf<PubSub.Publisher>()
+const privateTable = PubSub.DynamoDB.layerFrom(Sandbox.layerMemory())
+expectTypeOf<Layer.Success<typeof privateTable>>().toEqualTypeOf<
+  PubSub.Storage | PubSub.Publisher
+>()
+expectTypeOf<
+  Extract<Layer.Success<typeof privateTable>, DynamoDB>
+>().toEqualTypeOf<never>()
+
+class ContextDecoder extends Context.Service<
+  ContextDecoder,
+  { readonly enabled: boolean }
+>()("ContextDecoder") {}
+class ContextEncoder extends Context.Service<
+  ContextEncoder,
+  { readonly enabled: boolean }
+>()("ContextEncoder") {}
+declare const serviceCodec: Schema.Codec<
+  typeof persistedSchema.Type,
+  typeof persistedSchema.Encoded,
+  ContextDecoder,
+  ContextEncoder
+>
+const schemaWebsocket = createWebSocketHandler({
+  ...typedPersistedOptions,
+  persistedContext: serviceCodec,
+})
+const schemaDelivery = PubSub.DynamoDB.streamHandler({
+  ...typedPersistedOptions,
+  persistedContext: serviceCodec,
+})
+expectTypeOf<
+  Effect.Services<ReturnType<typeof schemaWebsocket>>
+>().toEqualTypeOf<
+  ResolverService | Storage | Gateway | ContextDecoder | ContextEncoder
+>()
+expectTypeOf<
+  Effect.Services<ReturnType<typeof schemaDelivery>>
+>().toEqualTypeOf<ResolverService | Storage | Gateway | ContextDecoder>()
+createWebSocketHandler({
+  ...typedPersistedOptions,
+  // @ts-expect-error Unknown encoded values cannot cross the JSON persistence boundary.
+  persistedContext: Schema.Unknown,
+})
+
+const memoryPubSub = PubSub.DynamoDB.layerMemory()
+expectTypeOf<Layer.Success<typeof memoryPubSub>>().toEqualTypeOf<
+  PubSub.Storage | PubSub.Publisher | PubSub.DynamoDB.Sandbox
+>()
+expectTypeOf<
+  Extract<Layer.Success<typeof memoryPubSub>, DynamoDB | Sandbox>
+>().toEqualTypeOf<never>()
+
+// @ts-expect-error A supplied layer must provide the DynamoDB table service.
+PubSub.DynamoDB.layerFrom(Layer.empty)

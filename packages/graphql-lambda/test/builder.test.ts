@@ -3,12 +3,10 @@ import { ErrorReporter, type ErrorReport } from "@model-ts/graphql"
 import { Cause, Effect } from "effect"
 import {
   GatewayMessages,
-  createDirectPublisher,
   createHttpHandler,
-  createStreamHandler,
   createWebSocketHandler,
-  publish,
 } from "../src/index.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
 import {
   Greeting,
   Identity,
@@ -16,13 +14,13 @@ import {
   builderTopic,
   privateFailure,
 } from "./builder.ts"
+import { publish } from "./fixtures.ts"
 import { httpEvent, streamEvent, testLayer, wsEvent } from "./fixtures.ts"
 
 const invocation = { requestId: "builder-test" }
 const http = createHttpHandler(builderOptions)
 const websocket = createWebSocketHandler(builderOptions)
-const direct = createDirectPublisher(builderOptions)
-const delivery = createStreamHandler(builderOptions)
+const delivery = streamHandler(builderOptions)
 const query = "{ hello publicFailure forbidden internal }"
 
 for (const transport of ["HTTP", "WebSocket"] as const) {
@@ -44,7 +42,7 @@ for (const transport of ["HTTP", "WebSocket"] as const) {
           )
           yield* websocket(
             wsEvent("builder", "$default", {
-              type: "start",
+              type: "subscribe",
               id: "q",
               payload: { query },
             }),
@@ -55,7 +53,7 @@ for (const transport of ["HTTP", "WebSocket"] as const) {
           )
           expect(frames.map((frame) => frame.type)).toEqual([
             "connection_ack",
-            "data",
+            "next",
             "complete",
           ])
           return JSON.stringify(frames[1].payload)
@@ -109,7 +107,7 @@ for (const transport of ["HTTP", "WebSocket"] as const) {
 }
 
 it.effect(
-  "delivers a builder subscription through direct and queued publication with identical filtering",
+  "delivers a builder subscription through published events with filtering",
   () =>
     Effect.gen(function* () {
       yield* websocket(wsEvent("subscriber", "$connect"), invocation)
@@ -119,7 +117,7 @@ it.effect(
       )
       yield* websocket(
         wsEvent("subscriber", "$default", {
-          type: "start",
+          type: "subscribe",
           id: "s",
           payload: { query: "subscription { message }" },
         }),
@@ -131,7 +129,6 @@ it.effect(
       ).toEqual([{ type: "connection_ack" }])
       for (const user of ["Other", "Ada"]) {
         const payload = { user, message: "event" }
-        yield* direct(builderTopic, payload, invocation)
         const event = yield* publish(builderTopic, payload)
         expect(yield* delivery(streamEvent(event), invocation)).toEqual({
           batchItemFailures: [],
@@ -142,23 +139,22 @@ it.effect(
         .map((message) => JSON.parse(message.data))
       expect(frames).toEqual([
         {
-          type: "data",
-          id: "s",
-          payload: { data: { message: "Hello event" } },
-        },
-        {
-          type: "data",
+          type: "next",
           id: "s",
           payload: { data: { message: "Hello event" } },
         },
       ])
       yield* websocket(wsEvent("subscriber", "$disconnect"), invocation)
-      yield* direct(
-        builderTopic,
-        { user: "Ada", message: "after disconnect" },
+      yield* delivery(
+        streamEvent(
+          yield* publish(builderTopic, {
+            user: "Ada",
+            message: "after disconnect",
+          }),
+        ),
         invocation,
       )
-      expect(yield* messages.all).toHaveLength(3)
+      expect(yield* messages.all).toHaveLength(2)
     }).pipe(
       Effect.provideService(Greeting, { prefix: "Hello " }),
       Effect.provideService(Identity, { user: "Ada" }),

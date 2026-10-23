@@ -17,15 +17,21 @@ it.effect(
         endpoint: "https://example.execute-api.local/ws",
         context: {},
         initialized: true,
+        initReceived: true,
         createdAt: 0,
         ttl: 7200,
       })
       const gateway = yield* GatewayMessages
-      const overhead = Buffer.byteLength(JSON.stringify({ payload: "" }))
+      const overhead = Buffer.byteLength(
+        JSON.stringify({ type: "ping", payload: { value: "" } }),
+      )
       const frame = (bytes: number) => ({
-        payload:
-          "é".repeat(Math.floor((bytes - overhead) / 2)) +
-          "x".repeat((bytes - overhead) % 2),
+        type: "ping" as const,
+        payload: {
+          value:
+            "é".repeat(Math.floor((bytes - overhead) / 2)) +
+            "x".repeat((bytes - overhead) % 2),
+        },
       })
       for (const bytes of [32 * 1024 - 1, 32 * 1024]) {
         const message = frame(bytes)

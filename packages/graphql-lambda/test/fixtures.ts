@@ -1,5 +1,4 @@
 import { marshall } from "@aws-sdk/util-dynamodb"
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Effect, Layer, Schema } from "effect"
 import {
   GraphQLNonNull,
@@ -15,23 +14,25 @@ import {
 } from "../src/Identifiers.ts"
 import {
   Gateway,
-  Storage,
   ConnectionRejected,
   TransportError,
   createHttpHandler,
   createWebSocketHandler,
-  createStreamHandler,
   graphqlExecutor,
-  withFilter,
   type ContextRequest,
   type HttpEvent,
-  type PubSub,
-  type PublishedEvent,
+  PubSub,
+  PublishedEvent,
   type StreamEvent,
   type WebSocketEvent,
 } from "../src/index.ts"
 import { header } from "../src/internal/request.ts"
+import { JsonObject } from "../src/Models.ts"
 import type { OperationRequest } from "../src/Models.ts"
+import { withFilter } from "../src/PubSub.ts"
+import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { streamHandler } from "../src/PubSub/DynamoDB.ts"
+import { Storage } from "../src/Storage.ts"
 
 declare module "vitest" {
   export interface ProvidedContext {
@@ -39,19 +40,37 @@ declare module "vitest" {
   }
 }
 export const testLayer = () =>
-  Storage.layer.pipe(
-    Layer.provideMerge(
-      Layer.merge(
-        inject("graphqlDynamoDB") === "local"
-          ? Sandbox.layerLocal()
-          : Sandbox.layerMemory(),
-        Gateway.layerMemory,
-      ),
+  Layer.merge(
+    inject("graphqlDynamoDB") === "local"
+      ? PubSub.DynamoDB.layerLocal()
+      : PubSub.DynamoDB.layerMemory(),
+    Gateway.layerMemory,
+  )
+
+export const loadConnection = (id: ConnectionId) =>
+  Storage.use((storage) => storage.liveConnection(id))
+export const loadOperation = (id: ConnectionId, operationId: OperationId) =>
+  Storage.use((storage) => storage.operation(id, operationId)).pipe(
+    Effect.flatMap((operation) =>
+      operation
+        ? Effect.succeed(operation)
+        : Effect.die(new Error("Expected an operation")),
     ),
   )
 
+export const publish = Effect.fn(function* (
+  topic: Topic,
+  payload: Schema.Json,
+  ttlSeconds = 7200,
+) {
+  const id = yield* PubSub.publish(topic, payload, { ttlSeconds })
+  return yield* (yield* Sandbox)
+    .get({ PK: `GRAPHQL#EVENT#${id}`, SK: "EVENT" })
+    .pipe(Effect.flatMap(Schema.decodeUnknownEffect(PublishedEvent)))
+})
+
 export interface AppContext {
-  readonly pubSub: PubSub
+  readonly pubSub: PubSub.Source
   readonly user: string
   readonly allowed: boolean
 }
@@ -144,9 +163,10 @@ export const context = (request: ContextRequest<LambdaContext>) =>
     }
   })
 export const options = {
+  persistedContext: JsonObject,
   executor: graphqlExecutor<AppContext>(schema),
   context,
-  onConnect: (payload: { readonly [key: string]: Schema.Json }) =>
+  onInit: (payload: { readonly [key: string]: Schema.Json }) =>
     payload.token === "valid"
       ? Effect.succeed({ user: "ada", allowed: true })
       : Effect.fail(new ConnectionRejected({})),
@@ -156,7 +176,7 @@ export const http = createHttpHandler({
   cors: { origin: ["https://app.example"], credentials: true },
 })
 export const websocket = createWebSocketHandler(options)
-export const stream = createStreamHandler(options)
+export const stream = streamHandler(options)
 export const httpEvent = (
   query: unknown,
   overrides: Partial<HttpEvent> = {},
@@ -176,7 +196,7 @@ export const wsEvent = (
   routeKey: string,
   message?: unknown,
 ): WebSocketEvent => ({
-  headers: { "sEc-WeBsOcKeT-PrOtOcOl": "other, graphql-ws" },
+  headers: { "sEc-WeBsOcKeT-PrOtOcOl": "other, graphql-transport-ws" },
   requestContext: {
     connectionId: id,
     routeKey,
@@ -199,7 +219,7 @@ export const connect = (id: string) =>
 export const start = (id: string, operationId = "1", domain = "a") =>
   websocket(
     wsEvent(id, "$default", {
-      type: "start",
+      type: "subscribe",
       id: operationId,
       payload: {
         query: "subscription ($domain: String!) { message(domain: $domain) }",

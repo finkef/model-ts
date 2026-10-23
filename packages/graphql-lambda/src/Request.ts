@@ -1,6 +1,6 @@
 import type { ValidationRule } from "graphql"
-import type { Connection, JsonObject, PublishedEvent } from "./Models.ts"
-import type { PubSub } from "./PubSub.ts"
+import type { Connection, JsonObject } from "./Models.ts"
+import type { Source } from "./PubSub.ts"
 
 /** Structural API Gateway payload v1.0 types: real AWS events are assignable. */
 export interface HttpEvent {
@@ -42,11 +42,6 @@ export interface StreamRecord {
     readonly SequenceNumber?: string
   }
 }
-/** Inline delivery has no DynamoDB stream record; domain metadata can travel in lambdaContext. */
-export interface DirectEvent {
-  readonly delivery: "direct"
-  readonly publishedEvent: PublishedEvent
-}
 export interface StreamEvent {
   readonly Records: ReadonlyArray<StreamRecord>
 }
@@ -62,12 +57,12 @@ export interface ResponseHeaders {
   readonly headers: Record<string, string>
   readonly cookies: Array<string>
 }
-export interface ContextRequest<L> {
-  readonly event: HttpEvent | WebSocketEvent | StreamRecord | DirectEvent
+export interface ContextRequest<L, P = JsonObject> {
+  readonly event: HttpEvent | WebSocketEvent | StreamRecord
   readonly lambdaContext: L
   readonly connection?: Connection
-  readonly persisted: JsonObject
-  readonly pubSub: PubSub
+  readonly persisted: P
+  readonly pubSub: Source
   readonly response: ResponseHeaders
 }
 export interface ValidationOptions {

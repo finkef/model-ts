@@ -1,8 +1,6 @@
 import { expect, it } from "@effect/vitest"
-import { Sandbox } from "@model-ts/dynamodb/Sandbox"
 import { Cause, Effect, Logger } from "effect"
 import {
-  Connection,
   ConnectionId,
   ConnectionRejected,
   GatewayMessages,
@@ -10,6 +8,8 @@ import {
   createWebSocketHandler,
   type JsonObject,
 } from "../src/index.ts"
+import { Sandbox } from "../src/PubSub/DynamoDB.ts"
+import { loadConnection } from "./fixtures.ts"
 import { options, testLayer, websocket, wsEvent } from "./fixtures.ts"
 
 it.effect(
@@ -25,7 +25,7 @@ it.effect(
         const upgradeId = `upgrade-${index}`
         const upgrade = createWebSocketHandler({
           ...options,
-          onWebsocketConnect: () => decision,
+          onConnect: () => decision,
         })
         expect(
           (yield* upgrade(wsEvent(upgradeId, "$connect"), {})).statusCode,
@@ -34,7 +34,7 @@ it.effect(
         const initId = `init-${index}`
         const init = createWebSocketHandler({
           ...options,
-          onConnect: () => decision,
+          onInit: () => decision,
         })
         yield* websocket(wsEvent(initId, "$connect"), {})
         expect(
@@ -45,10 +45,7 @@ it.effect(
         ).toBe(401)
         expect(yield* sandbox.snapshot).toEqual({})
         expect(yield* gateway.closed).toContain(initId)
-        expect(JSON.parse((yield* gateway.all).at(-1)!.data)).toMatchObject({
-          type: "error",
-          payload: { extensions: { code: "UNAUTHORIZED" } },
-        })
+        expect(yield* gateway.all).toEqual([])
       }
     }).pipe(Effect.provide(testLayer())),
 )
@@ -59,7 +56,7 @@ it.effect(
     Effect.gen(function* () {
       const logCauses: Array<string> = []
       const logger = Logger.make(({ cause }) => {
-        logCauses.push(Cause.pretty(cause))
+        if (cause.reasons.length) logCauses.push(Cause.pretty(cause))
       })
       const failure = new Error("credential database offline")
       const failures: ReadonlyArray<
@@ -85,21 +82,14 @@ it.effect(
       for (const [index, failed] of failures.entries()) {
         const upgrade = createWebSocketHandler({
           ...options,
-          onWebsocketConnect: () => failed,
+          onConnect: () => failed,
         })
         const response = yield* upgrade(
           wsEvent(`upgrade-${index}`, "$connect"),
           {},
         ).pipe(Effect.provide(Logger.layer([logger])))
         expect(response.statusCode).toBe(500)
-        expect(JSON.parse(response.body)).toEqual({
-          errors: [
-            {
-              message: "Internal server error",
-              extensions: { code: "INTERNAL_SERVER_ERROR" },
-            },
-          ],
-        })
+        expect(response.body).toBe("")
         expect(yield* (yield* Sandbox).snapshot).toEqual({})
       }
       expect(logCauses).toHaveLength(4)
@@ -111,47 +101,29 @@ it.effect(
 )
 
 it.effect(
-  "init failures retain uninitialized state for a retry and never send an unauthorized frame",
+  "init infrastructure failures close and clean up without protocol frames",
   () =>
     Effect.gen(function* () {
-      const id = ConnectionId.make("retry")
-      yield* websocket(wsEvent(id, "$connect"), {})
-      const logs: Array<string> = []
-      const logger = Logger.make(({ cause }) => {
-        logs.push(Cause.pretty(cause))
-      })
-      for (const failed of [
+      for (const [index, failed] of [
         Effect.fail(new Error("JWT key fetch failed")),
         Effect.die(new Error("JWT implementation defect")),
-      ]) {
+      ].entries()) {
+        const id = `init-failure-${index}`
+        yield* websocket(wsEvent(id, "$connect"), {})
         const handler = createWebSocketHandler({
           ...options,
-          onConnect: () => failed,
+          onInit: () => failed,
         })
         expect(
           (yield* handler(
             wsEvent(id, "$default", { type: "connection_init" }),
             {},
-          ).pipe(Effect.provide(Logger.layer([logger])))).statusCode,
+          )).statusCode,
         ).toBe(500)
-        const persisted = yield* Connection.get(Connection.key(id))
-        expect(persisted.initialized).toBe(false)
-        expect(persisted.context).toEqual({})
+        expect(yield* (yield* Sandbox).snapshot).toEqual({})
+        expect(yield* (yield* GatewayMessages).closed).toContain(id)
         expect(yield* (yield* GatewayMessages).all).toEqual([])
-        expect(yield* (yield* GatewayMessages).closed).toEqual([])
       }
-      expect(logs[0]).toContain("JWT key fetch failed")
-      expect(logs[1]).toContain("JWT implementation defect")
-      expect(
-        (yield* websocket(
-          wsEvent(id, "$default", {
-            type: "connection_init",
-            payload: { token: "valid" },
-          }),
-          {},
-        )).statusCode,
-      ).toBe(200)
-      expect((yield* Connection.get(Connection.key(id))).initialized).toBe(true)
     }).pipe(Effect.provide(testLayer())),
 )
 
@@ -159,7 +131,7 @@ it.effect("synchronously thrown auth defects are server errors too", () =>
   Effect.gen(function* () {
     const upgrade = createWebSocketHandler({
       ...options,
-      onWebsocketConnect: () => {
+      onConnect: () => {
         throw new Error("hook threw before returning its Effect")
       },
     })
@@ -176,8 +148,8 @@ it.effect(
     Effect.gen(function* () {
       const handler = createWebSocketHandler({
         ...options,
-        onConnect: undefined,
-        onWebsocketConnect: () =>
+        onInit: undefined,
+        onConnect: () =>
           Effect.succeed({ user: "authenticated", role: "member" }),
       })
       const id = ConnectionId.make("upgrade-only")
@@ -191,13 +163,13 @@ it.effect(
       )
       yield* handler(
         wsEvent(id, "$default", {
-          type: "start",
+          type: "subscribe",
           id: "query",
           payload: { query: "{ me }" },
         }),
         {},
       )
-      const connection = yield* Connection.get(Connection.key(id))
+      const connection = yield* loadConnection(id)
       expect(connection.context).toEqual({
         user: "authenticated",
         role: "member",
@@ -209,7 +181,7 @@ it.effect(
       expect(frames[1].payload.data.me).toBe("authenticated")
       const anonymous = createWebSocketHandler({
         ...options,
-        onConnect: undefined,
+        onInit: undefined,
       })
       yield* anonymous(wsEvent("anonymous", "$connect"), {})
       yield* anonymous(
@@ -220,8 +192,7 @@ it.effect(
         {},
       )
       expect(
-        (yield* Connection.get(Connection.key(ConnectionId.make("anonymous"))))
-          .context,
+        (yield* loadConnection(ConnectionId.make("anonymous"))).context,
       ).toEqual({})
     }).pipe(Effect.provide(testLayer())),
 )
