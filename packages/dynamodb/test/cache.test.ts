@@ -1,7 +1,15 @@
 import { describe, expect, it as vitest } from "@effect/vitest"
-import { Effect } from "effect"
-import { docVersion, DynamoDB, RequestCache } from "../src/index.ts"
-import { ItemCache } from "../src/internal/cache.ts"
+import { Model } from "@model-ts/core"
+import { Deferred, Effect, Fiber, Schema } from "effect"
+import {
+  docVersion,
+  DynamoDB,
+  type DynamoDBError,
+  RequestCache,
+} from "../src/index.ts"
+import { ItemCache, type SharedRead } from "../src/internal/cache.ts"
+import { makeMemoryEngine } from "../src/internal/memory/engine.ts"
+import { memoryClientConfig } from "../src/internal/memory/handler.ts"
 import { Sandbox } from "../src/Sandbox.ts"
 import { makePost, Post, PostId, Slug } from "./fixtures.ts"
 import { it, recordSpans } from "./utils.ts"
@@ -19,6 +27,67 @@ const cached = <A, E, R>(effect: Effect.Effect<A, E, R>) =>
   batches(effect.pipe(DynamoDB.withRequestCache))
 
 const key = Post.key(PostId.make("post_001"))
+
+/** A model with a field the schema doesn't copy, so aliasing would show. */
+class Doc extends Model.Class<Doc>()("Doc", DynamoDB.provider, {
+  id: Schema.String,
+  data: Schema.Unknown,
+}) {
+  get PK() {
+    return `DOC#${this.id}`
+  }
+  get SK() {
+    return "DOC"
+  }
+}
+const docKey = { PK: "DOC#1", SK: "DOC" }
+
+interface HttpRequest {
+  readonly headers: Record<string, string>
+}
+
+/**
+ * An in-memory table whose responses can be held after DynamoDB applied the
+ * request, to put writes and reads in flight at chosen moments.
+ */
+const gatedTable = (tableName = "posts") => {
+  const config = memoryClientConfig(makeMemoryEngine())
+  const handler = config.requestHandler as unknown as {
+    readonly handle: (request: HttpRequest) => Promise<unknown>
+  }
+  const holding = new Set<string>()
+  const held: Array<() => void> = []
+  const calls: Array<string> = []
+  const handle = async (request: HttpRequest) => {
+    const target = request.headers["x-amz-target"] ?? ""
+    const operation = target.slice(target.indexOf(".") + 1)
+    calls.push(operation)
+    const response = await handler.handle(request)
+    if (holding.has(operation)) {
+      await new Promise<void>((resolve) => held.push(resolve))
+    }
+    return response
+  }
+  const until = (done: () => boolean): Effect.Effect<void> =>
+    Effect.suspend(() =>
+      done() ? Effect.void : Effect.andThen(Effect.sleep(1), until(done)),
+    )
+  return {
+    layer: DynamoDB.layer({
+      tableName,
+      cursors: "plain",
+      client: { ...config, requestHandler: { ...handler, handle } as never },
+    }),
+    calls,
+    hold: (operation: string) => Effect.sync(() => holding.add(operation)),
+    /** Waits until `count` responses are held. */
+    held: (count: number) => until(() => held.length >= count),
+    release: Effect.sync(() => {
+      holding.clear()
+      for (const resolve of held.splice(0)) resolve()
+    }),
+  }
+}
 
 describe("request cache", () => {
   it.effect("reads each key once per request", () =>
@@ -268,37 +337,186 @@ describe("request cache", () => {
       expect(value.invalidated.title).toBe("Changed")
     }),
   )
+
+  it.effect("loads what a fresh read returns after a write", () =>
+    Effect.gen(function* () {
+      const data = {
+        set: new Set(["a", undefined]),
+        map: new Map([["a", 1]]),
+        big: 1n,
+        list: ["a", undefined],
+        nested: { gone: undefined, n: 1 },
+      }
+      const { value } = yield* cached(
+        Effect.gen(function* () {
+          yield* new Doc({ id: "1", data }).put()
+          return yield* Doc.load(docKey)
+        }),
+      )
+      const fresh = yield* Doc.get(docKey)
+
+      expect(value.data).toEqual(fresh.data)
+      expect(fresh.data).toEqual({
+        set: new Set(["a"]),
+        map: { a: 1 },
+        big: 1,
+        list: ["a"],
+        nested: { n: 1 },
+      })
+    }),
+  )
+
+  it.effect("keeps its items apart from the instances it returns", () =>
+    Effect.gen(function* () {
+      yield* (yield* Sandbox).seed(new Doc({ id: "1", data: { n: 1 } }))
+
+      const { value } = yield* cached(
+        Effect.gen(function* () {
+          const loaded = yield* Doc.load(docKey)
+          Object.assign(loaded.data as object, { n: 2 })
+          const reloaded = yield* Doc.load(docKey)
+
+          const written = new Doc({ id: "2", data: { n: 1 } })
+          yield* written.put()
+          Object.assign(written.data as object, { n: 2 })
+          return { reloaded, written: yield* Doc.load(written) }
+        }),
+      )
+
+      expect(value.reloaded.data).toEqual({ n: 1 })
+      expect(value.written.data).toEqual({ n: 1 })
+    }),
+  )
+
+  vitest.live("forgets a key that two writes changed at once", () => {
+    const table = gatedTable()
+    return Effect.gen(function* () {
+      // DynamoDB applies the first put, but its response arrives last.
+      yield* table.hold("PutItem")
+      const first = yield* Effect.forkChild(
+        makePost(1, { title: "First" }).put({ ignoreExistence: true }),
+      )
+      yield* table.held(1)
+      const second = yield* Effect.forkChild(
+        makePost(1, { title: "Second" }).put({ ignoreExistence: true }),
+      )
+      yield* table.held(2)
+      yield* table.release
+      yield* Fiber.join(first)
+      yield* Fiber.join(second)
+
+      const sent = table.calls.length
+      expect((yield* Post.load(key)).title).toBe("Second")
+      expect(table.calls.slice(sent)).toEqual(["BatchGetItem"])
+    }).pipe(DynamoDB.withRequestCache, Effect.provide(table.layer))
+  })
+
+  vitest.live("shares a read in flight with later loads of its key", () => {
+    const table = gatedTable()
+    return Effect.gen(function* () {
+      yield* makePost(1).put()
+      yield* Effect.gen(function* () {
+        yield* table.hold("BatchGetItem")
+        const first = yield* Effect.forkChild(Post.load(key))
+        yield* table.held(1)
+        const second = yield* Effect.forkChild(Post.load(key))
+        yield* Effect.sleep(10)
+        yield* table.release
+        expect((yield* Fiber.join(first)).title).toBe("Post 1")
+        expect((yield* Fiber.join(second)).title).toBe("Post 1")
+      }).pipe(DynamoDB.withRequestCache)
+      expect(table.calls).toEqual(["PutItem", "BatchGetItem"])
+    }).pipe(Effect.provide(table.layer))
+  })
+
+  vitest.live("reads again when the load it waited for is interrupted", () => {
+    const table = gatedTable()
+    return Effect.gen(function* () {
+      yield* makePost(1).put()
+      yield* Effect.gen(function* () {
+        yield* table.hold("BatchGetItem")
+        const first = yield* Effect.forkChild(Post.load(key))
+        yield* table.held(1)
+        const second = yield* Effect.forkChild(Post.load(key))
+        yield* Effect.sleep(10)
+        yield* Effect.forkChild(Fiber.interrupt(first))
+        yield* Effect.sleep(10)
+        yield* table.release
+        expect((yield* Fiber.join(second)).title).toBe("Post 1")
+      }).pipe(DynamoDB.withRequestCache)
+    }).pipe(Effect.provide(table.layer))
+  })
+
+  vitest.live("keeps tables of the same name apart", () => {
+    const a = gatedTable("posts")
+    const b = gatedTable("posts")
+    return Effect.gen(function* () {
+      const cache = yield* RequestCache.make
+      const run = <A, E>(
+        table: typeof a,
+        effect: Effect.Effect<A, E, DynamoDB>,
+      ) =>
+        effect.pipe(
+          Effect.provideService(RequestCache, cache),
+          Effect.provide(table.layer),
+        )
+      yield* run(a, makePost(1, { title: "A" }).put())
+      yield* run(b, makePost(1, { title: "B" }).put())
+
+      expect((yield* run(a, Post.load(key))).title).toBe("A")
+      expect((yield* run(b, Post.load(key))).title).toBe("B")
+    })
+  })
 })
 
 describe("ItemCache", () => {
-  vitest("keeps a write over a read that started before it", () => {
-    const cache = new ItemCache()
-    const token = cache.token()
-    cache.set("posts", key, { ...key, title: "Written" })
-    cache.fill("posts", key, token, { ...key, title: "Read" })
-    expect(cache.lookup("posts", key)?.item?.title).toBe("Written")
+  const table = {}
+  const item = (title: string) => ({ ...key, title })
+  const titleOf = (cache: ItemCache) => cache.lookup(table, key)?.item?.title
 
-    const late = cache.token()
-    cache.clear()
-    cache.fill("posts", key, late, { ...key, title: "Read" })
-    expect(cache.lookup("posts", key)).toBeUndefined()
+  vitest.effect("keeps a write over a read that started before it", () =>
+    Effect.gen(function* () {
+      const cache = new ItemCache()
+      const pending = yield* Deferred.make<SharedRead, DynamoDBError>()
+      const shared = { _tag: "Shared", pending } as const
+      const token = cache.beginRead(table, key, shared)
+      cache.endWrite(cache.beginWrite(table, [key]), [
+        { _tag: "Stored", key, item: item("Written") },
+      ])
+      cache.endRead(table, key, token, shared, { item: item("Read") })
+      expect(titleOf(cache)).toBe("Written")
+
+      const consistent = { _tag: "Consistent" } as const
+      const late = cache.beginRead(table, key, consistent)
+      cache.clear()
+      cache.endRead(table, key, late, consistent, { item: item("Read") })
+      expect(cache.lookup(table, key)).toBeUndefined()
+    }),
+  )
+
+  vitest("keeps a consistent read over an older one", () => {
+    const cache = new ItemCache()
+    const consistent = { _tag: "Consistent" } as const
+    const older = cache.beginRead(table, key, consistent)
+    const newer = cache.beginRead(table, key, consistent)
+    cache.endRead(table, key, newer, consistent, { item: item("New") })
+    cache.endRead(table, key, older, consistent, { item: item("Old") })
+    expect(titleOf(cache)).toBe("New")
   })
 
-  vitest("stores what DynamoDB would store", () => {
+  vitest("forgets a key whose writes overlapped", () => {
     const cache = new ItemCache()
-    const item = {
-      ...key,
-      GSI1PK: undefined,
-      tags: ["a", undefined],
-      meta: { a: undefined, b: 1 },
-    }
-    cache.set("posts", key, item)
-    item.meta.b = 2
-    expect(cache.lookup("posts", key)?.item).toEqual({
-      ...key,
-      tags: ["a"],
-      meta: { b: 1 },
-    })
-    expect(cache.lookup("other", key)).toBeUndefined()
+    const first = cache.beginWrite(table, [key])
+    const second = cache.beginWrite(table, [key])
+    cache.endWrite(second, [{ _tag: "Stored", key, item: item("Second") }])
+    cache.endWrite(first, [{ _tag: "Stored", key, item: item("First") }])
+    expect(cache.lookup(table, key)).toBeUndefined()
+
+    // Once no write is in flight, the next one is recorded again.
+    cache.endWrite(cache.beginWrite(table, [key]), [
+      { _tag: "Stored", key, item: item("Third") },
+    ])
+    expect(titleOf(cache)).toBe("Third")
+    expect(cache.lookup({}, key)).toBeUndefined()
   })
 })

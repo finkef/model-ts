@@ -46,7 +46,7 @@ import {
 } from "./internal/memory/engine.ts"
 import { memoryClientConfig } from "./internal/memory/handler.ts"
 import { snapshotKey } from "./internal/snapshot.ts"
-import { createTableCommand } from "./internal/table.ts"
+import { createTableCommand, marshallOptions } from "./internal/table.ts"
 import type { RawItem } from "./Item.ts"
 import type { Key } from "./Keys.ts"
 import type { CursorOptions } from "./Pagination.ts"
@@ -159,7 +159,7 @@ export class Sandbox extends Context.Service<Sandbox, SandboxService>()(
         const documents = yield* Effect.acquireRelease(
           Effect.sync(() =>
             DynamoDBDocumentClient.from(new DynamoDBClient(client), {
-              marshallOptions: { removeUndefinedValues: true },
+              marshallOptions: marshallOptions(),
             }),
           ),
           (documents) => Effect.sync(() => documents.destroy()),

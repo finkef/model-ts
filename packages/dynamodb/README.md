@@ -187,31 +187,46 @@ export const handler = (event: APIGatewayProxyEvent) =>
 ```
 
 Inside the request, `load` and `loadMany` return what the request already
-knows about a key, including that it holds no item. Keys the cache doesn't
-know still go through the batched read, so a GraphQL level of partly cached
-items costs one BatchGetItem for the rest. Writes keep the cache current: a
-successful `put`, `update`, `updateRaw`, `delete`, `softDelete` or bulk
-transaction (including its rollback) records the item it stored or the key it
-removed. A bulk `updateRaw` changes an item without returning it, so its key
-is read again on the next load. A write that fails, for example with
-`RaceConditionError`, forgets every key it touched, so a retry loads fresh data.
-A load that was already in flight when a write happened never replaces what the
-write recorded.
+knows about a key, including that it holds no item, and a load of a key that is
+already being read waits for that read. Keys the cache doesn't know still go
+through the batched read, so a GraphQL level of partly cached items costs one
+BatchGetItem for the rest.
+
+Writes keep the cache current. A successful `put`, `update`, `updateRaw`,
+`delete`, `softDelete` or bulk transaction (including its rollback) records the
+item it stored, as a read would return it, or that the key is now empty. The
+cache forgets a key instead when it can't know what the table holds:
+
+- after a failed or interrupted write, for example one that failed with
+  `RaceConditionError`, so a retry loads fresh data;
+- after writes of the key that ran at the same time, since their responses
+  don't show which one DynamoDB applied last;
+- after an `updateRaw` inside `bulk`, because transactions don't return items.
+
+A read never replaces what a write, an invalidation or a consistent read that
+started after it recorded. Every load gets its own copy of the item, so changing
+one instance never changes what the next load returns.
 
 `get`, `query`, `stream` and `paginate` always read the table, and
 `load(key, { consistentRead: true })` reads the table and refreshes the entry.
 
 The cache only sees writes made through model-ts in the same request. After
-writing some other way, call `RequestCache.invalidate(key)` or
+writing some other way, call `RequestCache.invalidate(...keys)` (include
+`deletedKey(key)` when the write moved a soft-deleted item) or
 `RequestCache.clear`, or load with `consistentRead: true`. Create one cache per
 request, never one for the container: another invocation's writes would never
 reach it. When one request runs several effects, as GraphQL resolvers that each
-call `runPromise` do, make the cache once and provide it to each of them:
+call `runPromise` do, make the cache once per request and provide it to each of
+them. Keep the `DynamoDB` layer in the shared runtime, so resolvers still share
+batches:
 
 ```ts
-const cache = await runtime.runPromise(RequestCache.make)
-const run = <A, E>(effect: Effect.Effect<A, E, DynamoDB>) =>
-  runtime.runPromise(Effect.provideService(effect, RequestCache, cache))
+const execute = async (request: GraphQLRequest) => {
+  const cache = await runtime.runPromise(RequestCache.make)
+  const run = <A, E>(effect: Effect.Effect<A, E, AppServices>) =>
+    runtime.runPromise(Effect.provideService(effect, RequestCache, cache))
+  return graphql({ schema, source: request.query, contextValue: { run } })
+}
 ```
 
 ## Writes
