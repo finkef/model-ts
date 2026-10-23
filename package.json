@@ -19,7 +19,8 @@
     "format:check": "oxfmt --check",
     "dynamodb:start": "docker run -d --name dynamodb --rm -p 8000:8000 amazon/dynamodb-local",
     "dynamodb:stop": "docker stop dynamodb",
-    "release": "bun run clean && bun run build && changeset publish"
+    "release": "bun run clean && bun run build && changeset publish",
+    "version": "changeset version && bun install"
   },
   "devDependencies": {
     "@aws-sdk/client-dynamodb": "^3.1079.0",
