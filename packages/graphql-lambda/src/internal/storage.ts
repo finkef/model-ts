@@ -69,7 +69,7 @@ const operations = (id: ConnectionId) =>
       ":prefix": "OPERATION#",
     },
     ConsistentRead: true,
-    FetchAllPages: true,
+    fetchAllPages: true,
   })
 
 const removeOperation = (operation: SubscriptionOperation) => [
@@ -187,7 +187,7 @@ const activate = Effect.fn("GraphQL.activate")(function* (
               connectionId: id,
               operationId,
               ttl: connection.ttl,
-            }).operation("put", { IgnoreExistence: true }),
+            }).operation("put", { ignoreExistence: true }),
           ),
         ],
       ])
