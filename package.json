@@ -10,9 +10,9 @@
   "type": "module",
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
-    "clean": "tsc -b tsconfig.build.json --clean && node -e \"for (const name of ['core', 'dynamodb', 'eventbridge']) require('node:fs').rmSync('packages/' + name + '/dist', { recursive: true, force: true })\"",
+    "clean": "tsc -b tsconfig.build.json --clean && node -e \"for (const name of ['core', 'dynamodb', 'eventbridge', 'graphql']) require('node:fs').rmSync('packages/' + name + '/dist', { recursive: true, force: true })\"",
     "typecheck": "tsc -b tsconfig.json",
-    "test": "vitest run --project core --project eventbridge --project dynamodb:memory",
+    "test": "vitest run --project core --project eventbridge --project dynamodb:memory --project graphql",
     "test:local": "vitest run --project dynamodb:local",
     "lint": "oxlint",
     "format": "oxfmt",

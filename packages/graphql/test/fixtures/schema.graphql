@@ -1,0 +1,299 @@
+"""
+A valid DateTime value
+"""
+scalar DateTime
+
+union FavoriteTarget = List | Workspace
+
+type FavoriteTargetConnection {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Edge-Types
+  """
+  edges: [FavoriteTargetEdge!]!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
+  """
+  pageInfo: PageInfo!
+}
+
+type FavoriteTargetEdge {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Cursor
+  """
+  cursor: String!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Node
+  """
+  node: FavoriteTarget!
+}
+
+"""
+The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).
+"""
+scalar JSON
+
+type List implements Node {
+  createdAt: DateTime!
+  createdBy: String!
+  id: ID!
+
+  """
+  Shown in the sidebar and in mentions.
+  """
+  name: String!
+  organizationId: ID!
+  starred: Boolean
+
+  """
+  Whether the list shows up in the sidebar.
+  """
+  status: ListStatus!
+  updatedAt: DateTime
+  workspace: Workspace
+  workspaceId: ID!
+}
+
+type ListConnection {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Edge-Types
+  """
+  edges: [ListEdge!]!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
+  """
+  pageInfo: PageInfo!
+}
+
+type ListCountedConnection {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Edge-Types
+  """
+  edges: [ListEdge!]!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
+  """
+  pageInfo: PageInfo!
+  totalCount: Int!
+}
+
+type ListEdge {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Cursor
+  """
+  cursor: String!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Node
+  """
+  node: List!
+}
+
+"""
+Whether the list shows up in the sidebar.
+"""
+enum ListStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+input ListUpdateInput {
+  """
+  A new name. Must not be blank.
+  """
+  name: String
+  starred: Boolean
+}
+
+union ListUpdateResult = ListEdge | NotFoundError | UserInputError
+
+type Mutation {
+  listUpdate(
+    """
+    The list ID.
+    """
+    id: ID!
+    input: ListUpdateInput!
+  ): ListUpdateResult!
+}
+
+interface Node {
+  id: ID!
+}
+
+type NodeConnection {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Edge-Types
+  """
+  edges: [NodeEdge!]!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
+  """
+  pageInfo: PageInfo!
+}
+
+type NodeEdge {
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Cursor
+  """
+  cursor: String!
+
+  """
+  https://facebook.github.io/relay/graphql/connections.htm#sec-Node
+  """
+  node: Node!
+}
+
+type NotFoundError {
+  message: String!
+}
+
+"""
+PageInfo cursor, as defined in https://facebook.github.io/relay/graphql/connections.htm#sec-undefined.PageInfo
+"""
+type PageInfo {
+  """
+  The cursor corresponding to the last nodes in edges. Null if the connection is empty.
+  """
+  endCursor: String
+
+  """
+  Used to indicate whether more edges exist following the set defined by the clients arguments.
+  """
+  hasNextPage: Boolean!
+
+  """
+  Used to indicate whether more edges exist prior to the set defined by the clients arguments.
+  """
+  hasPreviousPage: Boolean!
+
+  """
+  The cursor corresponding to the first nodes in edges. Null if the connection is empty.
+  """
+  startCursor: String
+}
+
+type Query {
+  favorites: [FavoriteTarget!]!
+  legacyName: String! @deprecated(reason: "Use workspace.name")
+  listsCounted(
+    """
+    Returns the elements in the list that come after the specified cursor
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor
+    """
+    before: String
+
+    """
+    Returns the first n elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last n elements from the list.
+    """
+    last: Int
+  ): ListCountedConnection!
+  metadata(value: JSON!): JSON!
+  node: Node!
+  nodePage(
+    """
+    Returns the elements in the list that come after the specified cursor
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor
+    """
+    before: String
+
+    """
+    Returns the first n elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last n elements from the list.
+    """
+    last: Int
+  ): NodeConnection!
+  search(
+    """
+    Returns the elements in the list that come after the specified cursor
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor
+    """
+    before: String
+
+    """
+    Returns the first n elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last n elements from the list.
+    """
+    last: Int
+    terms: [String!]!
+  ): FavoriteTargetConnection!
+  searchEdge: FavoriteTargetEdge!
+  serverTime: DateTime!
+
+  """
+  Validate a workspace URL slug.
+  """
+  slug(value: Slug!): Slug!
+  workspace(id: ID!): Workspace!
+}
+
+scalar Slug
+
+type Subscription {
+  listChanged(id: ID!): List!
+}
+
+type UserInputError {
+  field: String!
+  message: String!
+}
+
+type Workspace implements Node {
+  createdAt: DateTime!
+  id: ID!
+  lists(
+    """
+    Returns the elements in the list that come after the specified cursor
+    """
+    after: String
+
+    """
+    Returns the elements in the list that come before the specified cursor
+    """
+    before: String
+
+    """
+    Returns the first n elements from the list.
+    """
+    first: Int
+
+    """
+    Returns the last n elements from the list.
+    """
+    last: Int
+  ): ListConnection!
+
+  """
+  Shown in the sidebar and in mentions.
+  """
+  name: String!
+}

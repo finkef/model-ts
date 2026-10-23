@@ -1,0 +1,98 @@
+"""
+An ISO-8601 timestamp with a timezone.
+"""
+scalar DateTime
+
+type List implements Node {
+  createdAt: DateTime!
+  createdBy: String!
+  id: ID!
+
+  """
+  Shown in the sidebar and in mentions.
+  """
+  name: String!
+  organizationId: ID!
+  starred: Boolean
+
+  """
+  Whether the list shows up in the sidebar.
+  """
+  status: ListStatus!
+  updatedAt: DateTime
+  workspace: Workspace
+  workspaceId: ID!
+}
+
+type ListConnection {
+  edges: [ListEdge!]!
+  pageInfo: PageInfo!
+}
+
+type ListEdge {
+  cursor: String!
+  node: List!
+}
+
+"""
+Whether the list shows up in the sidebar.
+"""
+enum ListStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+input ListUpdateInput {
+  """
+  A new name. Must not be blank.
+  """
+  name: String
+  starred: Boolean
+}
+
+union ListUpdateResult = ListEdge | NotFoundError | UserInputError
+
+type Mutation {
+  listUpdate(
+    """
+    The list ID.
+    """
+    id: ID!
+    input: ListUpdateInput!
+  ): ListUpdateResult!
+}
+
+interface Node {
+  id: ID!
+}
+
+type NotFoundError {
+  message: String!
+}
+
+type PageInfo {
+  endCursor: String
+  hasNextPage: Boolean!
+  hasPreviousPage: Boolean!
+  startCursor: String
+}
+
+type Query {
+  workspace(id: ID!): Workspace!
+}
+
+type UserInputError {
+  field: String!
+  message: String!
+}
+
+type Workspace implements Node {
+  createdAt: DateTime!
+  id: ID!
+  lists(after: String, before: String, first: Int, last: Int): ListConnection!
+
+  """
+  Shown in the sidebar and in mentions.
+  """
+  name: String!
+}

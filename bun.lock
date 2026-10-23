@@ -58,6 +58,20 @@
         "effect": "^4.0.5",
       },
     },
+    "packages/graphql": {
+      "name": "@model-ts/graphql",
+      "version": "6.0.0",
+      "devDependencies": {
+        "@model-ts/core": "*",
+        "@model-ts/dynamodb": "*",
+        "effect": "4.0.5",
+        "graphql": "16.11.0",
+      },
+      "peerDependencies": {
+        "effect": "^4.0.5",
+        "graphql": "^16.11.0",
+      },
+    },
   },
   "packages": {
     "@aws-sdk/client-dynamodb": ["@aws-sdk/client-dynamodb@3.1154.0", "", { "dependencies": { "@aws-sdk/core": "^3.978.4", "@aws-sdk/credential-provider-node": "^3.972.87", "@aws-sdk/dynamodb-codec": "^3.973.49", "@aws-sdk/middleware-endpoint-discovery": "^3.972.33", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.36.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-59z5o4r+U0jOC9QEPPCcZkfcF7vAiQPGkMUDe5p6euN0fAFMNDy4rVeyf1eMROEcTs+Lu9xkUJTOVPr5TrbkYg=="],
@@ -159,6 +173,8 @@
     "@model-ts/dynamodb": ["@model-ts/dynamodb@workspace:packages/dynamodb"],
 
     "@model-ts/eventbridge": ["@model-ts/eventbridge@workspace:packages/eventbridge"],
+
+    "@model-ts/graphql": ["@model-ts/graphql@workspace:packages/graphql"],
 
     "@nodelib/fs.scandir": ["@nodelib/fs.scandir@2.1.5", "", { "dependencies": { "@nodelib/fs.stat": "2.0.5", "run-parallel": "^1.1.9" } }, "sha512-vq24Bq3ym5HEQm2NKCr3yXDwjc7vTsEThRDnkp2DK9p1uqLR+DHurm/NOTo0KG7HYHU7eppKZj3MyqYuMBf62g=="],
 
