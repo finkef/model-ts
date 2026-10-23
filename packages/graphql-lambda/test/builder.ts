@@ -24,44 +24,36 @@ const GraphQL = createBuilder<{}, BuilderContext>().withErrorPolicy({
   public: [PublicFailure],
   publicCodes: { PublicFailure: "INVALID_STATE" },
 })
-const hello = GraphQL.queryField(
-  "hello",
-  GraphQL.field("String", (_, __, context) =>
-    Effect.map(Greeting, ({ prefix }) => prefix + context.user),
-  ),
+const hello = GraphQL.queryField("hello", "String", (_, __, context) =>
+  Effect.map(Greeting, ({ prefix }) => prefix + context.user),
 )
 const publicFailure = GraphQL.queryField(
   "publicFailure",
-  GraphQL.nullable("String", () =>
+  GraphQL.nullable("String"),
+  () =>
     Effect.fail(new PublicFailure({ message: "This action is unavailable" })),
-  ),
 )
-const forbidden = GraphQL.queryField(
-  "forbidden",
-  GraphQL.nullable("String", {
-    authorize: () => false,
-    resolve: () => "private",
-  }),
-)
+const forbidden = GraphQL.queryField("forbidden", GraphQL.nullable("String"), {
+  authorize: () => false,
+  resolve: () => "private",
+})
 const internal = GraphQL.queryField(
   "internal",
-  GraphQL.nullable("String", () => Effect.die(privateFailure)),
+  GraphQL.nullable("String"),
+  () => Effect.die(privateFailure),
 )
 export const builderTopic = Topic.make("builder/messages")
 const Payload = Schema.Struct({ user: Schema.String, message: Schema.String })
-const message = GraphQL.subscriptionField(
-  "message",
-  GraphQL.field("String", {
-    subscribe: (_, __, context) =>
-      context.pubSub.stream(builderTopic).pipe(
-        Stream.map((payload) => Schema.decodeUnknownSync(Payload)(payload)),
-        Stream.filter((payload) => payload.user === context.user),
-        Stream.mapEffect((payload) =>
-          Effect.map(Greeting, ({ prefix }) => prefix + payload.message),
-        ),
+const message = GraphQL.subscriptionField("message", "String", {
+  subscribe: (_, __, context) =>
+    context.pubSub.stream(builderTopic).pipe(
+      Stream.map((payload) => Schema.decodeUnknownSync(Payload)(payload)),
+      Stream.filter((payload) => payload.user === context.user),
+      Stream.mapEffect((payload) =>
+        Effect.map(Greeting, ({ prefix }) => prefix + payload.message),
       ),
-  }),
-)
+    ),
+})
 export const built = GraphQL.schema({
   hello,
   publicFailure,

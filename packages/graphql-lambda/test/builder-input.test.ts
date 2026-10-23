@@ -40,15 +40,15 @@ const inputSchema = (reject: () => never) => {
       parseLiteral: reject,
     }),
   )
-  const echo = GraphQL.field("String", {
+  const echo = {
     args: { value: scalar.schema },
     resolve: () => "unexpected resolution",
-  })
+  }
   return executor(
     GraphQL.schema({
       scalar,
-      query: GraphQL.queryField("echo", echo),
-      mutation: GraphQL.mutationField("echo", echo),
+      query: GraphQL.queryField("echo", "String", echo),
+      mutation: GraphQL.mutationField("echo", "String", echo),
     }),
   )
 }

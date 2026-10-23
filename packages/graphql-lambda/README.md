@@ -50,25 +50,19 @@ interface AppContext {
 
 const announcements = Topic.make("public/announcements")
 const GraphQL = createBuilder<{}, AppContext>()
-const greeting = GraphQL.queryField(
-  "greeting",
-  GraphQL.field("String", (_, __, context) =>
-    Effect.succeed(`Hello from ${context.requestId}`),
-  ),
+const greeting = GraphQL.queryField("greeting", "String", (_, __, context) =>
+  Effect.succeed(`Hello from ${context.requestId}`),
 )
-const announcement = GraphQL.subscriptionField(
-  "announcement",
-  GraphQL.field("String", {
-    subscribe: (_, __, context) =>
-      context.pubSub
-        .stream(announcements)
-        .pipe(
-          Stream.map((payload) =>
-            Schema.decodeUnknownSync(Schema.String)(payload),
-          ),
+const announcement = GraphQL.subscriptionField("announcement", "String", {
+  subscribe: (_, __, context) =>
+    context.pubSub
+      .stream(announcements)
+      .pipe(
+        Stream.map((payload) =>
+          Schema.decodeUnknownSync(Schema.String)(payload),
         ),
-  }),
-)
+      ),
+})
 const schema = GraphQL.schema({ greeting, announcement })
 const options = {
   executor: executor(schema),

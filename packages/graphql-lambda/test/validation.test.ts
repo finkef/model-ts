@@ -41,22 +41,16 @@ const fixture = (kind: "builder" | "plain") => {
     const GraphQL = createBuilder<{}, AppContext>()
     adapter = executor(
       GraphQL.schema({
-        ping: GraphQL.queryField(
-          "ping",
-          GraphQL.field("String", () => {
-            calls.resolvers++
-            return "pong"
-          }),
-        ),
-        event: GraphQL.subscriptionField(
-          "event",
-          GraphQL.field("String", {
-            subscribe: (_, __, context) => {
-              calls.sources++
-              return context.pubSub.stream(topic).pipe(Stream.map(String))
-            },
-          }),
-        ),
+        ping: GraphQL.queryField("ping", "String", () => {
+          calls.resolvers++
+          return "pong"
+        }),
+        event: GraphQL.subscriptionField("event", "String", {
+          subscribe: (_, __, context) => {
+            calls.sources++
+            return context.pubSub.stream(topic).pipe(Stream.map(String))
+          },
+        }),
       }),
     )
   } else {
