@@ -27,23 +27,19 @@ it.effect(
         },
       )
       const query = {
-        identitiesField: G.queryField(
-          "identities",
-          G.connection("Identity", { nodes: () => [value] }),
-        ),
-        searchField: G.queryField(
-          "search",
-          G.connection("Success", {
-            nodes: () => [
-              value,
-              { id: "item-1", kind: "item" as const, name: "one" },
-            ],
-          }),
-        ),
-        edgeField: G.queryField(
-          "edge",
-          G.field("SuccessEdge", () => ({ cursor: "opaque", node: value })),
-        ),
+        identitiesField: G.queryField("identities", G.connection("Identity"), {
+          nodes: () => [value],
+        }),
+        searchField: G.queryField("search", G.connection("Success"), {
+          nodes: () => [
+            value,
+            { id: "item-1", kind: "item" as const, name: "one" },
+          ],
+        }),
+        edgeField: G.queryField("edge", "SuccessEdge", () => ({
+          cursor: "opaque",
+          node: value,
+        })),
       }
       const built = G.schema({ ...definitions, identity, ...query })
       const result = yield* G.execute(
@@ -99,26 +95,19 @@ it.effect(
       class ModelInput extends Schema.Class<ModelInput>("ModelInput")({
         scopes: Schema.optionalKey(Schema.NullOr(Schema.Array(Scope))),
       }) {}
-      const query = G.queryField(
-        "echo",
-        G.list("Scope", {
-          args: {
-            scope: Schema.optionalKey(
-              Scope.annotate({ description: "Optional permission." }),
-            ),
-            input: ModelInput,
-            fallback: G.default(Scope, "user:read"),
-          },
-          resolve: (_, { scope, input, fallback }) => {
-            expect(input).toBeInstanceOf(ModelInput)
-            return [
-              ...(scope ? [scope] : []),
-              ...(input.scopes ?? []),
-              fallback,
-            ]
-          },
-        }),
-      )
+      const query = G.queryField("echo", G.list("Scope"), {
+        args: {
+          scope: Schema.optionalKey(
+            Scope.annotate({ description: "Optional permission." }),
+          ),
+          input: ModelInput,
+          fallback: G.default(Scope, "user:read"),
+        },
+        resolve: (_, { scope, input, fallback }) => {
+          expect(input).toBeInstanceOf(ModelInput)
+          return [...(scope ? [scope] : []), ...(input.scopes ?? []), fallback]
+        },
+      })
       const built = G.schema({ ...definitions, EchoQuery: query })
       for (const [source, variableValues, expected] of [
         [
@@ -151,10 +140,10 @@ it("unregistered literal schemas report the input path and registration fix", ()
     "UnregisteredInput",
     Schema.Struct({ scopes: Schema.Array(Unregistered) }),
   )
-  const query = G.queryField(
-    "value",
-    G.field("Boolean", { args: { input: Input }, resolve: () => true }),
-  )
+  const query = G.queryField("value", "Boolean", {
+    args: { input: Input },
+    resolve: () => true,
+  })
   expect(() => G.schema({ ...definitions, query })).toThrow(
     "Unregistered literal or union schema at UnregisteredInput.scopes; register this exact model schema with GraphQL.enum(name, schema) and export the definition in the schema barrel",
   )
@@ -167,26 +156,20 @@ it.effect("singleton enum identity is local to the assembled schema", () =>
     const single = local.enum("Single", Single, {
       values: { ONLY: "only:value" },
     })
-    const query = local.queryField(
-      "value",
-      local.field("Single", {
-        args: { value: Schema.optionalKey(Single) },
-        resolve: (_, args) => args.value ?? "only:value",
-      }),
-    )
+    const query = local.queryField("value", "Single", {
+      args: { value: Schema.optionalKey(Single) },
+      resolve: (_, args) => args.value ?? "only:value",
+    })
     expect(
       yield* local.execute(local.schema({ single, query }), {
         source: "{ value(value: ONLY) }",
       }),
     ).toEqual({ data: { value: "ONLY" } })
     const unregistered = createBuilder<{}>()
-    const missing = unregistered.queryField(
-      "value",
-      unregistered.field("Boolean", {
-        args: { value: Single },
-        resolve: () => true,
-      }),
-    )
+    const missing = unregistered.queryField("value", "Boolean", {
+      args: { value: Single },
+      resolve: () => true,
+    })
     expect(() => unregistered.schema({ missing })).toThrow(
       "register this exact model schema",
     )
@@ -202,10 +185,7 @@ it("rejects two enum names for one model schema instead of choosing by barrel or
   const two = local.enum("Two", Scope.annotate({ description: "Alias" }), {
     values,
   })
-  const query = local.queryField(
-    "value",
-    local.field("One", () => "user:read"),
-  )
+  const query = local.queryField("value", "One", () => "user:read")
   expect(() => local.schema({ one, two, query })).toThrow(
     "Enum schema is registered as both One and Two; use a separate Schema.Literals instance for each enum",
   )

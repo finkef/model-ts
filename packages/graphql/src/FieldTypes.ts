@@ -1,6 +1,7 @@
 import type { Effect, Option, Schema, Stream } from "effect"
 import { type GraphQLFieldConfig, type GraphQLOutputType } from "graphql"
 import { type Connection, type ConnectionArgs } from "./Connections.ts"
+import type { RootDefinition } from "./Definitions.ts"
 import type { InputTypes } from "./InputTypes.ts"
 import {
   type Scalars,
@@ -22,11 +23,49 @@ export type RuntimeRef =
 
 export declare const outputValue: unique symbol
 
-export interface OutputRef<A> {
+/** Preserve a nullable ref's named success type for result-union validation. */
+export declare const outputResult: unique symbol
+
+export interface OutputRef<A, Result = unknown> {
+  readonly [outputResult]: Result
   readonly kind: "list" | "nullable"
   readonly of: RuntimeRef
   readonly [outputValue]: A
 }
+
+/** A config-less connection helper retains the node for the connection overloads. */
+export interface ConnectionRef<N extends string> {
+  readonly kind: "connection"
+  readonly node: N
+}
+
+export type RootKind = "query" | "mutation" | "subscription"
+
+/** Root helpers add a name and return a definition; the field config stays shared. */
+type FieldArguments<K, N extends string, T, I> = [
+  ...name: K extends RootKind ? [name: N] : [],
+  type: T,
+  input: I,
+]
+
+type FieldSource<K, S> = K extends RootKind ? unknown : S
+
+type FieldResult<
+  K,
+  N extends string,
+  S,
+  R,
+  C,
+  Subscription extends boolean = false,
+> = K extends RootKind
+  ? RootDefinition<
+      K,
+      { readonly [P in N]: SourceField<unknown, R, C, Subscription> },
+      C
+    >
+  : SourceField<S, R, C, Subscription>
+
+type ResultTarget<T> = T extends OutputRef<unknown, infer Result> ? Result : T
 
 export type ConnectionNode<Types> = NamesOfKind<
   Types,
@@ -45,10 +84,10 @@ export type ResultName<Types> =
 export type Ref<Types> =
   | Extract<keyof Values<Types>, string>
   | keyof Scalars
-  | OutputRef<unknown>
+  | OutputRef<unknown, unknown>
 
 export type Value<Types, T> =
-  T extends OutputRef<infer A>
+  T extends OutputRef<infer A, unknown>
     ? A
     : T extends keyof Values<Types>
       ? Values<Types>[T]
@@ -147,14 +186,14 @@ export type FieldInput<S, A, R, G, Args extends ArgFields, AR, C> =
 
 export type UnionRule<Types, T, E> = E extends readonly []
   ? unknown
-  : T extends ResultName<Types>
+  : ResultTarget<T> extends ResultName<Types>
     ? unknown
     : {
         readonly errors: "Result unions need an object type or object union; use a registered object or union"
       }
 
 export type ResultRule<Types, T> =
-  T extends ResultName<Types>
+  ResultTarget<T> extends ResultName<Types>
     ? unknown
     : {
         readonly result?: "Result unions need an object type or object union; use a registered object or union"
@@ -251,7 +290,7 @@ export const fieldRequirements: unique symbol = Symbol(
 )
 
 export interface Field<out R, C = {}> extends Contextual<C> {
-  readonly kind: "field" | "list" | "nullable"
+  readonly kind: "field" | "list" | "nullable" | "connection"
   readonly build: (
     context: BuildContext,
     name: string,
@@ -338,32 +377,14 @@ export interface NullableFields<Types, G, C> extends ScalarHelpers<
   C,
   true
 > {
-  <
-    S,
-    const T extends Ref<Types>,
-    R = never,
-    const Args extends ArgFields = {},
-    AR = never,
-  >(
-    of: T,
-    config: SubscriptionConfig<
-      S,
-      Args,
-      NullableOf<Types, NoInfer<T>>,
-      G,
-      R,
-      AR,
-      C
-    >,
-  ): SourceField<S, R | AR, C, true>
   <const T extends Ref<Types>>(
     of: T,
-  ): OutputRef<NullableOf<Types, T>> &
-    SourceDefault<unknown, never, OutputRef<NullableOf<Types, T>>, C>
+  ): OutputRef<NullableOf<Types, T>, T> &
+    SourceDefault<unknown, never, OutputRef<NullableOf<Types, T>, T>, C>
   <S, const T extends Ref<Types>, AR = never>(
     of: T,
     options: DefaultOptions<S, G, AR, C>,
-  ): SourceDefault<S, AR, OutputRef<NullableOf<Types, T>>, C>
+  ): SourceDefault<S, AR, OutputRef<NullableOf<Types, T>, T>, C>
   <
     S,
     const T extends Ref<Types>,
@@ -406,6 +427,162 @@ export type CheckedFields<Types, N extends string, S, F> = {
     : `${N}.${K & string}: ${DefaultMessage<S, K, F[K]>}`
 }
 
+export interface EnumFields<Types, C, K = undefined> {
+  // Keep shorthand first: the broader overload widens literal returns before TS7 checks them.
+  <
+    const N extends string,
+    S,
+    const T extends NamesOfKind<Types, "enum">,
+    const A extends string,
+  >(
+    ...args: FieldArguments<
+      K,
+      N,
+      T &
+        ([NoInfer<A>] extends [ModelAt<Types, NoInfer<T>>]
+          ? unknown
+          : "Return a registered enum model literal"),
+      (source: FieldSource<K, S>, args: {}, context: C) => A
+    >
+  ): FieldResult<K, N, S, never, C>
+}
+
+export interface SubscriptionFields<Types, G, C, K = undefined> {
+  <
+    const N extends string,
+    S,
+    const T extends Ref<Types>,
+    R = never,
+    const Args extends ArgFields = {},
+    AR = never,
+  >(
+    ...args: FieldArguments<
+      K,
+      N,
+      T,
+      SubscriptionConfig<
+        FieldSource<K, S>,
+        Args,
+        Value<Types, NoInfer<T>>,
+        G,
+        R,
+        AR,
+        C
+      >
+    >
+  ): FieldResult<K, N, S, R | AR, C, true>
+}
+
+type ResolverInput<
+  Types,
+  T,
+  S,
+  R,
+  G,
+  E extends readonly ErrorSchema[],
+  Args extends ArgFields,
+  AR,
+  CR,
+  C,
+> =
+  T extends ConnectionRef<infer N>
+    ? ConnectionInput<S, ModelAt<Types, N>, R, G, Args, AR, CR, C>
+    : T extends { readonly kind: "list" }
+      ? FieldInput<S, Value<Types, T>, R, G, Args, AR, C>
+      :
+          | Resolve<S, {}, Value<Types, NoInfer<T>>, NoInfer<G>, R, C>
+          | (UnionFieldConfig<
+              S,
+              Args,
+              Value<Types, NoInfer<T>>,
+              E,
+              R,
+              NoInfer<G>,
+              AR,
+              C
+            > &
+              UnionRule<Types, T, E> &
+              ResultRule<Types, T>)
+
+export interface ResolverFields<Types, G, C, K = undefined> {
+  <
+    const N extends string,
+    S,
+    const T extends
+      | Ref<Types>
+      | (K extends RootKind ? ConnectionRef<ConnectionNode<Types>> : never),
+    R = never,
+    const E extends readonly ErrorSchema[] = readonly [],
+    const Args extends ArgFields = {},
+    AR = never,
+    CR = never,
+  >(
+    ...args: FieldArguments<
+      K,
+      N,
+      T,
+      ResolverInput<
+        Types,
+        NoInfer<T>,
+        FieldSource<K, S>,
+        R,
+        G,
+        E,
+        Args,
+        AR,
+        CR,
+        C
+      >
+    >
+  ): FieldResult<K, N, S, R | AR | CR, C>
+}
+
+export type ObjectFields<Types, G, C> = EnumFields<Types, C> &
+  DefaultFields<Types, G, C> &
+  ResolverFields<Types, G, C>
+
+export interface DefaultFields<Types, G, C> {
+  <S, const T extends Ref<Types>, AR = never>(
+    type: T,
+    options?: DefaultOptions<S, G, AR, C>,
+  ): SourceDefault<S, AR, T, C>
+}
+
+type ConnectionInput<S, A, R, G, Args extends ArgFields, AR, CR, C> =
+  | Resolve<S, ConnectionArgs, Connection<A>, NoInfer<G>, R, C>
+  | PagedConnection<S, A, Args, R, NoInfer<G>, AR, CR, C>
+  | NodesConnection<S, A, Args, R, NoInfer<G>, AR, CR, C>
+
+export interface ObjectConnections<Types, G, C> {
+  <const N extends ConnectionNode<Types>>(
+    node: N,
+  ): ConnectionRef<N> & SourceDefault<unknown, never, `${N}Connection`, C>
+  <S, const N extends ConnectionNode<Types>, AR = never>(
+    node: N,
+    options: DefaultOptions<S, G, AR, C> | undefined,
+  ): SourceDefault<S, AR, `${N}Connection`, C>
+  <
+    S,
+    const N extends ConnectionNode<Types>,
+    R = never,
+    const Args extends ArgFields = {},
+    AR = never,
+    CR = never,
+  >(
+    node: N,
+    input: ConnectionInput<
+      S,
+      ModelAt<Types, NoInfer<N>>,
+      R,
+      G,
+      Args,
+      AR,
+      CR,
+      C
+    >,
+  ): SourceField<S, R | AR | CR, C>
+}
+
 /** Field helpers of a builder; `id` covers both the output field and ID arguments. */
 export interface Fields<Types, G, C = {}> extends Omit<
   ScalarHelpers<Types, G, C>,
@@ -417,66 +594,15 @@ export interface Fields<Types, G, C = {}> extends Omit<
   ): SourceDefault<S, AR, "ID", C>
   /** Exposes a string schema, such as a branded ID, as a GraphQL `ID` argument or input field. */
   id<S extends Schema.Top & Schema.Schema<string>>(schema: S): S["Rebuild"]
-  // Keep shorthand first: the broader overload widens literal returns before TS7 checks them.
-  field<S, const T extends NamesOfKind<Types, "enum">, const A extends string>(
-    type: T &
-      ([NoInfer<A>] extends [ModelAt<Types, NoInfer<T>>]
-        ? unknown
-        : "Return a registered enum model literal"),
-    resolve: (source: S, args: {}, context: C) => A,
-  ): SourceField<S, never, C>
-  field<
-    S,
-    const T extends Ref<Types>,
-    R = never,
-    const Args extends ArgFields = {},
-    AR = never,
-  >(
-    type: T,
-    config: SubscriptionConfig<S, Args, Value<Types, NoInfer<T>>, G, R, AR, C>,
-  ): SourceField<S, R | AR, C, true>
-  field<S, const T extends Ref<Types>, AR = never>(
-    type: T,
-    options?: DefaultOptions<S, G, AR, C>,
-  ): SourceDefault<S, AR, T, C>
-  field<
-    S,
-    const T extends Ref<Types>,
-    R = never,
-    const E extends readonly ErrorSchema[] = readonly [],
-    const Args extends ArgFields = {},
-    AR = never,
-  >(
-    type: T,
-    input:
-      | Resolve<S, {}, Value<Types, NoInfer<T>>, NoInfer<G>, R, C>
-      | (UnionFieldConfig<
-          S,
-          Args,
-          Value<Types, NoInfer<T>>,
-          E,
-          R,
-          NoInfer<G>,
-          AR,
-          C
-        > &
-          UnionRule<Types, T, E> &
-          ResultRule<Types, T>),
-  ): SourceField<S, R | AR, C>
-  list<
-    S,
-    const T extends Ref<Types>,
-    R = never,
-    const Args extends ArgFields = {},
-    AR = never,
-  >(
-    of: T,
-    config: SubscriptionConfig<S, Args, ListOf<Types, NoInfer<T>>, G, R, AR, C>,
-  ): SourceField<S, R | AR, C, true>
+  readonly field: ObjectFields<Types, G, C>
   list<const T extends Ref<Types>>(
     of: T,
-  ): OutputRef<ListOf<Types, T>> &
-    SourceDefault<unknown, never, OutputRef<ListOf<Types, T>>, C>
+  ): OutputRef<ListOf<Types, T>> & { readonly kind: "list" } & SourceDefault<
+      unknown,
+      never,
+      OutputRef<ListOf<Types, T>>,
+      C
+    >
   list<S, const T extends Ref<Types>, AR = never>(
     of: T,
     options: DefaultOptions<S, G, AR, C>,
@@ -492,49 +618,7 @@ export interface Fields<Types, G, C = {}> extends Omit<
     input: FieldInput<S, ListOf<Types, NoInfer<T>>, R, G, Args, AR, C>,
   ): SourceField<S, R | AR, C>
   readonly nullable: NullableFields<Types, G, C>
-  connection<S, const N extends ConnectionNode<Types>, AR = never>(
-    node: N,
-    options?: DefaultOptions<S, G, AR, C>,
-  ): SourceDefault<S, AR, `${N}Connection`, C>
-  connection<
-    S,
-    const N extends ConnectionNode<Types>,
-    R = never,
-    const Args extends ArgFields = {},
-    AR = never,
-    CR = never,
-  >(
-    node: N,
-    input:
-      | Resolve<
-          S,
-          ConnectionArgs,
-          Connection<ModelAt<Types, NoInfer<N>>>,
-          NoInfer<G>,
-          R,
-          C
-        >
-      | PagedConnection<
-          S,
-          ModelAt<Types, NoInfer<N>>,
-          Args,
-          R,
-          NoInfer<G>,
-          AR,
-          CR,
-          C
-        >
-      | NodesConnection<
-          S,
-          ModelAt<Types, NoInfer<N>>,
-          Args,
-          R,
-          NoInfer<G>,
-          AR,
-          CR,
-          C
-        >,
-  ): SourceField<S, R | AR | CR, C>
+  readonly connection: ObjectConnections<Types, G, C>
 }
 
 export type SourceBase<A> = [A] extends [never]
@@ -558,7 +642,7 @@ export type SourceDescription<A> =
 
 export type DefaultMessage<S, K, F> = K extends keyof S
   ? F extends { readonly [defaultRef]: infer T }
-    ? `model has ${SourceDescription<S[K]>}, field declares ${T extends string ? T : T extends OutputRef<infer A> ? SourceDescription<A> : "declared GraphQL value"}`
+    ? `model has ${SourceDescription<S[K]>}, field declares ${T extends string ? T : T extends OutputRef<infer A, unknown> ? SourceDescription<A> : "declared GraphQL value"}`
     : never
   : "missing source property; supply a resolver"
 

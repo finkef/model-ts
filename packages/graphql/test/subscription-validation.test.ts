@@ -11,24 +11,20 @@ class Payload extends Schema.TaggedClass<Payload>()("Payload", {
 function fixture() {
   let sources = 0
   const GraphQL = createBuilder<Register<typeof Payload>>()
-  const events = () =>
-    GraphQL.field("Payload", {
-      subscribe: () => {
-        sources++
-        return Stream.succeed(new Payload({ text: "hello", extra: "world" }))
-      },
-    })
+  const events = () => ({
+    subscribe: () => {
+      sources++
+      return Stream.succeed(new Payload({ text: "hello", extra: "world" }))
+    },
+  })
   const schema = GraphQL.schema({
     payload: GraphQL.object(Payload, {
       text: GraphQL.string(),
       extra: GraphQL.string(),
     }),
-    queryField: GraphQL.queryField(
-      "ping",
-      GraphQL.field("String", () => "pong"),
-    ),
-    event: GraphQL.subscriptionField("event", events()),
-    other: GraphQL.subscriptionField("other", events()),
+    queryField: GraphQL.queryField("ping", "String", () => "pong"),
+    event: GraphQL.subscriptionField("event", "Payload", events()),
+    other: GraphQL.subscriptionField("other", "Payload", events()),
   })
   return { adapter: executor(schema), sources: () => sources }
 }

@@ -31,7 +31,7 @@ export interface BuilderOptions {
 
 /** Definitions, field helpers and execution for one registry and request context. */
 export interface Builder<Types, G, C = {}>
-  extends DefinitionBuilder<Types, C>, Fields<Types, G, C> {
+  extends DefinitionBuilder<Types, G, C>, Fields<Types, G, C> {
   input: typeof input
   default: typeof defaulted
   /** Errors any resolver may fail with, and how each reaches the response. */
@@ -79,9 +79,14 @@ function make<Types, G, C>(
   maxPageSize: number,
   defaultPageSize: number,
 ): Builder<Types, G, C> {
+  const { fields, rootField } = makeFields<Types, G, C>(
+    policy,
+    maxPageSize,
+    defaultPageSize,
+  )
   return {
-    ...makeFields<Types, G, C>(policy, maxPageSize, defaultPageSize),
-    ...makeDefinitions<Types, C>(),
+    ...fields,
+    ...makeDefinitions<Types, G, C>(rootField),
     input,
     default: defaulted,
     withErrorPolicy: (options) =>

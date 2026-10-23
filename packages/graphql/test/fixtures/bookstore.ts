@@ -98,37 +98,30 @@ export const schema = G.schema({
   orderSuccess: G.union("OrderSuccess", OrderSuccess, {
     members: ["OrderConfirmation", "Backorder"],
   }),
-  queryField: G.queryField(
-    "health",
-    G.field("Boolean", () => true),
-  ),
-  bookCreateField: G.mutationField(
-    "bookCreate",
-    G.nullable("Book", {
-      errors: [NotFoundError, UserInputError],
-      resolve: () => null,
-    }),
-  ),
-  orderPlaceField: G.mutationField(
-    "orderPlace",
-    G.nullable("OrderSuccess", {
-      errors: [OutOfStockError, UserInputError],
-      resolve: () => null,
-    }),
-  ),
+  queryField: G.queryField("health", "Boolean", () => true),
+  bookCreateField: G.mutationField("bookCreate", G.nullable("Book"), {
+    errors: [NotFoundError, UserInputError],
+    resolve: () => null,
+  }),
+  orderPlaceField: G.mutationField("orderPlace", G.nullable("OrderSuccess"), {
+    errors: [OutOfStockError, UserInputError],
+    resolve: () => null,
+  }),
   adminRefundIssueField: G.mutationField(
     "adminRefundIssue",
-    G.nullable("Refund", {
+    G.nullable("Refund"),
+    {
       errors: [UserInputError],
       result: { name: "AdminRefundResult" },
       resolve: () => null,
-    }),
+    },
   ),
   wishlistClearField: G.mutationField(
     "wishlistClear",
-    G.nullable("WishlistClearSuccess", {
+    G.nullable("WishlistClearSuccess"),
+    {
       result: {},
       resolve: () => null,
-    }),
+    },
   ),
 })

@@ -228,22 +228,33 @@ import { Effect } from "effect"
 import { List, ListId } from "../../store/models.ts"
 import { GraphQL } from "../graphql.ts"
 
-export const ListQuery = GraphQL.queryField(
-  "list",
-  GraphQL.nullable("List", {
-    args: { id: GraphQL.id(ListId) },
-    authorize: (_, __, context) => context.identity !== null,
-    resolve: (_, { id }) =>
-      List.load(List.key(id)).pipe(
-        Effect.catchTag("ItemNotFoundError", () => Effect.succeed(null)),
-      ),
-  }),
+export const ListQuery = GraphQL.queryField("list", GraphQL.nullable("List"), {
+  args: { id: GraphQL.id(ListId) },
+  authorize: (_, __, context) => context.identity !== null,
+  resolve: (_, { id }) =>
+    List.load(List.key(id)).pipe(
+      Effect.catchTag("ItemNotFoundError", () => Effect.succeed(null)),
+    ),
+})
+```
+
+Each root field is an exported constant with a name, an output type, and a config
+or resolver. The output type is a registered or scalar name, or a config-less
+`nullable`, `list`, or `connection` helper. It determines the resolver result and
+available config options, just as on object fields. For example:
+
+```ts
+export const ListsQuery = GraphQL.queryField(
+  "lists",
+  GraphQL.list("List"),
+  () => [],
 )
 ```
 
-Each root field is an exported constant with a string name and an output field
-helper. Use the same `field`, `nullable`, `list`, and `connection` helpers as on
-object fields.
+Roots have no parent property to read, so the third argument is required. Use
+`resolve` (or resolver shorthand), `nodes` for a connection, or `subscribe` for
+a subscription. Pass connection options such as `args`, `name`, `edgeName`,
+`authorize`, and `totalCount` in that third argument.
 
 A missing list becomes `null`. A denied request produces a GraphQL field error
 with code `FORBIDDEN`. A storage outage follows the internal-error policy.
@@ -276,23 +287,20 @@ export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
   description: Schema.optionalKey(Schema.NullOr(Schema.String)),
 }) {}
 
-export const ListUpdateMutation = GraphQL.mutationField(
-  "listUpdate",
-  GraphQL.field("List", {
-    args: { id: GraphQL.id(ListId), input: ListUpdateInput },
-    errors: [NotFoundError, UserInputError],
-    authorize: (_, __, { identity }) => identity?.canWrite === true,
-    resolve: (_, { id, input }) =>
-      Effect.gen(function* () {
-        const list = yield* List.load(List.key(id)).pipe(
-          Effect.catchTag("ItemNotFoundError", () =>
-            Effect.fail(new NotFoundError({ message: "List not found" })),
-          ),
-        )
-        return yield* list.update(input)
-      }),
-  }),
-)
+export const ListUpdateMutation = GraphQL.mutationField("listUpdate", "List", {
+  args: { id: GraphQL.id(ListId), input: ListUpdateInput },
+  errors: [NotFoundError, UserInputError],
+  authorize: (_, __, { identity }) => identity?.canWrite === true,
+  resolve: (_, { id, input }) =>
+    Effect.gen(function* () {
+      const list = yield* List.load(List.key(id)).pipe(
+        Effect.catchTag("ItemNotFoundError", () =>
+          Effect.fail(new NotFoundError({ message: "List not found" })),
+        ),
+      )
+      return yield* list.update(input)
+    }),
+})
 ```
 
 The generated field is `listUpdate: ListUpdateResult!`, with
@@ -507,13 +515,10 @@ Use `GraphQL.default(schema, decodedValue)` for argument defaults:
 import { Schema } from "effect"
 import { GraphQL } from "../api/graphql.ts"
 
-export const GreetingQuery = GraphQL.queryField(
-  "greeting",
-  GraphQL.field("String", {
-    args: { name: GraphQL.default(Schema.String, "world") },
-    resolve: (_, { name }) => `Hello, ${name}`,
-  }),
-)
+export const GreetingQuery = GraphQL.queryField("greeting", "String", {
+  args: { name: GraphQL.default(Schema.String, "world") },
+  resolve: (_, { name }) => `Hello, ${name}`,
+})
 ```
 
 Defaults are validated and encoded with their schema. An explicit null sent to an
@@ -542,13 +547,10 @@ export const ScopeType = GraphQL.enum("Scope", Scope, {
     WORKSPACE_WRITE: "workspace:write",
   },
 })
-export const ScopeQuery = GraphQL.queryField(
-  "echoScope",
-  GraphQL.field("Scope", {
-    args: { scope: Scope },
-    resolve: (_, { scope }) => scope,
-  }),
-)
+export const ScopeQuery = GraphQL.queryField("echoScope", "Scope", {
+  args: { scope: Scope },
+  resolve: (_, { scope }) => scope,
+})
 ```
 
 Clients send and receive `USER_READ`; resolvers see `"user:read"`. Every model
@@ -674,8 +676,8 @@ models. GraphQL metadata need not be added to the projection values.
 
 ## Mutations and typed results
 
-`GraphQL.mutationField(name, field)` defines one root field in the same way as
-`GraphQL.queryField(name, field)`. A field's `errors: [ErrorClass, ...]` turns
+`GraphQL.mutationField(name, type, config)` defines one root field in the same way as
+`GraphQL.queryField(name, type, config)`. A field's `errors: [ErrorClass, ...]` turns
 expected typed failures into ordinary GraphQL data. Clients inspect `__typename` and select the corresponding fragment.
 Only errors declared on that field become its result members.
 
@@ -706,7 +708,8 @@ import { NotFoundError } from "../api/mutation/list-update.ts"
 
 export const OptionalUpdate = GraphQL.mutationField(
   "optionalUpdate",
-  GraphQL.nullable("List", {
+  GraphQL.nullable("List"),
+  {
     errors: [NotFoundError],
     result: {
       name: "OptionalUpdateResult",
@@ -714,7 +717,7 @@ export const OptionalUpdate = GraphQL.mutationField(
     },
     resolve: () =>
       Effect.fail(new NotFoundError({ message: "List not found" })),
-  }),
+  },
 )
 ```
 
@@ -771,7 +774,8 @@ import { List, WorkspaceId } from "../store/models.ts"
 
 export const ListsQuery = GraphQL.queryField(
   "lists",
-  GraphQL.connection("List", {
+  GraphQL.connection("List"),
+  {
     args: { workspaceId: GraphQL.id(WorkspaceId) },
     authorize: (_, __, { identity }) => identity !== null,
     resolve: (_, { workspaceId, ...page }) =>
@@ -780,7 +784,7 @@ export const ListsQuery = GraphQL.queryField(
         KeyConditionExpression: "GSI1PK = :pk",
         ExpressionAttributeValues: { ":pk": `WORKSPACE#${workspaceId}` },
       }),
-  }),
+  },
 )
 ```
 
@@ -851,20 +855,14 @@ The builder supplies `ID`, `String`, `Boolean`, `Int`, `Float`, `DateTime`, and
 import { DateTime, JSONValue } from "@model-ts/graphql"
 import { GraphQL } from "../api/graphql.ts"
 
-export const EchoTimeQuery = GraphQL.queryField(
-  "echoTime",
-  GraphQL.field("DateTime", {
-    args: { at: DateTime },
-    resolve: (_, { at }) => at,
-  }),
-)
-export const EchoJSONQuery = GraphQL.queryField(
-  "echoJSON",
-  GraphQL.field("JSON", {
-    args: { value: JSONValue },
-    resolve: (_, { value }) => value,
-  }),
-)
+export const EchoTimeQuery = GraphQL.queryField("echoTime", "DateTime", {
+  args: { at: DateTime },
+  resolve: (_, { at }) => at,
+})
+export const EchoJSONQuery = GraphQL.queryField("echoJSON", "JSON", {
+  args: { value: JSONValue },
+  resolve: (_, { value }) => value,
+})
 ```
 
 `DateTime` inputs deliver normalized ISO strings. `Schema.Date` inputs deliver
@@ -896,13 +894,10 @@ export const SlugType = GraphQL.scalar(
     description: "Lowercase letters, numbers, and hyphens.",
   }),
 )
-export const SlugQuery = GraphQL.queryField(
-  "echoSlug",
-  GraphQL.field("Slug", {
-    args: { slug: SlugType.schema },
-    resolve: (_, { slug }) => slug,
-  }),
-)
+export const SlugQuery = GraphQL.queryField("echoSlug", "Slug", {
+  args: { slug: SlugType.schema },
+  resolve: (_, { slug }) => slug,
+})
 ```
 
 The codec validates inputs and encodes outputs; use the definition's `.schema`
@@ -925,9 +920,9 @@ built-in implementation. The five standard graphql-js scalars remain reserved.
 
 ## Subscriptions
 
-Define a subscription with an ordinary `GraphQL.field` and a `subscribe` callback
-that returns an Effect `Stream`. Its `authorize` callback runs for each delivered
-value, with that value as its parent, and returns a boolean or an Effect. Both
+Define a subscription with `GraphQL.subscriptionField(name, type, config)` and
+a `subscribe` callback that returns an Effect `Stream`. Its `authorize` callback
+runs for each delivered value, with that value as its parent, and returns a boolean or an Effect. Both
 callbacks receive decoded arguments and request context. Their service requirements,
 along with nested resolver requirements, are retained in the built schema type.
 
@@ -940,22 +935,22 @@ import { List, ListId } from "../store/models.ts"
 
 export const ListSubscription = GraphQL.subscriptionField(
   "listChanged",
-  GraphQL.field("List", {
+  "List",
+  {
     args: { id: GraphQL.id(ListId) },
     // A finite stream for this example; replace it with your event source.
     subscribe: (_, { id }) => Stream.fromEffect(List.load(List.key(id))),
     authorize: (_, __, { identity }) => identity !== null,
-  }),
+  },
 )
 ```
 
-The field passed to `GraphQL.subscriptionField(name, field)` must have
-`subscribe`. Fields with `subscribe` cannot be used in objects, interfaces,
-queries, or mutations; both
-mistakes are compile errors, including when reusing a field definition.
-`GraphQL.nullable("List", { subscribe })`, `GraphQL.list("List", { subscribe })`,
-and combinations such as `GraphQL.nullable(GraphQL.list("List"), { subscribe })`
-follow the same rules. The stream emits the declared nullable or list value;
+The third argument to `GraphQL.subscriptionField` must have `subscribe` and
+cannot have `resolve`. `subscribe` is rejected on object, interface, query, and
+mutation fields, including reused configs. Nullable and list subscriptions use
+config-less refs in the second argument, such as `GraphQL.nullable("List")`,
+`GraphQL.list("List")`, or `GraphQL.nullable(GraphQL.list("List"))`. The stream
+emits the declared nullable or list value;
 `authorize` receives it before output normalization.
 
 Export the subscription in the schema barrel with `export *`. Consume
@@ -1226,20 +1221,17 @@ class UpstreamError extends Schema.TaggedError<UpstreamError>()(
 const GraphQL = createBuilder<{}>().withErrorPolicy({
   internal: [UpstreamError],
 })
-export const RemoteQuery = GraphQL.queryField(
-  "status",
-  GraphQL.field("String", {
-    resolve: () =>
-      Effect.tryPromise({
-        try: async (signal) => {
-          const response = await fetch("https://example.com/status", { signal })
-          if (!response.ok) throw new Error(`HTTP ${response.status}`)
-          return response.text()
-        },
-        catch: (cause) => new UpstreamError({ cause }),
-      }),
-  }),
-)
+export const RemoteQuery = GraphQL.queryField("status", "String", {
+  resolve: () =>
+    Effect.tryPromise({
+      try: async (signal) => {
+        const response = await fetch("https://example.com/status", { signal })
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.text()
+      },
+      catch: (cause) => new UpstreamError({ cause }),
+    }),
+})
 ```
 
 For an existing remote client, put the client in an Effect service layer and

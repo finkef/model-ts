@@ -2,9 +2,12 @@ import type { Schema } from "effect"
 import type { GraphQLScalarType } from "graphql"
 import { GraphQLEnumType } from "graphql"
 import { type AnyDefinition } from "./Assembly.ts"
+import type { RuntimeRef, ConnectionRef, Field } from "./FieldTypes.ts"
 import {
   type FieldMap,
-  type SourceField,
+  type ResolverFields,
+  type EnumFields,
+  type SubscriptionFields,
   type CheckedFields,
   type SourceIssue,
   type SourceSlot,
@@ -17,6 +20,7 @@ import {
   type CheckedMembers,
 } from "./Registry.ts"
 import { type DefinitionKind } from "./Registry.ts"
+import type { AnyResolve, AnyConfig } from "./Resolver.ts"
 import { input } from "./SchemaTypes.ts"
 import { invalid, metadata } from "./SchemaTypes.ts"
 
@@ -227,7 +231,7 @@ export function mappedEnumeration(
   })
 }
 
-export interface DefinitionBuilder<Types, C> {
+export interface DefinitionBuilder<Types, G, C> {
   object<
     M extends Schema.Schema<{ readonly _tag: string }> & {
       readonly fields: { readonly _tag: Schema.Constraint }
@@ -320,43 +324,19 @@ export interface DefinitionBuilder<Types, C> {
         CheckedEnumValues<NoInfer<S["Type"]>, V>
     },
   ): EnumDefinition<N, S>
-  queryField<
-    const N extends string,
-    const F extends SourceField<{}, unknown, C>,
-  >(
-    name: N,
-    field: F &
-      CheckedFields<Types, "Query", {}, { readonly [K in N]: NoInfer<F> }>[N],
-  ): RootDefinition<"query", { readonly [K in N]: F }, C>
-  mutationField<
-    const N extends string,
-    const F extends SourceField<{}, unknown, C>,
-  >(
-    name: N,
-    field: F &
-      CheckedFields<
-        Types,
-        "Mutation",
-        {},
-        { readonly [K in N]: NoInfer<F> }
-      >[N],
-  ): RootDefinition<"mutation", { readonly [K in N]: F }, C>
-  subscriptionField<
-    const N extends string,
-    const F extends SourceField<{}, unknown, C, true>,
-  >(
-    name: N,
-    field: F &
-      CheckedFields<
-        Types,
-        "Subscription",
-        {},
-        { readonly [K in N]: NoInfer<F> }
-      >[N],
-  ): RootDefinition<"subscription", { readonly [K in N]: F }, C>
+  readonly queryField: EnumFields<Types, C, "query"> &
+    ResolverFields<Types, G, C, "query">
+  readonly mutationField: EnumFields<Types, C, "mutation"> &
+    ResolverFields<Types, G, C, "mutation">
+  readonly subscriptionField: SubscriptionFields<Types, G, C, "subscription">
 }
 
-export function makeDefinitions<Types, C>(): DefinitionBuilder<Types, C> {
+export function makeDefinitions<Types, G, C>(
+  rootField: (
+    ref: RuntimeRef | ConnectionRef<string>,
+    input: AnyResolve | AnyConfig,
+  ) => Field<unknown>,
+): DefinitionBuilder<Types, G, C> {
   const object = (...args: readonly unknown[]) => {
     const explicit = typeof args[0] === "string"
     // Public overloads validate each positional argument before this boundary.
@@ -429,7 +409,11 @@ export function makeDefinitions<Types, C>(): DefinitionBuilder<Types, C> {
           ),
       },
     }),
-    scalar: (name, model, scalarType) => {
+    scalar: (
+      name: string,
+      model: Schema.Top,
+      scalarType?: GraphQLScalarType,
+    ) => {
       if (scalarType && scalarType.name !== name)
         invalid(
           `Scalar name ${scalarType.name} does not match ${name}; register the scalar under its existing name`,
@@ -453,17 +437,29 @@ export function makeDefinitions<Types, C>(): DefinitionBuilder<Types, C> {
       "~model": model,
       schema: input(name, model),
     }),
-    queryField: (name, field) => ({
+    queryField: (
+      name: string,
+      ref: RuntimeRef | ConnectionRef<string>,
+      input: AnyResolve | AnyConfig,
+    ) => ({
       "~kind": "query",
-      fields: { [name]: field },
+      fields: { [name]: rootField(ref, input) },
     }),
-    mutationField: (name, field) => ({
+    mutationField: (
+      name: string,
+      ref: RuntimeRef | ConnectionRef<string>,
+      input: AnyResolve | AnyConfig,
+    ) => ({
       "~kind": "mutation",
-      fields: { [name]: field },
+      fields: { [name]: rootField(ref, input) },
     }),
-    subscriptionField: (name, field) => ({
+    subscriptionField: (
+      name: string,
+      ref: RuntimeRef | ConnectionRef<string>,
+      input: AnyResolve | AnyConfig,
+    ) => ({
       "~kind": "subscription",
-      fields: { [name]: field },
+      fields: { [name]: rootField(ref, input) },
     }),
-  } as DefinitionBuilder<Types, C>
+  } as unknown as DefinitionBuilder<Types, G, C>
 }

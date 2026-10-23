@@ -1,6 +1,6 @@
 import { expect, it } from "@effect/vitest"
 import { Model } from "@model-ts/core"
-import { Effect, Schema, Stream } from "effect"
+import { Effect, Option, Schema, Stream } from "effect"
 import { createBuilder, type Register } from "../src/index.ts"
 
 class Library extends Model.Class<Library>()("Library", {
@@ -28,18 +28,13 @@ it.effect("real LibraryConnection and renamed derived connection coexist", () =>
     const query = {
       savedField: G.queryField(
         "saved",
-        G.field(
-          "LibraryConnection",
-          () => new LibraryConnection({ id: "saved" }),
-        ),
+        "LibraryConnection",
+        () => new LibraryConnection({ id: "saved" }),
       ),
-      directoryField: G.queryField(
-        "directory",
-        G.connection("Library", {
-          name: "LibraryDirectoryConnection",
-          nodes: () => [new Library({ id: "directory" })],
-        }),
-      ),
+      directoryField: G.queryField("directory", G.connection("Library"), {
+        name: "LibraryDirectoryConnection",
+        nodes: () => [new Library({ id: "directory" })],
+      }),
     }
     const schema = G.schema({ ...objects, ...query })
     expect(
@@ -56,20 +51,16 @@ it.effect("real LibraryConnection and renamed derived connection coexist", () =>
 )
 
 it("rejects duplicate real names at assembly", () => {
-  const query = G.queryField(
-    "hello",
-    G.field("String", () => "hello"),
-  )
+  const query = G.queryField("hello", "String", () => "hello")
   expect(() =>
     G.schema({ ...objects, duplicate: objects.library, query }),
   ).toThrow("Duplicate GraphQL object: Library")
 })
 
 it("claims derived connection names only when used", () => {
-  const query = G.queryField(
-    "directory",
-    G.connection("Library", { nodes: () => [] }),
-  )
+  const query = G.queryField("directory", G.connection("Library"), {
+    nodes: () => [],
+  })
   expect(() => G.schema({ ...objects, query })).toThrow(
     "Duplicate GraphQL name: LibraryConnection",
   )
@@ -81,10 +72,9 @@ it("rejects a real edge name when a connection needs that edge", () => {
   >()
   const library = local.object(Library, { id: local.id() })
   const edge = local.object(LibraryEdge, { id: local.id() })
-  const query = local.queryField(
-    "directory",
-    local.connection("Library", { nodes: () => [] }),
-  )
+  const query = local.queryField("directory", local.connection("Library"), {
+    nodes: () => [],
+  })
   expect(() => local.schema({ library, edge, query })).toThrow(
     "Duplicate GraphQL name: LibraryEdge",
   )
@@ -93,19 +83,17 @@ it("rejects a real edge name when a connection needs that edge", () => {
 for (const root of ["Query", "Mutation", "Subscription"] as const) {
   it(`rejects duplicate ${root} field names at assembly`, () => {
     const GraphQL = createBuilder<{}>()
-    const field = GraphQL.field("String", () => "value")
-    const event = GraphQL.field("String", {
-      subscribe: () => Stream.succeed("value"),
-    })
+    const resolve = () => "value"
+    const event = { subscribe: () => Stream.succeed("value") }
     const define = () =>
       root === "Query"
-        ? GraphQL.queryField("duplicate", field)
+        ? GraphQL.queryField("duplicate", "String", resolve)
         : root === "Mutation"
-          ? GraphQL.mutationField("duplicate", field)
-          : GraphQL.subscriptionField("duplicate", event)
+          ? GraphQL.mutationField("duplicate", "String", resolve)
+          : GraphQL.subscriptionField("duplicate", "String", event)
     expect(() =>
       GraphQL.schema({
-        ping: GraphQL.queryField("ping", field),
+        ping: GraphQL.queryField("ping", "String", resolve),
         first: define(),
         second: define(),
       }),
@@ -118,17 +106,14 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const GraphQL = createBuilder<{}>()
-      const field = GraphQL.field("String", () => "value")
+      const resolve = () => "value"
       const schema = GraphQL.schema({
-        first: GraphQL.queryField("first", field),
-        second: GraphQL.queryField("second", field),
-        mutation: GraphQL.mutationField("first", field),
-        subscription: GraphQL.subscriptionField(
-          "first",
-          GraphQL.field("String", {
-            subscribe: () => Stream.succeed("event"),
-          }),
-        ),
+        first: GraphQL.queryField("first", "String", resolve),
+        second: GraphQL.queryField("second", "String", resolve),
+        mutation: GraphQL.mutationField("first", "String", resolve),
+        subscription: GraphQL.subscriptionField("first", "String", {
+          subscribe: () => Stream.succeed("event"),
+        }),
       })
       expect(
         yield* GraphQL.execute(schema, { source: "{ first second }" }),
@@ -148,5 +133,63 @@ it.effect(
       for (const name of ["query", "mutation", "subscription", "events"]) {
         expect(GraphQL).not.toHaveProperty(name)
       }
+    }),
+)
+
+it.effect(
+  "positional refs normalize nested outputs and execute connection shorthand",
+  () =>
+    Effect.gen(function* () {
+      const G = createBuilder<
+        Register<typeof Library>,
+        { readonly allowed: boolean }
+      >()
+      const schema = G.schema({
+        library: G.object(Library, { id: G.id() }),
+        nested: G.queryField(
+          "nested",
+          G.nullable(G.list(G.nullable("String"))),
+          {
+            args: { text: Schema.String },
+            authorize: (_, __, context) => Effect.succeed(context.allowed),
+            resolve: (_, { text }) =>
+              Effect.succeed(Option.some([Option.some(text), Option.none()])),
+          },
+        ),
+        page: G.queryField(
+          "page",
+          G.connection("Library"),
+          (_, args, context) => {
+            expect(args.first).toBe(1)
+            expect(context.allowed).toBe(true)
+            return {
+              edges: [
+                { node: new Library({ id: "library" }), cursor: "opaque" },
+              ],
+              pageInfo: {
+                hasNextPage: false,
+                hasPreviousPage: false,
+                startCursor: "opaque",
+                endCursor: "opaque",
+              },
+            }
+          },
+        ),
+      })
+      expect(
+        yield* G.execute(
+          schema,
+          {
+            source:
+              '{ nested(text: "hello") page(first: 1) { edges { cursor node { id } } } }',
+          },
+          { allowed: true },
+        ),
+      ).toEqual({
+        data: {
+          nested: ["hello", null],
+          page: { edges: [{ cursor: "opaque", node: { id: "library" } }] },
+        },
+      })
     }),
 )

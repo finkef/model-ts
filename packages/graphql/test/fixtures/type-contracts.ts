@@ -99,84 +99,63 @@ const ScopeInput = G.input(
   "ScopeInput",
   Schema.Struct({ scopes: Schema.Array(Scope) }),
 )
-export const StatusQuery = G.queryField(
-  "status",
-  G.field("Status", () => "ACTIVE"),
-)
-export const EchoQuery = G.queryField(
-  "echo",
-  G.field("Scope", {
-    args: { scope: Scope },
-    resolve: (_, args) => args.scope,
-  }),
-)
-export const InputQuery = G.queryField(
-  "input",
-  G.list("Scope", {
-    args: { input: ScopeInput },
-    resolve: (_, args) => args.input.scopes,
-  }),
-)
-export const IdentityQuery = G.queryField(
-  "identity",
-  G.field("Identity", () => ({ id: "alt-1" })),
-)
-export const ItemQuery = G.queryField(
-  "item",
-  G.field("Item", () => ({
-    id: "item-1",
-    kind: "item" as const,
-    name: "one",
-  })),
-)
-export const ChangeQuery = G.queryField(
-  "change",
-  G.nullable("Item", { errors: [Missing], resolve: () => null }),
-)
-export const ChangeMutation = G.mutationField(
-  "change",
-  G.nullable("Success", {
-    errors: [Missing],
-    result: {
-      name: "ChangeResult",
-      description: "The result of changing an item.",
-    },
-    args: { fail: Schema.Boolean, alternative: Schema.Boolean },
-    resolve: (_, args) =>
-      args.fail
-        ? Effect.fail(new Missing({ message: "Not found" }))
-        : args.alternative
-          ? { id: "alt-1", kind: "alternative" as const }
-          : { id: "item-1", kind: "item" as const, name: "one" },
-  }),
-)
+export const StatusQuery = G.queryField("status", "Status", () => "ACTIVE")
+export const EchoQuery = G.queryField("echo", "Scope", {
+  args: { scope: Scope },
+  resolve: (_, args) => args.scope,
+})
+export const InputQuery = G.queryField("input", G.list("Scope"), {
+  args: { input: ScopeInput },
+  resolve: (_, args) => args.input.scopes,
+})
+export const IdentityQuery = G.queryField("identity", "Identity", () => ({
+  id: "alt-1",
+}))
+export const ItemQuery = G.queryField("item", "Item", () => ({
+  id: "item-1",
+  kind: "item" as const,
+  name: "one",
+}))
+export const ChangeQuery = G.queryField("change", G.nullable("Item"), {
+  errors: [Missing],
+  resolve: () => null,
+})
+export const ChangeMutation = G.mutationField("change", G.nullable("Success"), {
+  errors: [Missing],
+  result: {
+    name: "ChangeResult",
+    description: "The result of changing an item.",
+  },
+  args: { fail: Schema.Boolean, alternative: Schema.Boolean },
+  resolve: (_, args) =>
+    args.fail
+      ? Effect.fail(new Missing({ message: "Not found" }))
+      : args.alternative
+        ? { id: "alt-1", kind: "alternative" as const }
+        : { id: "item-1", kind: "item" as const, name: "one" },
+})
 export const MarkAllReadMutation = G.mutationField(
   "markAllRead",
-  G.nullable("Item", {
+  G.nullable("Item"),
+  {
     result: { name: "MarkAllReadResult" },
     errors: [],
     resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
-  }),
+  },
 )
-export const DeniedMutation = G.mutationField(
-  "denied",
-  G.nullable("Item", {
-    errors: [Missing],
-    authorize: () => false,
-    resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
-  }),
-)
-export const EmptyMutation = G.mutationField(
-  "empty",
-  G.nullable("Item", { errors: [Missing], resolve: () => null }),
-)
-export const BrokenMutation = G.mutationField(
-  "broken",
-  G.nullable("Item", {
-    errors: [Missing],
-    resolve: () => Effect.die("private"),
-  }),
-)
+export const DeniedMutation = G.mutationField("denied", G.nullable("Item"), {
+  errors: [Missing],
+  authorize: () => false,
+  resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
+})
+export const EmptyMutation = G.mutationField("empty", G.nullable("Item"), {
+  errors: [Missing],
+  resolve: () => null,
+})
+export const BrokenMutation = G.mutationField("broken", G.nullable("Item"), {
+  errors: [Missing],
+  resolve: () => Effect.die("private"),
+})
 export const definitions = {
   scope,
   status,

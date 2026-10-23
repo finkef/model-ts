@@ -57,28 +57,19 @@ for (const operation of ["query", "subscription"] as const) {
         })
         const custom = throwingScalar()
         const scalar = GraphQL.scalar("Custom", scalarSchema, custom)
-        const query = GraphQL.queryField(
-          "ping",
-          GraphQL.field("String", () => "ok"),
-        )
+        const query = GraphQL.queryField("ping", "String", () => "ok")
         const field = { args: { value: scalar.schema } }
         const built = GraphQL.schema({
           scalar,
           query,
-          echoField: GraphQL.queryField(
-            "echo",
-            GraphQL.field("String", {
-              ...field,
-              resolve: () => "ok",
-            }),
-          ),
-          events: GraphQL.subscriptionField(
-            "echo",
-            GraphQL.field("String", {
-              ...field,
-              subscribe: () => Stream.succeed("ok"),
-            }),
-          ),
+          echoField: GraphQL.queryField("echo", "String", {
+            ...field,
+            resolve: () => "ok",
+          }),
+          events: GraphQL.subscriptionField("echo", "String", {
+            ...field,
+            subscribe: () => Stream.succeed("ok"),
+          }),
         })
         const reports: ErrorReport[] = []
         for (const variables of [false, true]) {
@@ -132,13 +123,10 @@ it.effect(
     Effect.gen(function* () {
       const GraphQL = createBuilder<{}>()
       const schema = GraphQL.schema({
-        queryField: GraphQL.queryField(
-          "echo",
-          GraphQL.field("String", {
-            args: { value: Schema.String },
-            resolve: (_, { value }) => value,
-          }),
-        ),
+        queryField: GraphQL.queryField("echo", "String", {
+          args: { value: Schema.String },
+          resolve: (_, { value }) => value,
+        }),
       })
       for (const request of [
         { source: "{missing}", message: 'Cannot query field "missing"' },
@@ -200,17 +188,20 @@ it.effect(
           ),
           leakField: GraphQL.queryField(
             "leak",
-            GraphQL.nullable("String", () => {
+            GraphQL.nullable("String"),
+            () => {
               throw error
-            }),
+            },
           ),
           abstractField: GraphQL.queryField(
             "abstract",
-            GraphQL.nullable("Abstract", () => new Node({ id: "id" })),
+            GraphQL.nullable("Abstract"),
+            () => new Node({ id: "id" }),
           ),
           scalarField: GraphQL.queryField(
             "scalar",
-            GraphQL.nullable("Output", () => "value"),
+            GraphQL.nullable("Output"),
+            () => "value",
           ),
         })
         const result = yield* execute(schema, {
@@ -248,28 +239,24 @@ it.effect(
         GraphQL.schema({
           deniedField: GraphQL.queryField(
             "denied",
-            GraphQL.nullable("String", {
+            GraphQL.nullable("String"),
+            {
               authorize: () => false,
               resolve: () => "no",
-            }),
+            },
           ),
           publicField: GraphQL.queryField(
             "public",
-            GraphQL.nullable("String", () => Effect.fail(publicInput)),
+            GraphQL.nullable("String"),
+            () => Effect.fail(publicInput),
           ),
-          jsonField: GraphQL.queryField(
-            "json",
-            GraphQL.field("JSON", () => ({
-              at: new Date("2026-10-23T00:00:00Z"),
-              omitted: undefined,
-            })),
-          ),
-          subscription: GraphQL.subscriptionField(
-            "public",
-            GraphQL.field("String", {
-              subscribe: () => Stream.fail(publicInput),
-            }),
-          ),
+          jsonField: GraphQL.queryField("json", "JSON", () => ({
+            at: new Date("2026-10-23T00:00:00Z"),
+            omitted: undefined,
+          })),
+          subscription: GraphQL.subscriptionField("public", "String", {
+            subscribe: () => Stream.fail(publicInput),
+          }),
         }),
       )
       const query = "{denied public json}"
@@ -318,16 +305,10 @@ it.effect(
       for (const value of [1n, cycle]) {
         const adapter = executor(
           GraphQL.schema({
-            queryField: GraphQL.queryField(
-              "value",
-              GraphQL.field("JSON", () => value),
-            ),
-            subscription: GraphQL.subscriptionField(
-              "value",
-              GraphQL.field("JSON", {
-                subscribe: () => Stream.succeed(value),
-              }),
-            ),
+            queryField: GraphQL.queryField("value", "JSON", () => value),
+            subscription: GraphQL.subscriptionField("value", "JSON", {
+              subscribe: () => Stream.succeed(value),
+            }),
           }),
         )
         for (const operation of ["query", "subscription"]) {
@@ -399,24 +380,18 @@ for (const phase of ["authorize", "resolve"] as const) {
               phase === "resolve" ? blocked : "id",
             ),
           }),
-          queryField: GraphQL.queryField(
-            "ping",
-            GraphQL.field("String", () => "ok"),
-          ),
-          subscription: GraphQL.subscriptionField(
-            "event",
-            GraphQL.field("Node", {
-              subscribe: () =>
-                Stream.succeed(new Node({ id: "id" })).pipe(
-                  Stream.ensuring(
-                    Effect.sync(() => {
-                      sourceFinalized = true
-                    }),
-                  ),
+          queryField: GraphQL.queryField("ping", "String", () => "ok"),
+          subscription: GraphQL.subscriptionField("event", "Node", {
+            subscribe: () =>
+              Stream.succeed(new Node({ id: "id" })).pipe(
+                Stream.ensuring(
+                  Effect.sync(() => {
+                    sourceFinalized = true
+                  }),
                 ),
-              authorize: () => (phase === "authorize" ? blocked : true),
-            }),
-          ),
+              ),
+            authorize: () => (phase === "authorize" ? blocked : true),
+          }),
         })
         const fiber = yield* subscribe(schema, {
           source: "subscription{event{id}}",
@@ -456,14 +431,10 @@ it.effect(
       )
       const GraphQL = createBuilder<{}>()
       const schema = GraphQL.schema({
-        queryField: GraphQL.queryField(
-          "ping",
-          GraphQL.field("String", () => "ok"),
-        ),
-        subscription: GraphQL.subscriptionField(
-          "event",
-          GraphQL.field("String", { subscribe: () => source }),
-        ),
+        queryField: GraphQL.queryField("ping", "String", () => "ok"),
+        subscription: GraphQL.subscriptionField("event", "String", {
+          subscribe: () => source,
+        }),
       })
       const fiber = yield* subscribe(schema, {
         source: "subscription{event}",
@@ -516,13 +487,10 @@ it.effect(
             resolve: (parent) => parent.label(),
           }),
         }),
-        queryField: GraphQL.queryField(
-          "result",
-          GraphQL.field("Node", {
-            errors: [Problem],
-            resolve: () => Effect.fail(problem),
-          }),
-        ),
+        queryField: GraphQL.queryField("result", "Node", {
+          errors: [Problem],
+          resolve: () => Effect.fail(problem),
+        }),
       })
       const result = yield* execute(schema, {
         source: "{result{__typename ...on Problem{message label display}}}",
@@ -560,13 +528,10 @@ it.effect(
       const scalar = GraphQL.scalar("Checked", custom)
       const schema = GraphQL.schema({
         scalar,
-        queryField: GraphQL.queryField(
-          "echo",
-          GraphQL.field("String", {
-            args: { value: scalar.schema },
-            resolve: (_, { value }) => value,
-          }),
-        ),
+        queryField: GraphQL.queryField("echo", "String", {
+          args: { value: scalar.schema },
+          resolve: (_, { value }) => value,
+        }),
       })
       for (const variables of [false, true]) {
         for (const value of ["raw", "public", "invalid"]) {

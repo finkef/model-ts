@@ -2,7 +2,12 @@ import { Schema } from "effect"
 import { connectionField } from "./Connections.ts"
 import { type ErrorPolicy } from "./Errors.ts"
 import { wrap, normalize } from "./FieldRuntime.ts"
-import { type RuntimeRef, type Field, type Fields } from "./FieldTypes.ts"
+import {
+  type ConnectionRef,
+  type RuntimeRef,
+  type Field,
+  type Fields,
+} from "./FieldTypes.ts"
 import {
   type AnyResolve,
   type AnyConfig,
@@ -16,7 +21,7 @@ export function makeFields<Types, G, C>(
   policy: ErrorPolicy,
   maxPageSize: number,
   defaultPageSize: number,
-): Fields<Types, G, C> {
+) {
   const field = (
     ref: RuntimeRef,
     input: AnyResolve | AnyConfig = {},
@@ -78,9 +83,15 @@ export function makeFields<Types, G, C>(
           field(nullable ? { kind: "nullable", of: ref } : ref, options),
       ]),
     )
-  // The public overloads and generics describe these runtime functions; they are
-  // erased here, at the single boundary between typed definitions and graphql-js.
-  return {
+  const connection = (node: string, input?: AnyResolve | AnyConfig) =>
+    input === undefined
+      ? Object.assign(
+          connectionField(policy, maxPageSize, defaultPageSize, node),
+          { kind: "connection" as const, node },
+        )
+      : connectionField(policy, maxPageSize, defaultPageSize, node, input)
+  // Public overloads describe these functions before the graphql-js runtime boundary.
+  const fields = {
     ...scalarHelpers(false),
     // A schema can never be field options, so the argument alone selects the
     // position; the public overload admits only string schemas.
@@ -89,9 +100,18 @@ export function makeFields<Types, G, C>(
         ? id(input as Schema.Top & Schema.Schema<string>)
         : field("ID", input),
     field,
-    connection: (node: string, input?: AnyResolve | AnyConfig) =>
-      connectionField(policy, maxPageSize, defaultPageSize, node, input),
+    connection,
     list: wrapped("list"),
     nullable: Object.assign(wrapped("nullable"), scalarHelpers(true)),
   } as unknown as Fields<Types, G, C>
+  return {
+    fields,
+    rootField: (
+      ref: RuntimeRef | ConnectionRef<string>,
+      input: AnyResolve | AnyConfig,
+    ) =>
+      typeof ref !== "string" && ref.kind === "connection"
+        ? connection(ref.node, input)
+        : field(ref, input),
+  }
 }

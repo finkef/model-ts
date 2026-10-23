@@ -226,10 +226,7 @@ test("declared fields need no model AST inspection", async () => {
   const local = createBuilder<Register<typeof model, "Explicit">>()
   const object = local.object("Explicit", model, {}, { value: local.string() })
   // Use a scalar query to include the object without requiring a new registry ref.
-  const query = local.queryField(
-    "hello",
-    local.field("String", () => "ok"),
-  )
+  const query = local.queryField("hello", "String", () => "ok")
   const built = local.schema({ object, query })
   expect(
     await local
@@ -330,16 +327,13 @@ class NestedInput extends Schema.Class<NestedInput>("NestedInput")({
 class OuterInput extends Schema.Class<OuterInput>("OuterInput")({
   nested: NestedInput,
 }) {}
-const NestedQuery = GraphQL.queryField(
-  "nested",
-  GraphQL.field("String", {
-    args: { input: OuterInput },
-    resolve: (_, { input }) =>
-      input instanceof OuterInput && input.nested instanceof NestedInput
-        ? input.nested.label
-        : "wrong",
-  }),
-)
+const NestedQuery = GraphQL.queryField("nested", "String", {
+  args: { input: OuterInput },
+  resolve: (_, { input }) =>
+    input instanceof OuterInput && input.nested instanceof NestedInput
+      ? input.nested.label
+      : "wrong",
+})
 test("nested input names and decoded classes come from identifiers", async () => {
   const built = GraphQL.schema({ ...definitions, NestedQuery })
   expect(printSchema(built.schema)).toContain("input NestedInput {")
@@ -362,19 +356,16 @@ test("decode failure without declared UserInputError remains BAD_USER_INPUT", as
   expect(result.errors?.[0]?.extensions.code).toBe("BAD_USER_INPUT")
 })
 test("nested decode path in UserInputError", async () => {
-  const query = GraphQL.queryField(
-    "nestedEdge",
-    GraphQL.field("ListEdge", {
-      args: { input: OuterInput },
-      errors: [UserInputError],
-      resolve: () =>
-        List.load(List.key(ListId.make("l1"))).pipe(
-          Effect.flatMap((node) =>
-            Effect.map(node.cursor(), (cursor) => ({ cursor, node })),
-          ),
+  const query = GraphQL.queryField("nestedEdge", "ListEdge", {
+    args: { input: OuterInput },
+    errors: [UserInputError],
+    resolve: () =>
+      List.load(List.key(ListId.make("l1"))).pipe(
+        Effect.flatMap((node) =>
+          Effect.map(node.cursor(), (cursor) => ({ cursor, node })),
         ),
-    }),
-  )
+      ),
+  })
   const built = GraphQL.schema({ ...definitions, query })
   const result = await GraphQL.execute(
     built,
@@ -395,21 +386,21 @@ test("errors preserve public/internal/defect policy", async () => {
   const query = {
     internalField: GraphQL.queryField(
       "internal",
-      GraphQL.nullable("String", () =>
+      GraphQL.nullable("String"),
+      () =>
         Effect.fail(
           new DynamoDBError({ operation: "secret", cause: "secret" }),
         ),
-      ),
     ),
-    defectField: GraphQL.queryField(
-      "defect",
-      GraphQL.nullable("String", () => Effect.die(new Error("secret"))),
+    defectField: GraphQL.queryField("defect", GraphQL.nullable("String"), () =>
+      Effect.die(new Error("secret")),
     ),
     thrownField: GraphQL.queryField(
       "thrown",
-      GraphQL.nullable("String", () => {
+      GraphQL.nullable("String"),
+      () => {
         throw new Error("secret")
-      }),
+      },
     ),
   }
   const built = GraphQL.schema({ ...definitions, ...query })
@@ -426,14 +417,11 @@ test("errors preserve public/internal/defect policy", async () => {
 })
 test("internal errors cannot be exposed as result members", () => {
   expect(() => {
-    const query = GraphQL.queryField(
-      "bad",
-      GraphQL.field("List", {
-        errors: [DynamoDBError],
-        resolve: () =>
-          Effect.fail(new DynamoDBError({ operation: "x", cause: "x" })),
-      }),
-    )
+    const query = GraphQL.queryField("bad", "List", {
+      errors: [DynamoDBError],
+      resolve: () =>
+        Effect.fail(new DynamoDBError({ operation: "x", cause: "x" })),
+    })
     GraphQL.schema({ ...definitions, query })
   }).toThrow("Internal errors cannot be exposed")
 })
@@ -529,16 +517,13 @@ test("default page size is 20, independently of the maximum of 100", async () =>
     internal: [DynamoDBError, ItemDecodeError],
   })
   const object = local.object(List, { id: local.id() })
-  const query = local.queryField(
-    "page",
-    local.connection("List", {
-      nodes: () =>
-        List.load(List.key(ListId.make("l1"))).pipe(
-          Effect.map((list) => Array.from({ length: 120 }, () => list)),
-        ),
-      totalCount: () => 120,
-    }),
-  )
+  const query = local.queryField("page", local.connection("List"), {
+    nodes: () =>
+      List.load(List.key(ListId.make("l1"))).pipe(
+        Effect.map((list) => Array.from({ length: 120 }, () => list)),
+      ),
+    totalCount: () => 120,
+  })
   const built = local.schema({ object, query })
   const result = await local
     .execute(built, {

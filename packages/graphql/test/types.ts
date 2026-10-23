@@ -82,22 +82,19 @@ const defaults = GraphQL.object(Workspace, {
 export type DefaultAuthRequirements = Assert<
   Equal<Requirements<{ defaults: typeof defaults }>, Extra>
 >
-const counted = GraphQL.queryField(
-  "page",
-  GraphQL.connection("List", {
-    resolve: () =>
-      List.paginate(
-        { first: 1 },
-        {
-          IndexName: "GSI1",
-          KeyConditionExpression: "GSI1PK = :pk",
-          ExpressionAttributeValues: { ":pk": "WORKSPACE#w1" },
-        },
-      ),
-    totalCount: () => Extra.useSync((s) => s.n),
-    authorize: (_, __, { identity }) => identity.organizationId !== null,
-  }),
-)
+const counted = GraphQL.queryField("page", GraphQL.connection("List"), {
+  resolve: () =>
+    List.paginate(
+      { first: 1 },
+      {
+        IndexName: "GSI1",
+        KeyConditionExpression: "GSI1PK = :pk",
+        ExpressionAttributeValues: { ":pk": "WORKSPACE#w1" },
+      },
+    ),
+  totalCount: () => Extra.useSync((s) => s.n),
+  authorize: (_, __, { identity }) => identity.organizationId !== null,
+})
 export type IndependentRequirements = Assert<
   Equal<Requirements<{ counted: typeof counted }>, DynamoDB | Extra>
 >

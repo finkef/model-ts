@@ -113,27 +113,15 @@ it.effect(
           members: ["Author", "Book", "Publisher", "Review", "Series", "Shelf"],
           resolveType: (value) => value.__typename,
         }),
-        storeField: G.queryField(
-          "store",
-          G.field("Store", () => ({ id: "store" })),
-        ),
-        shelfField: G.queryField(
-          "shelf",
-          G.field("Shelf", () => searchNodes[5]),
-        ),
-        eventsField: G.queryField(
-          "events",
-          G.connection("Event", {
-            nodes: () => [{ id: "signing" }],
-          }),
-        ),
-        searchField: G.queryField(
-          "search",
-          G.connection("SearchResult", {
-            args: { query: Schema.String },
-            nodes: (_, { query }) => (query ? searchNodes : []),
-          }),
-        ),
+        storeField: G.queryField("store", "Store", () => ({ id: "store" })),
+        shelfField: G.queryField("shelf", "Shelf", () => searchNodes[5]),
+        eventsField: G.queryField("events", G.connection("Event"), {
+          nodes: () => [{ id: "signing" }],
+        }),
+        searchField: G.queryField("search", G.connection("SearchResult"), {
+          args: { query: Schema.String },
+          nodes: (_, { query }) => (query ? searchNodes : []),
+        }),
       }
       const built = G.schema(definitions)
       const paperbacks = {
