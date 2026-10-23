@@ -1,6 +1,6 @@
 {
   "name": "@model-ts/core",
-  "version": "0.4.2",
+  "version": "7.0.0",
   "description": "Effect Schema classes with providers: models that decode, encode and carry your own methods.",
   "keywords": [
     "effect",
