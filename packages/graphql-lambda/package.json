@@ -1,0 +1,49 @@
+{
+  "name": "@model-ts/graphql-lambda",
+  "version": "6.0.0",
+  "description": "Effect-native GraphQL HTTP and durable WebSocket transport for API Gateway and DynamoDB.",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./*": {
+      "types": "./dist/*.d.ts",
+      "default": "./dist/*.js"
+    },
+    "./internal/*": null,
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run --project graphql-lambda:memory --root ../..",
+    "test:local": "vitest run --project graphql-lambda:local --root ../.."
+  },
+  "devDependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.1079.0",
+    "@model-ts/core": "workspace:*",
+    "@model-ts/dynamodb": "workspace:*",
+    "@model-ts/graphql": "workspace:*",
+    "effect": "4.0.5",
+    "graphql": "^16.11.0"
+  },
+  "peerDependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.0.0",
+    "@aws-sdk/util-dynamodb": "^3.0.0",
+    "@model-ts/core": "^7.0.0",
+    "@model-ts/dynamodb": "^7.0.0",
+    "effect": "^4.0.5",
+    "graphql": "^16.11.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -56,17 +56,16 @@ const program = Effect.gen(function* () {
 
 ## Packages
 
-| Package                                                   | What it does                                                               |
-| --------------------------------------------------------- | -------------------------------------------------------------------------- |
-| [`@model-ts/core`](packages/core/README.md)               | `Model.Class`, `Model.Union` and the provider API.                         |
-| [`@model-ts/dynamodb`](packages/dynamodb/README.md)       | Single-table DynamoDB: reads, writes, transactions, pagination, sandboxes. |
-| [`@model-ts/eventbridge`](packages/eventbridge/README.md) | Publishing models as EventBridge events, now or later.                     |
-| [`@model-ts/graphql`](packages/graphql/README.md)         | Effect-native GraphQL definitions, model registration and execution.       |
+| Package                                                         | What it does                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------- |
+| [`@model-ts/core`](packages/core/README.md)                     | `Model.Class`, `Model.Union` and the provider API.                              |
+| [`@model-ts/dynamodb`](packages/dynamodb/README.md)             | Single-table DynamoDB: reads, writes, transactions, pagination, sandboxes.      |
+| [`@model-ts/eventbridge`](packages/eventbridge/README.md)       | Publishing models as EventBridge events, now or later.                          |
+| [`@model-ts/graphql`](packages/graphql/README.md)               | Effect-native GraphQL definitions, model registration and execution.            |
+| [`@model-ts/graphql-lambda`](packages/graphql-lambda/README.md) | Effect-native GraphQL HTTP, WebSockets and subscription delivery on AWS Lambda. |
 
-All four are versioned together, so `@model-ts/core@7.1.0` goes with
+All five are versioned together, so `@model-ts/core@7.1.0` goes with
 `@model-ts/dynamodb@7.1.0`.
-
-The `@model-ts/graphql-lambda` transport will be added on top in a separate PR.
 
 ## Installation
 

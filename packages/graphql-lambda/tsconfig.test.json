@@ -1,0 +1,25 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "tsBuildInfoFile": "node_modules/.cache/tsconfig.test.tsbuildinfo",
+    "rewriteRelativeImportExtensions": false,
+    "allowImportingTsExtensions": true
+  },
+  "include": ["test"],
+  "references": [
+    {
+      "path": "."
+    },
+    {
+      "path": "../core"
+    },
+    {
+      "path": "../dynamodb"
+    },
+    {
+      "path": "../graphql"
+    }
+  ]
+}

@@ -24,6 +24,12 @@
     },
     {
       "path": "./packages/graphql/tsconfig.test.json"
+    },
+    {
+      "path": "./packages/graphql-lambda"
+    },
+    {
+      "path": "./packages/graphql-lambda/tsconfig.test.json"
     }
   ]
 }
