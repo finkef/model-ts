@@ -3,8 +3,8 @@ export interface GraphiQLOptions {
   readonly credentials?: "include" | "same-origin" | "omit"
   /** HTTP endpoint; defaults to the request's rawPath. */
   readonly endpoint?: string
-  /** Uses graphql-ws with the graphql-transport-ws protocol. */
-  readonly subscriptionUrl?: `wss://${string}`
+  /** Uses graphql-ws with the graphql-transport-ws protocol; ws:// is for local servers. */
+  readonly subscriptionUrl?: `wss://${string}` | `ws://${string}`
   /** HTTP defaults, also sent as WebSocket connection_init parameters. */
   readonly headers?: Readonly<Record<string, string>>
   readonly query?: string

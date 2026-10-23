@@ -373,7 +373,6 @@ export function createWebSocketHandler<C, L, P>(
           const error = Cause.hasDies(cause)
             ? new ExecutionError({ cause: Cause.squash(cause) })
             : Cause.squash(cause)
-          yield* Effect.logError("GraphQL WebSocket request failed", cause)
           const reason =
             error instanceof ProtocolClose
               ? error.reason
@@ -382,6 +381,9 @@ export function createWebSocketHandler<C, L, P>(
                   ? "Unauthorized"
                   : "InvalidMessage"
                 : "Internal"
+          // Client protocol violations are logged as warnings by close().
+          if (reason === "Internal")
+            yield* Effect.logError("GraphQL WebSocket request failed", cause)
           yield* close(socket, reason).pipe(
             Effect.catchCause((cleanupCause) =>
               Effect.logError(
