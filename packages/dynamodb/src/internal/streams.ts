@@ -76,12 +76,31 @@ export const streamChanges = (
       ),
     )
 
+    const read = async (shardId: string, position: string) => {
+      try {
+        return await client.send(
+          new sdk.GetRecordsCommand({ ShardIterator: position }),
+        )
+      } catch (error) {
+        if (!(error instanceof sdk.TrimmedDataAccessException)) throw error
+        // DynamoDB Local positions iterators on a shard without records at the
+        // shard's start, but numbers records with a counter shared by all
+        // tables. When another table writes first, this shard's first record
+        // lies past that start and the read fails as trimmed. Nothing was read
+        // from the shard yet, so every record in it is new: read from its
+        // first record, as Lambda resumes after trimming.
+        const horizon = await iterator(shardId, "TRIM_HORIZON")
+        if (!horizon) throw error
+        return client.send(
+          new sdk.GetRecordsCommand({ ShardIterator: horizon }),
+        )
+      }
+    }
+
     const poll = async () => {
       const records: Array<StreamRecord> = []
       for (const [shardId, position] of iterators) {
-        const page = await client.send(
-          new sdk.GetRecordsCommand({ ShardIterator: position }),
-        )
+        const page = await read(shardId, position)
         records.push(
           ...(page.Records ?? []).map((record) => toRecord(record, streamArn)),
         )
