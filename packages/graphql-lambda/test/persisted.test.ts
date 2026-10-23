@@ -3,6 +3,9 @@ import { Cause, Effect, Logger, Schema } from "effect"
 import {
   ConnectionId,
   GatewayMessages,
+  Gateway,
+  GatewayError,
+  OperationId,
   PubSub,
   Topic,
   createWebSocketHandler,
@@ -144,6 +147,7 @@ it.effect(
         ),
       )
       expect(result).toEqual({ batchItemFailures: [] })
+      expect(yield* (yield* GatewayMessages).closed).toEqual(["a-stale"])
       expect(
         logs.some((line) =>
           line.includes("persisted context no longer decodes"),
@@ -271,5 +275,81 @@ it.effect(
           {},
         )).statusCode,
       ).toBe(500)
+    }).pipe(Effect.provide(testLayer())),
+)
+
+it.effect(
+  "stale context closure retries DeleteConnection before removing its recovery state",
+  () =>
+    Effect.gen(function* () {
+      yield* initialize("c1")
+      yield* subscribe("c1")
+      const storage = yield* PubSub.Storage
+      const id = ConnectionId.make("c1")
+      yield* storage.update(yield* storage.liveConnection(id), { context: {} })
+      const event = yield* publish(Topic.make("user"), {
+        domainId: "a",
+        message: "event",
+      })
+      const deliver = PubSub.DynamoDB.streamHandler(settings)(
+        streamEvent(event, "42"),
+        {},
+      )
+      const gateway = yield* Gateway
+      expect(
+        yield* deliver.pipe(
+          Effect.provideService(Gateway, {
+            ...gateway,
+            close: () =>
+              Effect.fail(
+                new GatewayError({
+                  operation: "DeleteConnection",
+                  gone: false,
+                  cause: new Error("Throttled"),
+                }),
+              ),
+          }),
+        ),
+      ).toEqual({ batchItemFailures: [{ itemIdentifier: "42" }] })
+      expect((yield* storage.operation(id, OperationId.make("s")))?.state).toBe(
+        "active",
+      )
+      expect(yield* deliver).toEqual({ batchItemFailures: [] })
+      expect(yield* (yield* GatewayMessages).closed).toEqual(["c1"])
+      expect(
+        yield* storage.operation(id, OperationId.make("s")),
+      ).toBeUndefined()
+    }).pipe(Effect.provide(testLayer())),
+)
+
+it.effect(
+  "heartbeats and client completion do not decode persisted context",
+  () =>
+    Effect.gen(function* () {
+      yield* initialize("c1")
+      yield* subscribe("c1")
+      const storage = yield* PubSub.Storage
+      const id = ConnectionId.make("c1")
+      yield* storage.update(yield* storage.liveConnection(id), { context: {} })
+      for (const message of [
+        { type: "ping", payload: { nonce: 1 } },
+        { type: "pong" },
+        { type: "complete", id: "s" },
+      ])
+        expect(
+          (yield* handler(wsEvent("c1", "$default", message), {})).statusCode,
+        ).toBe(200)
+      expect(yield* (yield* GatewayMessages).closed).toEqual([])
+      expect(
+        (yield* (yield* GatewayMessages).all).map((frame) =>
+          JSON.parse(frame.data),
+        ),
+      ).toEqual([
+        { type: "connection_ack" },
+        { type: "pong", payload: { nonce: 1 } },
+      ])
+      expect(
+        yield* storage.operation(id, OperationId.make("s")),
+      ).toBeUndefined()
     }).pipe(Effect.provide(testLayer())),
 )

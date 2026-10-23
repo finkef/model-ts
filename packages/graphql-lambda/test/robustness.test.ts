@@ -1,6 +1,6 @@
 import { marshall } from "@aws-sdk/util-dynamodb"
 import { it, expect } from "@effect/vitest"
-import { Effect, Layer, Stream } from "effect"
+import { Cause, Effect, Layer, Stream } from "effect"
 import { TestClock } from "effect/testing"
 import { GraphQLError } from "graphql"
 import {
@@ -314,8 +314,8 @@ it.effect(
         batchItemFailures: [],
       })
       expect(
-        JSON.parse((yield* (yield* GatewayMessages).all).at(-1)!.data).payload
-          .errors[0],
+        JSON.parse((yield* (yield* GatewayMessages).all).at(-1)!.data)
+          .payload[0],
       ).toEqual({
         message: "Session revoked",
         extensions: { code: "UNAUTHORIZED" },
@@ -425,8 +425,8 @@ it.effect(
         batchItemFailures: [],
       })
       expect(
-        JSON.parse((yield* (yield* GatewayMessages).all).at(-1)!.data).payload
-          .errors[0].message,
+        JSON.parse((yield* (yield* GatewayMessages).all).at(-1)!.data)
+          .payload[0].message,
       ).toBe("Field disabled")
     }).pipe(Effect.provide(testLayer())),
 )
@@ -449,4 +449,85 @@ it.effect("disconnect racing registration leaves no orphaned operations", () =>
     )
     expect(yield* (yield* Sandbox).snapshot).toEqual({})
   }).pipe(Effect.provide(testLayer())),
+)
+
+it.effect(
+  "record defects report their sequence and do not abort later records",
+  () =>
+    Effect.gen(function* () {
+      yield* connect("c1")
+      yield* start("c1")
+      const event = yield* publish(Topic.make("user"), {
+        domainId: "a",
+        message: "hello",
+      })
+      const storage = yield* Storage
+      const defect = new Error("subscriber lookup defect")
+      let calls = 0
+      const result = yield* stream(
+        {
+          Records: [
+            ...streamEvent(event, "41").Records,
+            ...streamEvent(event, "42").Records,
+          ],
+        },
+        {},
+      ).pipe(
+        Effect.provideService(Storage, {
+          ...storage,
+          subscribers: (...args) =>
+            ++calls === 1 ? Stream.die(defect) : storage.subscribers(...args),
+        }),
+      )
+      expect(result).toEqual({ batchItemFailures: [{ itemIdentifier: "41" }] })
+      expect(
+        (yield* (yield* GatewayMessages).all).map((frame) =>
+          JSON.parse(frame.data),
+        ),
+      ).toEqual([
+        { type: "connection_ack" },
+        { type: "next", id: "1", payload: { data: { message: "hello" } } },
+      ])
+      const exit = yield* stream(
+        {
+          Records: [
+            {
+              ...streamEvent(event).Records[0],
+              dynamodb: {
+                NewImage: streamEvent(event).Records[0].dynamodb?.NewImage,
+              },
+            },
+          ],
+        },
+        {},
+      ).pipe(
+        Effect.provideService(Storage, {
+          ...storage,
+          subscribers: () => Stream.die(defect),
+        }),
+        Effect.exit,
+      )
+      expect(exit._tag).toBe("Failure")
+      if (exit._tag === "Failure") expect(Cause.squash(exit.cause)).toBe(defect)
+    }).pipe(Effect.provide(testLayer())),
+)
+
+it.effect(
+  "delivery closes IDs too large for even a terminal frame without poisoning retries",
+  () =>
+    Effect.gen(function* () {
+      yield* connect("c1")
+      yield* start("c1", "x".repeat(33 * 1024))
+      const event = yield* publish(Topic.make("user"), {
+        domainId: "a",
+        message: "hello",
+      })
+      expect(yield* stream(streamEvent(event), {})).toEqual({
+        batchItemFailures: [],
+      })
+      expect(yield* (yield* GatewayMessages).closed).toEqual(["c1"])
+      expect(
+        Object.values(yield* (yield* Sandbox).snapshot).map((row) => row._tag),
+      ).toEqual(["GraphQLPublishedEvent"])
+    }).pipe(Effect.provide(testLayer())),
 )

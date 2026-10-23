@@ -1,4 +1,5 @@
 import { Cause, Clock, Effect, Option, Schema, Stream } from "effect"
+import type { GraphQLFormattedError } from "graphql"
 import {
   badRequest,
   ConnectionRejected,
@@ -208,6 +209,29 @@ export function createWebSocketHandler<C, L, P>(
         Effect.mapError(() => badRequest("Invalid WebSocket message")),
       )
       let connection = yield* storage.liveConnection(id)
+      // Heartbeats and cancellation must not depend on application context decoding.
+      if (message.type === "ping") {
+        yield* send(connection, {
+          type: "pong",
+          ...(message.payload === undefined
+            ? {}
+            : { payload: message.payload }),
+        })
+        return { statusCode: 200, body: "" }
+      }
+      if (message.type === "pong") return { statusCode: 200, body: "" }
+      if (message.type !== "connection_init") {
+        if (!message.id)
+          return yield* new ProtocolClose({ reason: "InvalidMessage" })
+        if (message.type === "complete") {
+          yield* storage.stop(id, message.id)
+          return { statusCode: 200, body: "" }
+        }
+        if (!connection.initialized || connection.context === undefined)
+          return yield* new ProtocolClose({ reason: "Unauthorized" })
+      } else {
+        connection = yield* storage.beginInit(connection)
+      }
       const persisted =
         connection.context === undefined
           ? Option.none<P>()
@@ -218,7 +242,6 @@ export function createWebSocketHandler<C, L, P>(
               ),
             )
       if (message.type === "connection_init") {
-        connection = yield* storage.beginInit(connection)
         const hook = options.onInit
         const context = hook
           ? yield* authenticate(() =>
@@ -249,23 +272,7 @@ export function createWebSocketHandler<C, L, P>(
         })
         return { statusCode: 200, body: "" }
       }
-      if (message.type === "ping") {
-        yield* send(connection, {
-          type: "pong",
-          ...(message.payload === undefined
-            ? {}
-            : { payload: message.payload }),
-        })
-        return { statusCode: 200, body: "" }
-      }
-      if (message.type === "pong") return { statusCode: 200, body: "" }
-      if (!message.id || message.id.length > 128)
-        return yield* new ProtocolClose({ reason: "InvalidMessage" })
-      if (message.type === "complete") {
-        yield* storage.stop(id, message.id)
-        return { statusCode: 200, body: "" }
-      }
-      if (!connection.initialized || Option.isNone(persisted))
+      if (Option.isNone(persisted))
         return yield* new ProtocolClose({ reason: "Unauthorized" })
       yield* Effect.gen(function* () {
         const request = message.payload
@@ -384,7 +391,11 @@ export function createWebSocketHandler<C, L, P>(
           // Client protocol violations are logged as warnings by close().
           if (reason === "Internal")
             yield* Effect.logError("GraphQL WebSocket request failed", cause)
-          yield* close(socket, reason).pipe(
+          yield* Effect.gen(function* () {
+            const cleanup = yield* Effect.exit(storage.disconnect(id))
+            yield* close(socket, reason)
+            yield* cleanup
+          }).pipe(
             Effect.catchCause((cleanupCause) =>
               Effect.logError(
                 "GraphQL connection cleanup failed",
@@ -439,6 +450,8 @@ export const deliverOperation = <C, L, P, E, R>(
             "GraphQL persisted context no longer decodes",
             error,
           )
+          // Retain state if closing fails so stream delivery can retry DeleteConnection.
+          yield* close(connection, "Internal")
           yield* storage.disconnect(connection.id)
           return Option.none<P>()
         }),
@@ -492,18 +505,51 @@ export const deliverOperation = <C, L, P, E, R>(
     )
     // Infrastructure failures still reach the stream retry policy. Only execution failures
     // become GraphQL results; retrying a permission denial cannot make it succeed.
-    const current = yield* (yield* Storage).operation(
+    const current = yield* storage.operation(
       connection.id,
       operation.operationId,
     )
     if (
-      result &&
-      current?.generation === operation.generation &&
-      current.state === "active"
+      !result ||
+      current?.generation !== operation.generation ||
+      current.state !== "active"
     )
-      yield* send(connection, {
-        type: "next",
-        id: operation.operationId,
-        payload: result,
+      return
+    const failOperation = (errors: ReadonlyArray<GraphQLFormattedError>) =>
+      Effect.gen(function* () {
+        // Keep the operation until the terminal frame is accepted so gateway failures retry.
+        yield* send(connection, {
+          type: "error",
+          id: operation.operationId,
+          payload: errors,
+        })
+        yield* storage.stop(
+          connection.id,
+          operation.operationId,
+          operation.generation,
+        )
       })
+    yield* (
+      (!("data" in result) || result.data === undefined) &&
+      result.errors?.length
+        ? failOperation(result.errors)
+        : send(connection, {
+            type: "next",
+            id: operation.operationId,
+            payload: result,
+          })
+    ).pipe(
+      Effect.catchTag("MessageTooLarge", (error) =>
+        // Retrying a result that cannot fit a frame only duplicates healthy deliveries.
+        failOperation([defaultFormatError(toGraphQLError(error))]).pipe(
+          Effect.catchTag("MessageTooLarge", () =>
+            Effect.gen(function* () {
+              // An ID alone can exceed a frame; only socket closure can terminate it.
+              yield* close(connection, "Internal")
+              yield* storage.disconnect(connection.id)
+            }),
+          ),
+        ),
+      ),
+    )
   })

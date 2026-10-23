@@ -1,5 +1,5 @@
 import { unmarshall } from "@aws-sdk/util-dynamodb"
-import { Clock, Effect, Schema, Stream } from "effect"
+import { Cause, Clock, Effect, Schema, Stream } from "effect"
 import { badRequest, DeliveryError } from "../Errors.ts"
 import type { Gateway } from "../Gateway.ts"
 import { PublishedEvent } from "../Models.ts"
@@ -71,16 +71,17 @@ const deliverEvent = <C, L, P, E, R>(
             lambdaContext,
           )
         }).pipe(
-          Effect.catch((error) =>
+          Effect.catchCause((cause) =>
             Effect.gen(function* () {
+              if (Cause.hasInterrupts(cause)) return yield* Effect.interrupt
               failures.push({
                 connectionId: subscription.connectionId,
                 operationId: subscription.operationId,
-                cause: error,
+                cause: Cause.squash(cause),
               })
               yield* Effect.logError(
                 "GraphQL subscriber delivery failed",
-                error,
+                cause,
               )
             }),
           ),
@@ -138,11 +139,12 @@ export function streamHandler<C, L, P>(
     const batchItemFailures: Array<{ itemIdentifier: string }> = []
     for (const record of event.Records)
       yield* process(record, lambdaContext).pipe(
-        Effect.catch((error) =>
+        Effect.catchCause((cause) =>
           Effect.gen(function* () {
-            yield* Effect.logError("GraphQL stream record failed", error)
+            if (Cause.hasInterrupts(cause)) return yield* Effect.interrupt
+            yield* Effect.logError("GraphQL stream record failed", cause)
             const sequence = record.dynamodb?.SequenceNumber
-            if (!sequence) return yield* error
+            if (!sequence) return yield* Effect.failCause(cause)
             batchItemFailures.push({ itemIdentifier: sequence })
           }),
         ),

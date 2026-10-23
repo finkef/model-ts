@@ -1,8 +1,11 @@
 import { expect, it } from "@effect/vitest"
 import { Deferred, Effect, Fiber, Tracer } from "effect"
-import { GatewayMessages, createWebSocketHandler } from "../src/index.ts"
+import { GatewayMessages, Topic, createWebSocketHandler } from "../src/index.ts"
 import { Sandbox } from "../src/PubSub/DynamoDB.ts"
 import {
+  publish,
+  stream,
+  streamEvent,
   connect,
   options,
   start,
@@ -234,5 +237,57 @@ it.effect(
           JSON.parse(frame.data),
         ),
       ).toEqual([{ type: "connection_ack" }])
+    }).pipe(Effect.provide(testLayer())),
+)
+
+it.effect(
+  "long operation IDs survive storage, delivery, completion and reuse",
+  () =>
+    Effect.gen(function* () {
+      yield* connect("c1")
+      const ids = [
+        "x".repeat(129),
+        "é\u0000".repeat(600),
+        "é\u0000".repeat(600) + "different",
+      ]
+      for (const id of ids) yield* start("c1", id)
+      const rows = Object.values(yield* (yield* Sandbox).snapshot)
+      expect(
+        rows.filter((row) => row._tag === "GraphQLSubscriptionOperation"),
+      ).toHaveLength(3)
+      expect(
+        rows.every(
+          (row) =>
+            typeof row.SK === "string" && Buffer.byteLength(row.SK) <= 1024,
+        ),
+      ).toBe(true)
+      const event = yield* publish(Topic.make("user"), {
+        domainId: "a",
+        message: "hello",
+      })
+      expect(yield* stream(streamEvent(event), {})).toEqual({
+        batchItemFailures: [],
+      })
+      const frames = (yield* (yield* GatewayMessages).all)
+        .slice(1)
+        .map((frame) => JSON.parse(frame.data))
+      expect(frames.map((frame) => frame.id).toSorted()).toEqual(ids.toSorted())
+      expect(
+        frames.every(
+          (frame) =>
+            frame.type === "next" && frame.payload.data.message === "hello",
+        ),
+      ).toBe(true)
+      for (const id of ids)
+        yield* websocket(
+          wsEvent("c1", "$default", { type: "complete", id }),
+          {},
+        )
+      for (const id of ids) yield* start("c1", id)
+      expect(yield* (yield* GatewayMessages).closed).toEqual([])
+      yield* websocket(wsEvent("c1", "$disconnect"), {})
+      expect(
+        Object.values(yield* (yield* Sandbox).snapshot).map((row) => row._tag),
+      ).toEqual(["GraphQLPublishedEvent"])
     }).pipe(Effect.provide(testLayer())),
 )

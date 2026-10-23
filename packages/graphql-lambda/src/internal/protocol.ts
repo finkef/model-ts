@@ -5,7 +5,6 @@ import type { Result } from "../Executor.ts"
 import { Gateway } from "../Gateway.ts"
 import type { OperationId } from "../Identifiers.ts"
 import type { Connection, JsonObject } from "../Models.ts"
-import { Storage } from "../Storage.ts"
 
 export type ServerMessage =
   | {
@@ -37,9 +36,7 @@ export const close = Effect.fn("GraphQL.close")(function* (
     "graphql.close.reason": reason,
   })
   yield* Effect.logWarning("GraphQL WebSocket closed", { code, reason })
-  const storage = yield* Storage
   const gateway = yield* Gateway
-  const cleanup = yield* Effect.exit(storage.disconnect(connection.id))
   yield* gateway
     .close(connection.endpoint, connection.id)
     .pipe(
@@ -47,5 +44,4 @@ export const close = Effect.fn("GraphQL.close")(function* (
         error.gone ? Effect.void : Effect.fail(error),
       ),
     )
-  yield* cleanup
 })

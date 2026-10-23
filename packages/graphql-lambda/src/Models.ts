@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto"
 import { Model } from "@model-ts/core"
 import { DynamoDB } from "@model-ts/dynamodb"
 import { Schema } from "effect"
@@ -20,9 +21,15 @@ export const OperationRequest = Schema.Struct({
 export type OperationRequest = typeof OperationRequest.Type
 
 // JSON tuples avoid collisions when connection/operation/topic names contain separators.
+// The protocol does not cap operation IDs; hash only keys beyond DynamoDB's sort-key limit.
+const sortKey = (key: string, prefix = "") =>
+  Buffer.byteLength(prefix + key) <= 1024
+    ? prefix + key
+    : `${prefix}SHA256#${createHash("sha256").update(key).digest("hex")}`
 const connectionPK = (id: ConnectionId) =>
   `GRAPHQL#CONNECTION#${JSON.stringify(id)}`
-const operationSK = (id: OperationId) => `OPERATION#${JSON.stringify(id)}`
+const operationSK = (id: OperationId) =>
+  sortKey(JSON.stringify(id), "OPERATION#")
 
 export class Connection extends Model.Class<Connection>()(
   "GraphQLConnection",
@@ -99,7 +106,7 @@ export class Subscription extends Model.Class<Subscription>()(
   ) {
     return {
       PK: Subscription.partitionKey(topic),
-      SK: JSON.stringify([connectionId, operationId]),
+      SK: sortKey(JSON.stringify([connectionId, operationId])),
     }
   }
 }
