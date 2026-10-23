@@ -459,6 +459,27 @@ void exportedLocalGateway
 // @ts-expect-error Local paths are absolute.
 GraphQLLocal.layer({ path: "graphql", http: handler })
 
+// A latency function's services carry into the layer; a fixed latency adds none.
+const localFixedLatency = GraphQLLocal.layer({
+  http: handler,
+  latency: "1 second",
+})
+expectTypeOf<Layer.Services<typeof localFixedLatency>>().toEqualTypeOf<
+  ResolverService | IdentityService | HttpServer.HttpServer
+>()
+const localLatency = GraphQLLocal.layer({
+  http: handler,
+  latency: () => UpgradeService.use(() => Effect.succeed("1 second" as const)),
+})
+expectTypeOf<Layer.Services<typeof localLatency>>().toEqualTypeOf<
+  ResolverService | IdentityService | UpgradeService | HttpServer.HttpServer
+>()
+GraphQLLocal.layer({
+  http: handler,
+  // @ts-expect-error A latency function cannot fail.
+  latency: () => Effect.fail(new Error("no latency")),
+})
+
 expectTypeOf<
   Extract<keyof typeof GraphQLLambda, "Local" | "Sandbox" | "GatewayMessages">
 >().toEqualTypeOf<never>()

@@ -1,5 +1,5 @@
 import { expect, it } from "@effect/vitest"
-import { Deferred, Effect, Layer, Schema } from "effect"
+import { Deferred, Duration, Effect, Layer, Ref, Schema } from "effect"
 import { TestClock } from "effect/testing"
 import { describe, inject } from "vitest"
 import {
@@ -370,5 +370,57 @@ describe.skipIf(inject("graphqlDynamoDB") !== "memory")("local server", () => {
         ),
       )
     },
+  )
+})
+
+describe.skipIf(inject("graphqlDynamoDB") !== "memory")("local latency", () => {
+  const echo = (event: HttpEvent) =>
+    Effect.succeed({
+      statusCode: 200,
+      headers: {},
+      body: event.rawQueryString,
+      isBase64Encoded: false,
+    })
+  const timed = (query: string) =>
+    Effect.gen(function* () {
+      const url = `${yield* origin}/graphql?${query}`
+      const started = Date.now()
+      const body = yield* Effect.promise(() =>
+        fetch(url).then((response) => response.text()),
+      )
+      return { body, elapsed: Date.now() - started }
+    })
+
+  it.live("delays every HTTP request by a fixed latency", () =>
+    Effect.gen(function* () {
+      const { body, elapsed } = yield* timed("fixed")
+      expect(body).toBe("fixed")
+      expect(elapsed).toBeGreaterThanOrEqual(200)
+    }).pipe(
+      Effect.provide(
+        Local.layer({ http: echo, latency: "200 millis" }).pipe(
+          Layer.provideMerge(server),
+        ),
+      ),
+    ),
+  )
+
+  it.live("decides the latency per request and can change it at runtime", () =>
+    Effect.gen(function* () {
+      const latency = yield* Ref.make<Duration.Input>(Duration.zero)
+      const layer = Local.layer({
+        http: echo,
+        latency: (event) =>
+          event.rawQueryString === "control"
+            ? Effect.succeed(Duration.zero)
+            : Ref.get(latency),
+      }).pipe(Layer.provideMerge(server))
+      yield* Effect.gen(function* () {
+        expect((yield* timed("before")).elapsed).toBeLessThan(250)
+        yield* Ref.set(latency, "300 millis")
+        expect((yield* timed("slow")).elapsed).toBeGreaterThanOrEqual(300)
+        expect((yield* timed("control")).elapsed).toBeLessThan(250)
+      }).pipe(Effect.provide(layer))
+    }),
   )
 })

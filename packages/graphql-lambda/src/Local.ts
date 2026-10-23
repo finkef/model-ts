@@ -64,6 +64,7 @@ export interface Options<
   RW = never,
   RS = never,
   K extends Duration.Input | false = false,
+  RL = never,
 > {
   readonly path?: `/${string}`
   readonly stage?: string
@@ -73,7 +74,21 @@ export interface Options<
   readonly batchSize?: number
   /** Disabled by default. Sends production keepAlive pings on this interval. */
   readonly keepAlive?: K
+  /**
+   * Delays HTTP requests before their handler runs, to exercise loading
+   * states. A function decides per request, e.g. from a `Ref` the app
+   * changes at runtime. WebSocket messages and stream delivery are not
+   * delayed. Disabled by default.
+   */
+  readonly latency?: Latency<RL>
 }
+
+/**
+ * A fixed delay, or an Effect that decides the delay for each HTTP request.
+ */
+export type Latency<R = never> =
+  | Duration.Input
+  | ((event: HttpEvent) => Effect.Effect<Duration.Input, never, R>)
 /** Runs production Lambda handlers on the application's Effect HTTP server. */
 export const layer = <
   L = LambdaContext,
@@ -83,14 +98,16 @@ export const layer = <
   RS = never,
   S extends StreamHandler<L, E, RS> | undefined = undefined,
   K extends Duration.Input | false = false,
+  RL = never,
 >(
-  options: Options<L, E, RH, RW, RS, K> & {
+  options: Options<L, E, RH, RW, RS, K, RL> & {
     readonly stream?: S
   } & ContextOptions<L>,
 ): Layer.Layer<
   Delivery,
   never,
   | Exclude<RH | RW | RS, Gateway>
+  | RL
   | HttpServer.HttpServer
   | ([S] extends [undefined] ? never : Sandbox)
   | (K extends false ? never : Storage)
@@ -117,8 +134,18 @@ const response = (result: ProxyResponse & Partial<HttpResponse>) => {
     : HttpServerResponse.text(result.body, options)
 }
 
-const serverLayer = <L, E, RH, RW, RS, K extends Duration.Input | false>(
-  options: Options<L, E, RH, RW, RS, K>,
+/** A latency as a sleepable duration; anything else is a configuration defect. */
+const latencyDuration = (input: Duration.Input) =>
+  Effect.suspend(() => {
+    const duration = Duration.fromInputUnsafe(input)
+    const millis = Duration.toMillis(duration)
+    return Number.isFinite(millis) && millis >= 0
+      ? Effect.succeed(duration)
+      : Effect.die(new Error("latency must be a finite non-negative duration"))
+  })
+
+const serverLayer = <L, E, RH, RW, RS, K extends Duration.Input | false, RL>(
+  options: Options<L, E, RH, RW, RS, K, RL>,
   context: (invocation: Invocation) => L,
 ) =>
   Layer.unwrap(
@@ -154,6 +181,19 @@ const serverLayer = <L, E, RH, RW, RS, K extends Duration.Input | false>(
         return yield* Effect.die(
           new Error("Local keepAlive requires PubSub.Storage"),
         )
+      const latency = options.latency
+      const delay =
+        latency === undefined
+          ? () => Effect.void
+          : typeof latency === "function"
+            ? (event: HttpEvent) =>
+                latency(event).pipe(
+                  Effect.flatMap(latencyDuration),
+                  Effect.flatMap(Effect.sleep),
+                )
+            : yield* latencyDuration(latency).pipe(
+                Effect.map((duration) => () => Effect.sleep(duration)),
+              )
       const sockets = new Map<ConnectionId, Socket.Writer>()
       const write = Effect.fn("GraphQL.Local.gateway")(function* (
         operation: GatewayError["operation"],
@@ -327,6 +367,7 @@ const serverLayer = <L, E, RH, RW, RS, K extends Duration.Input | false>(
             },
           },
         }
+        yield* delay(event)
         return response(yield* http(event, context(invocation(event))))
       })().pipe(
         Effect.catchCause((cause) =>

@@ -705,6 +705,29 @@ are configuration defects, not layer failures. Keep-alive pings are disabled
 unless `keepAlive` supplies an interval; they call
 the production `keepAlive` function for each open connection.
 
+`latency` delays HTTP requests before their handler runs, so the app's loading
+states can be exercised locally. Pass a duration, or a function that returns
+the delay for each request as an Effect. The function can read a `Ref` that
+the app or an end-to-end test changes at runtime, and can exempt requests that
+should stay fast; its services become requirements of the layer. WebSocket
+messages and stream delivery are never delayed, so `settled` stays fast.
+
+```ts
+const latency = yield * Ref.make<Duration.Input>(Duration.zero)
+
+Local.layer({
+  http,
+  webSocket,
+  latency: (event) =>
+    event.headers["x-skip-latency"]
+      ? Effect.succeed(Duration.zero)
+      : Ref.get(latency),
+})
+
+// Later, e.g. from a local-only control endpoint:
+yield * Ref.set(latency, "5 seconds")
+```
+
 The application supplies `HttpServer.HttpServer`; Effect's generic upgrade API
 does not expose subprotocol selection. Configure the platform's upgrade handler
 to select `graphql-transport-ws`, as above, especially when clients offer multiple
