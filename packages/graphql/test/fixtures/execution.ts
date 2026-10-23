@@ -20,15 +20,17 @@ export class Service extends Context.Service<
 >()("fixture/Service") {}
 export const tenant = createBuilder<{}, TenantContext>()
 export const user = createBuilder<{}, UserContext>()
-export const query = tenant.query({
-  value: tenant.field("String", (_, __, ctx) => ctx.tenant),
-})
-export const subscription = tenant.subscription({
-  event: tenant.events("String", {
+export const query = tenant.queryField(
+  "value",
+  tenant.field("String", (_, __, ctx) => ctx.tenant),
+)
+export const subscription = tenant.subscriptionField(
+  "event",
+  tenant.field("String", {
     authorize: (_, __, ctx) => Effect.map(Service, () => ctx.tenant.length > 0),
     subscribe: (_, __, ctx) => Stream.succeed(ctx.tenant),
   }),
-})
+)
 export const schema = tenant.schema({ query, subscription })
 export const runQuery = execute(
   schema,

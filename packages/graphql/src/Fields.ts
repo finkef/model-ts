@@ -22,6 +22,7 @@ export function makeFields<Types, G, C>(
     input: AnyResolve | AnyConfig = {},
   ): Field<unknown> => {
     const options = config(input)
+    if (options.subscribe) return eventField(policy, ref, options)
     const members = options.errors ?? []
     if (members.some((member) => policy.internal.includes(member)))
       invalid("Internal errors cannot be exposed as result union members")
@@ -87,8 +88,6 @@ export function makeFields<Types, G, C>(
       Schema.isSchema(input)
         ? id(input as Schema.Top & Schema.Schema<string>)
         : field("ID", input),
-    events: (ref: RuntimeRef, options: AnyConfig) =>
-      eventField(policy, ref, options),
     field,
     connection: (node: string, input?: AnyResolve | AnyConfig) =>
       connectionField(policy, maxPageSize, defaultPageSize, node, input),

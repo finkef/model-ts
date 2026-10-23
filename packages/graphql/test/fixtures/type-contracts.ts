@@ -99,26 +99,43 @@ const ScopeInput = G.input(
   "ScopeInput",
   Schema.Struct({ scopes: Schema.Array(Scope) }),
 )
-export const query = G.query({
-  status: G.field("Status", () => "ACTIVE"),
-  echo: G.field("Scope", {
+export const StatusQuery = G.queryField(
+  "status",
+  G.field("Status", () => "ACTIVE"),
+)
+export const EchoQuery = G.queryField(
+  "echo",
+  G.field("Scope", {
     args: { scope: Scope },
     resolve: (_, args) => args.scope,
   }),
-  input: G.list("Scope", {
+)
+export const InputQuery = G.queryField(
+  "input",
+  G.list("Scope", {
     args: { input: ScopeInput },
     resolve: (_, args) => args.input.scopes,
   }),
-  identity: G.field("Identity", () => ({ id: "alt-1" })),
-  item: G.field("Item", () => ({
+)
+export const IdentityQuery = G.queryField(
+  "identity",
+  G.field("Identity", () => ({ id: "alt-1" })),
+)
+export const ItemQuery = G.queryField(
+  "item",
+  G.field("Item", () => ({
     id: "item-1",
     kind: "item" as const,
     name: "one",
   })),
-  change: G.nullable("Item", { errors: [Missing], resolve: () => null }),
-})
-export const mutation = G.mutation({
-  change: G.nullable("Success", {
+)
+export const ChangeQuery = G.queryField(
+  "change",
+  G.nullable("Item", { errors: [Missing], resolve: () => null }),
+)
+export const ChangeMutation = G.mutationField(
+  "change",
+  G.nullable("Success", {
     errors: [Missing],
     result: {
       name: "ChangeResult",
@@ -132,22 +149,34 @@ export const mutation = G.mutation({
           ? { id: "alt-1", kind: "alternative" as const }
           : { id: "item-1", kind: "item" as const, name: "one" },
   }),
-  markAllRead: G.nullable("Item", {
+)
+export const MarkAllReadMutation = G.mutationField(
+  "markAllRead",
+  G.nullable("Item", {
     result: { name: "MarkAllReadResult" },
     errors: [],
     resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
   }),
-  denied: G.nullable("Item", {
+)
+export const DeniedMutation = G.mutationField(
+  "denied",
+  G.nullable("Item", {
     errors: [Missing],
     authorize: () => false,
     resolve: () => ({ id: "item-1", kind: "item" as const, name: "one" }),
   }),
-  empty: G.nullable("Item", { errors: [Missing], resolve: () => null }),
-  broken: G.nullable("Item", {
+)
+export const EmptyMutation = G.mutationField(
+  "empty",
+  G.nullable("Item", { errors: [Missing], resolve: () => null }),
+)
+export const BrokenMutation = G.mutationField(
+  "broken",
+  G.nullable("Item", {
     errors: [Missing],
     resolve: () => Effect.die("private"),
   }),
-})
+)
 export const definitions = {
   scope,
   status,
@@ -157,8 +186,17 @@ export const definitions = {
   success,
   error,
   missing,
-  query,
-  mutation,
+  StatusQuery,
+  EchoQuery,
+  InputQuery,
+  IdentityQuery,
+  ItemQuery,
+  ChangeQuery,
+  ChangeMutation,
+  MarkAllReadMutation,
+  DeniedMutation,
+  EmptyMutation,
+  BrokenMutation,
 }
 export const schema = G.schema(definitions)
 export const literalProbe = G.field("Status", () => "ACTIVE")

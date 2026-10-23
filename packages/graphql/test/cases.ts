@@ -137,8 +137,8 @@ export const negativeCases: readonly NegativeCase[] = [
   {
     name: "subscription field retains its context at composition",
     file: "tests/fixtures/execution.ts",
-    before: "tenant.subscription({",
-    after: "user.subscription({",
+    before: "tenant.subscriptionField(",
+    after: "user.subscriptionField(",
     message: /tenant|UserContext/,
   },
   {
@@ -575,6 +575,33 @@ export const negativeCases: readonly NegativeCase[] = [
 
 export const registryCases: readonly NegativeCase[] = [
   {
+    name: "subscription field requires subscribe",
+    file: "tests/fixtures/execution.ts",
+    before: "subscribe: (_, __, ctx) => Stream.succeed(ctx.tenant)",
+    after: "resolve: (_, __, ctx) => ctx.tenant",
+    message: /~subscription.*incompatible.*false.*true/,
+  },
+  ...["query", "mutation"].map((operation): NegativeCase => ({
+    name: `${operation} field rejects subscribe`,
+    file: "tests/fixtures/execution.ts",
+    before: "tenant.subscriptionField(",
+    after: `tenant.${operation}Field(`,
+    message: /~subscription.*incompatible.*true.*false/,
+  })),
+  ...[
+    ["object", 'name: G.string({ deprecationReason: "Use label instead." })'],
+    ["interface", "id: G.id()"],
+  ].map(([kind, before]): NegativeCase => ({
+    name: `${kind} field rejects subscribe`,
+    file: "tests/fixtures/type-contracts.ts",
+    before: before!,
+    after:
+      'event: G.field("String", { subscribe: () => Stream.succeed("value") })',
+    prefix: 'import { Stream } from "effect";\n',
+    message: /~subscription.*incompatible.*true.*false/,
+  })),
+
+  {
     name: "4a missing Workspace registration errors at reference",
     file: workspace,
     before:
@@ -795,8 +822,8 @@ export const definitionCases: readonly NegativeCase[] = [
   ),
   typeContract(
     "enum shorthand rejects wrong literal",
-    'status: G.field("Status", () => "ACTIVE")',
-    'status: G.field("Status", () => "WRONG")',
+    'G.queryField("status", G.field("Status", () => "ACTIVE"))',
+    'G.queryField("status", G.field("Status", () => "WRONG"))',
     /ACTIVE.*ARCHIVED/,
   ),
   typeContract(
@@ -855,14 +882,14 @@ export const definitionCases: readonly NegativeCase[] = [
   ),
   typeContract(
     "nullable typed results reject scalar successes",
-    'empty: G.nullable("Item", { errors: [Missing], resolve: () => null })',
-    'empty: G.nullable("String", { errors: [Missing], resolve: () => null })',
+    'G.mutationField("empty", G.nullable("Item", { errors: [Missing], resolve: () => null }))',
+    'G.mutationField("empty", G.nullable("String", { errors: [Missing], resolve: () => null }))',
     /Result unions need an object type or object union; use a registered object or union/,
   ),
   typeContract(
     "no-error result wrapper rejects scalar successes",
-    'status: G.field("Status", () => "ACTIVE")',
-    'status: G.field("Status", { result: {}, resolve: () => "ACTIVE" as const })',
+    'G.queryField("status", G.field("Status", () => "ACTIVE"))',
+    'G.queryField("status", G.field("Status", { result: {}, resolve: () => "ACTIVE" as const }))',
     /Result unions need an object type or object union; use a registered object or union/,
   ),
 ]

@@ -4,6 +4,7 @@ import { GraphQLEnumType } from "graphql"
 import { type AnyDefinition } from "./Assembly.ts"
 import {
   type FieldMap,
+  type SourceField,
   type CheckedFields,
   type SourceIssue,
   type SourceSlot,
@@ -319,15 +320,40 @@ export interface DefinitionBuilder<Types, C> {
         CheckedEnumValues<NoInfer<S["Type"]>, V>
     },
   ): EnumDefinition<N, S>
-  query<const F extends FieldMap<{}, C>>(
-    fields: F & CheckedFields<Types, "Query", {}, NoInfer<F>>,
-  ): RootDefinition<"query", F, C>
-  mutation<const F extends FieldMap<{}, C>>(
-    fields: F & CheckedFields<Types, "Mutation", {}, NoInfer<F>>,
-  ): RootDefinition<"mutation", F, C>
-  subscription<const F extends FieldMap<{}, C>>(
-    fields: F & CheckedFields<Types, "Subscription", {}, NoInfer<F>>,
-  ): RootDefinition<"subscription", F, C>
+  queryField<
+    const N extends string,
+    const F extends SourceField<{}, unknown, C>,
+  >(
+    name: N,
+    field: F &
+      CheckedFields<Types, "Query", {}, { readonly [K in N]: NoInfer<F> }>[N],
+  ): RootDefinition<"query", { readonly [K in N]: F }, C>
+  mutationField<
+    const N extends string,
+    const F extends SourceField<{}, unknown, C>,
+  >(
+    name: N,
+    field: F &
+      CheckedFields<
+        Types,
+        "Mutation",
+        {},
+        { readonly [K in N]: NoInfer<F> }
+      >[N],
+  ): RootDefinition<"mutation", { readonly [K in N]: F }, C>
+  subscriptionField<
+    const N extends string,
+    const F extends SourceField<{}, unknown, C, true>,
+  >(
+    name: N,
+    field: F &
+      CheckedFields<
+        Types,
+        "Subscription",
+        {},
+        { readonly [K in N]: NoInfer<F> }
+      >[N],
+  ): RootDefinition<"subscription", { readonly [K in N]: F }, C>
 }
 
 export function makeDefinitions<Types, C>(): DefinitionBuilder<Types, C> {
@@ -427,8 +453,17 @@ export function makeDefinitions<Types, C>(): DefinitionBuilder<Types, C> {
       "~model": model,
       schema: input(name, model),
     }),
-    query: (fieldMap) => ({ "~kind": "query", fields: fieldMap }),
-    mutation: (fieldMap) => ({ "~kind": "mutation", fields: fieldMap }),
-    subscription: (fieldMap) => ({ "~kind": "subscription", fields: fieldMap }),
+    queryField: (name, field) => ({
+      "~kind": "query",
+      fields: { [name]: field },
+    }),
+    mutationField: (name, field) => ({
+      "~kind": "mutation",
+      fields: { [name]: field },
+    }),
+    subscriptionField: (name, field) => ({
+      "~kind": "subscription",
+      fields: { [name]: field },
+    }),
   } as DefinitionBuilder<Types, C>
 }

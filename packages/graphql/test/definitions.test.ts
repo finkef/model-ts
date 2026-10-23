@@ -192,8 +192,9 @@ it("checks enum mappings and rejects ambiguous internal aliases", () => {
 })
 
 it("rejects conflicting explicit result names", () => {
-  const query = G.query({
-    one: G.field("Item", {
+  const query = G.queryField(
+    "one",
+    G.field("Item", {
       errors: [Missing],
       result: { name: "ChangeResult" },
       resolve: () =>
@@ -203,7 +204,7 @@ it("rejects conflicting explicit result names", () => {
           name: "one",
         }),
     }),
-  })
+  )
   expect(() => G.schema({ ...definitions, query })).toThrow(
     "Duplicate GraphQL name: ChangeResult",
   )
@@ -267,8 +268,9 @@ it.effect(
       const success = G.union("Success", Success, {
         members: ["Item", "Alternative"],
       })
-      const query = G.query({
-        value: G.field("Success", () => ({
+      const query = G.queryField(
+        "value",
+        G.field("Success", () => ({
           ...Schema.decodeUnknownSync(Item)({
             id: "item-1",
             kind: "item",
@@ -276,7 +278,7 @@ it.effect(
           }),
           __typename: "Item",
         })),
-      })
+      )
       const built = G.schema({ ...definitions, success, query })
       const result = yield* G.execute(
         built,

@@ -149,7 +149,7 @@ export type CompatibleContexts<M, C> = {
     readonly fields: infer F
   }
     ? M[K] extends Contextual<C>
-      ? F extends FieldMap<never, C>
+      ? F extends FieldMap<never, C, boolean>
         ? unknown
         : "Fields require a different request context; build them with the createBuilder<Types, AppContext>() builder that builds the schema"
       : "Definition requires a different request context; use definitions from createBuilder<Types, AppContext>() with the schema context"

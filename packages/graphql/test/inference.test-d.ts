@@ -1,6 +1,5 @@
 import { Sandbox } from "@model-ts/dynamodb/Sandbox"
-import type { Stream } from "effect"
-import { Effect, Schema } from "effect"
+import { Context, Effect, type Option, Schema, Stream } from "effect"
 import type {
   DocumentNode,
   GraphQLSchema,
@@ -16,6 +15,7 @@ import {
   type BuiltSchema,
   type Register,
   type Values,
+  type Requirements,
 } from "../src/index.ts"
 import * as Testing from "../src/Testing.ts"
 import type { AppContext, Identity } from "./app/api/context.ts"
@@ -107,15 +107,17 @@ it("rejects incompatible contexts at each composition boundary", () => {
   const tenant = createBuilder<{}, Tenant>()
   const user = createBuilder<{}, User>()
   const anonymous = createBuilder<{}>()
-  const query = tenant.query({
-    id: tenant.field("String", (_, __, context) => context.tenant.id),
-  })
+  const query = tenant.queryField(
+    "id",
+    tenant.field("String", (_, __, context) => context.tenant.id),
+  )
   const built = tenant.schema({ query })
   expectTypeOf(built).toEqualTypeOf<BuiltSchema<never, Tenant>>()
-  user.query({
+  user.queryField(
+    "id",
     // @ts-expect-error fields retain the context of their builder
-    id: tenant.field("String", (_, __, context) => context.tenant.id),
-  })
+    tenant.field("String", (_, __, context) => context.tenant.id),
+  )
   // @ts-expect-error definitions retain context when exported through a barrel
   user.schema({ query })
   // @ts-expect-error a context-free builder cannot erase a definition's context
@@ -156,8 +158,9 @@ it("abstract connections retain model types, decoded filters and services", () =
   expectTypeOf<Values<Types>["SearchResultConnection"]>().toEqualTypeOf<
     Connection<List | Workspace>
   >()
-  GraphQL.query({
-    searchPage: GraphQL.connection("FavoriteTarget", {
+  GraphQL.queryField(
+    "searchPage",
+    GraphQL.connection("FavoriteTarget", {
       args: { ids: Schema.Array(GraphQL.id(ListId)) },
       nodes: (_, { ids }, context) => {
         expectTypeOf(ids).toEqualTypeOf<readonly ListId[]>()
@@ -165,7 +168,7 @@ it("abstract connections retain model types, decoded filters and services", () =
         return Effect.forEach(ids, (id) => List.load(List.key(id)))
       },
     }),
-  })
+  )
 })
 
 it("satisfies the transport's independent structural contract without erasing context or services", () => {
@@ -283,9 +286,207 @@ it("Testing.client fills request context and keeps factory services", () => {
   >().toEqualTypeOf<DynamoDB | Sandbox>()
   const plain = createBuilder<{}>()
   const plainSchema = plain.schema({
-    query: plain.query({ ping: plain.field("String", () => "pong") }),
+    query: plain.queryField(
+      "ping",
+      plain.field("String", () => "pong"),
+    ),
   })
   expectTypeOf(Testing.client(plainSchema).request("{ping}")).toEqualTypeOf<
     Effect.Effect<Testing.Result>
   >()
+})
+
+it("requires subscribe only on subscription fields, including reused fields", () => {
+  const G = createBuilder<{}>()
+  expectTypeOf(G).not.toHaveProperty("events")
+  const regular = G.field("String", () => "value")
+  const event = G.field("String", { subscribe: () => Stream.succeed("value") })
+  G.subscriptionField(
+    "regular",
+    // @ts-expect-error subscription fields require subscribe
+    regular,
+  )
+  G.subscriptionField(
+    "nullable",
+    // @ts-expect-error nullable subscription fields also require subscribe
+    G.nullable("String", () => null),
+  )
+  G.subscriptionField(
+    "list",
+    // @ts-expect-error list subscription fields also require subscribe
+    G.list("String", () => []),
+  )
+  G.subscriptionField(
+    "default",
+    // @ts-expect-error default fields cannot supply a subscription source
+    G.string(),
+  )
+  G.queryField(
+    "event",
+    // @ts-expect-error query fields cannot have subscribe
+    event,
+  )
+  G.mutationField(
+    "event",
+    // @ts-expect-error mutation fields cannot have subscribe
+    event,
+  )
+  GraphQL.object(List, {
+    // @ts-expect-error object fields cannot have subscribe
+    event: GraphQL.field("List", { subscribe: () => Stream.empty }),
+  })
+  GraphQL.interface("Node", Schema.Struct({ id: Schema.String }), {
+    // @ts-expect-error interface fields cannot have subscribe
+    event: GraphQL.nullable("String", { subscribe: () => Stream.empty }),
+  })
+  const both = {
+    subscribe: () => Stream.succeed("value"),
+    resolve: () => "value",
+  }
+  // @ts-expect-error a reused config cannot hide subscribe behind a regular resolver
+  G.field("String", both)
+  // @ts-expect-error the unreleased events helper has been removed
+  G.events("String", { subscribe: () => Stream.empty })
+})
+
+it("subscription variants retain setup, delivery authorization and nested resolver services", () => {
+  class Source extends Context.Service<Source, { readonly value: List }>()(
+    "Source",
+  ) {}
+  class Authorization extends Context.Service<
+    Authorization,
+    { readonly allowed: boolean }
+  >()("Authorization") {}
+  class Resolver extends Context.Service<
+    Resolver,
+    { readonly label: string }
+  >()("Resolver") {}
+  const G = createBuilder<Register<typeof List>, AppContext>()
+  const source = Stream.fromEffect(Source.useSync((service) => service.value))
+  const subscription = {
+    changed: G.subscriptionField(
+      "changed",
+      G.field("List", {
+        args: { id: G.id(ListId) },
+        subscribe: (parent, args, context) => {
+          expectTypeOf(parent).toEqualTypeOf<unknown>()
+          expectTypeOf(args.id).toEqualTypeOf<ListId>()
+          expectTypeOf(context).toEqualTypeOf<AppContext>()
+          return source
+        },
+        authorize: (event, args, context) => {
+          expectTypeOf(event).toEqualTypeOf<List>()
+          expectTypeOf(args.id).toEqualTypeOf<ListId>()
+          expectTypeOf(context).toEqualTypeOf<AppContext>()
+          return Authorization.useSync((service) => service.allowed)
+        },
+      }),
+    ),
+    nullable: G.subscriptionField(
+      "nullable",
+      G.nullable("List", {
+        subscribe: () => source,
+        authorize: (event) => {
+          expectTypeOf(event).toEqualTypeOf<
+            List | null | undefined | Option.Option<List>
+          >()
+          return Authorization.useSync((service) => service.allowed)
+        },
+      }),
+    ),
+    list: G.subscriptionField(
+      "list",
+      G.list("List", {
+        subscribe: () => Stream.map(source, (value) => [value]),
+        authorize: (event) => {
+          expectTypeOf(event).toEqualTypeOf<readonly List[]>()
+          return Authorization.useSync((service) => service.allowed)
+        },
+      }),
+    ),
+    nullableList: G.subscriptionField(
+      "nullableList",
+      G.nullable(G.list("List"), {
+        subscribe: () => Stream.map(source, (value) => [value]),
+        authorize: () => Authorization.useSync((service) => service.allowed),
+      }),
+    ),
+    nullableElements: G.subscriptionField(
+      "nullableElements",
+      G.list(G.nullable("List"), {
+        subscribe: () => Stream.map(source, (value) => [value, null]),
+        authorize: () => Authorization.useSync((service) => service.allowed),
+      }),
+    ),
+    wrappedRef: G.subscriptionField(
+      "wrappedRef",
+      G.field(G.nullable(G.list("List")), {
+        subscribe: () => Stream.map(source, (value) => [value]),
+        authorize: () => Authorization.useSync((service) => service.allowed),
+      }),
+    ),
+  }
+  type FieldRequirements = {
+    [K in keyof typeof subscription]: Requirements<Pick<typeof subscription, K>>
+  }
+  expectTypeOf<FieldRequirements>().toEqualTypeOf<
+    Record<keyof typeof subscription, Source | Authorization>
+  >()
+  const object = G.object(List, {
+    label: G.field("String", () =>
+      Resolver.useSync((service) => service.label),
+    ),
+  })
+  const query = G.queryField(
+    "ping",
+    G.field("Boolean", () => true),
+  )
+  for (const field of Object.values(subscription)) {
+    const built = G.schema({ object, query, subscription: field })
+    expectTypeOf(built).toEqualTypeOf<
+      BuiltSchema<Source | Authorization | Resolver, AppContext>
+    >()
+    const stream = G.subscribe(
+      built,
+      { source: "subscription { changed { label } }" },
+      {
+        identity: identityFor(null, []),
+        requestId: "types",
+      },
+    )
+    expectTypeOf<Stream.Services<typeof stream>>().toEqualTypeOf<
+      Source | Authorization | Resolver
+    >()
+  }
+})
+
+it("root fields require a name and output helper and keep default-source checks", () => {
+  const G = createBuilder<{}>()
+  expectTypeOf(G).not.toHaveProperty("query")
+  expectTypeOf(G).not.toHaveProperty("mutation")
+  expectTypeOf(G).not.toHaveProperty("subscription")
+  G.queryField(
+    // @ts-expect-error root names must be strings
+    123,
+    G.field("String", () => "value"),
+  )
+  // @ts-expect-error root fields take an existing output helper, not a type config
+  G.queryField("value", { type: "String", resolve: () => "value" })
+  // @ts-expect-error a root has no default source property
+  G.queryField("missing", G.string())
+  // @ts-expect-error mutations also have no default source property
+  G.mutationField("missing", G.nullable("String"))
+  G.queryField(
+    "missing",
+    // @ts-expect-error output references still need registration
+    G.field("Unregistered", () => ({})),
+  )
+  // @ts-expect-error the object-map query form has been removed
+  G.query({ value: G.field("String", () => "value") })
+  // @ts-expect-error the object-map mutation form has been removed
+  G.mutation({ value: G.field("String", () => "value") })
+  // @ts-expect-error the object-map subscription form has been removed
+  G.subscription({
+    value: G.field("String", { subscribe: () => Stream.succeed("value") }),
+  })
 })

@@ -98,24 +98,37 @@ export const schema = G.schema({
   orderSuccess: G.union("OrderSuccess", OrderSuccess, {
     members: ["OrderConfirmation", "Backorder"],
   }),
-  query: G.query({ health: G.field("Boolean", () => true) }),
-  mutation: G.mutation({
-    bookCreate: G.nullable("Book", {
+  queryField: G.queryField(
+    "health",
+    G.field("Boolean", () => true),
+  ),
+  bookCreateField: G.mutationField(
+    "bookCreate",
+    G.nullable("Book", {
       errors: [NotFoundError, UserInputError],
       resolve: () => null,
     }),
-    orderPlace: G.nullable("OrderSuccess", {
+  ),
+  orderPlaceField: G.mutationField(
+    "orderPlace",
+    G.nullable("OrderSuccess", {
       errors: [OutOfStockError, UserInputError],
       resolve: () => null,
     }),
-    adminRefundIssue: G.nullable("Refund", {
+  ),
+  adminRefundIssueField: G.mutationField(
+    "adminRefundIssue",
+    G.nullable("Refund", {
       errors: [UserInputError],
       result: { name: "AdminRefundResult" },
       resolve: () => null,
     }),
-    wishlistClear: G.nullable("WishlistClearSuccess", {
+  ),
+  wishlistClearField: G.mutationField(
+    "wishlistClear",
+    G.nullable("WishlistClearSuccess", {
       result: {},
       resolve: () => null,
     }),
-  }),
+  ),
 })

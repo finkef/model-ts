@@ -17,34 +17,49 @@ const execute = (
 ) => Effect.runPromise(G.execute(G.schema(query), { source, variableValues }))
 
 test("DateTime accepts Date and string outputs, normalizes ISO inputs, and decodes native Dates", async () => {
-  const query = G.query({
-    date: G.field("DateTime", () => new Date("2026-10-22T08:00:00Z")),
-    iso: G.field("DateTime", () => "2026-10-22T10:00:00+02:00"),
-    echo: G.field("DateTime", {
-      args: { at: DateTime },
-      resolve: (_, { at }) => {
-        expect(typeof at).toBe("string")
-        return at
-      },
-    }),
-    native: G.field("DateTime", {
-      args: { at: Schema.Date },
-      resolve: (_, { at }) => {
-        expect(at).toBeInstanceOf(Date)
-        return at
-      },
-    }),
-    codec: G.field("DateTime", {
-      args: { at: input("DateTime", Schema.DateFromString) },
-      resolve: (_, { at }) => {
-        expect(at).toBeInstanceOf(Date)
-        return at
-      },
-    }),
-  })
+  const query = {
+    dateField: G.queryField(
+      "date",
+      G.field("DateTime", () => new Date("2026-10-22T08:00:00Z")),
+    ),
+    isoField: G.queryField(
+      "iso",
+      G.field("DateTime", () => "2026-10-22T10:00:00+02:00"),
+    ),
+    echoField: G.queryField(
+      "echo",
+      G.field("DateTime", {
+        args: { at: DateTime },
+        resolve: (_, { at }) => {
+          expect(typeof at).toBe("string")
+          return at
+        },
+      }),
+    ),
+    nativeField: G.queryField(
+      "native",
+      G.field("DateTime", {
+        args: { at: Schema.Date },
+        resolve: (_, { at }) => {
+          expect(at).toBeInstanceOf(Date)
+          return at
+        },
+      }),
+    ),
+    codecField: G.queryField(
+      "codec",
+      G.field("DateTime", {
+        args: { at: input("DateTime", Schema.DateFromString) },
+        resolve: (_, { at }) => {
+          expect(at).toBeInstanceOf(Date)
+          return at
+        },
+      }),
+    ),
+  }
   expect(
     await execute(
-      { query },
+      { ...query },
       "query($at:DateTime!){date iso echo(at:$at) native(at:$at) codec(at:$at)}",
       { at: "2026-10-22T10:00:00+02:00" },
     ),
@@ -57,33 +72,43 @@ test("DateTime accepts Date and string outputs, normalizes ISO inputs, and decod
     ),
   })
   expect(
-    await execute({ query }, '{echo(at:"2026-10-22T10:00:00+02:00")}'),
+    await execute({ ...query }, '{echo(at:"2026-10-22T10:00:00+02:00")}'),
   ).toEqual({ data: { echo: "2026-10-22T08:00:00.000Z" } })
   for (const literal of ['"not-a-date"', "123", "true"])
     expect(
-      (await execute({ query }, `{echo(at:${literal})}`)).errors,
+      (await execute({ ...query }, `{echo(at:${literal})}`)).errors,
     ).toHaveLength(1)
 })
 
 test("JSON keeps permissive JS variables/outputs but rejects enum literals, including nested ones", async () => {
   const value = { date: new Date("2026-10-22T00:00:00Z"), missing: undefined }
-  const query = G.query({
-    echo: G.field("JSON", {
-      args: { value: JSONValue },
-      resolve: (_, { value }) => value,
-    }),
-    output: G.field("JSON", () => value),
-  })
+  const query = {
+    echoField: G.queryField(
+      "echo",
+      G.field("JSON", {
+        args: { value: JSONValue },
+        resolve: (_, { value }) => value,
+      }),
+    ),
+    outputField: G.queryField(
+      "output",
+      G.field("JSON", () => value),
+    ),
+  }
   expect(
-    await execute({ query }, "query($value:JSON!){echo(value:$value) output}", {
-      value,
-    }),
+    await execute(
+      { ...query },
+      "query($value:JSON!){echo(value:$value) output}",
+      {
+        value,
+      },
+    ),
   ).toEqual({ data: { echo: value, output: value } })
   expect(
-    await execute({ query }, '{echo(value:{a:[1,true,null,"text"]})}'),
+    await execute({ ...query }, '{echo(value:{a:[1,true,null,"text"]})}'),
   ).toEqual({ data: { echo: { a: [1, true, null, "text"] } } })
   expect(
-    (await execute({ query }, "{echo(value:{a:[UNQUOTED]})}")).errors,
+    (await execute({ ...query }, "{echo(value:{a:[UNQUOTED]})}")).errors,
   ).toHaveLength(1)
 })
 
@@ -115,15 +140,16 @@ test("custom scalar codecs retain brands and metadata, and decode list arguments
   const local = createBuilder<Types>()
   const url = local.scalar("URL", URL)
   const zone = local.scalar("TimeZone", TimeZone)
-  const query = local.query({
-    urls: local.list("URL", {
+  const query = local.queryField(
+    "urls",
+    local.list("URL", {
       args: { urls: Schema.Array(url.schema), zone: zone.schema },
       resolve: (_, args) => {
         expect(args.zone).toBe("Europe/Berlin")
         return args.urls
       },
     }),
-  })
+  )
   const built = local.schema({ url, zone, query })
   const scalar = built.schema.getType("URL")
   expect(scalar?.description).toBe("A valid URL value")
@@ -170,21 +196,30 @@ test("existing scalar behavior is preserved without mutating the instance; built
   const zone = local.scalar("TimeZone", parsed, existing)
   const date = local.scalar("DateTime", dates)
   const jsonType = local.scalar("JSON", json)
-  const query = local.query({
-    zone: local.field("TimeZone", {
-      args: { value: zone.schema },
-      resolve: (_, { value }) => value,
-    }),
-    date: local.field("DateTime", {
-      args: { value: date.schema },
-      resolve: (_, { value }) => value,
-    }),
-    json: local.field("JSON", {
-      args: { value: jsonType.schema },
-      resolve: (_, { value }) => value,
-    }),
-  })
-  const built = local.schema({ zone, date, jsonType, query })
+  const query = {
+    zoneField: local.queryField(
+      "zone",
+      local.field("TimeZone", {
+        args: { value: zone.schema },
+        resolve: (_, { value }) => value,
+      }),
+    ),
+    dateField: local.queryField(
+      "date",
+      local.field("DateTime", {
+        args: { value: date.schema },
+        resolve: (_, { value }) => value,
+      }),
+    ),
+    jsonField: local.queryField(
+      "json",
+      local.field("JSON", {
+        args: { value: jsonType.schema },
+        resolve: (_, { value }) => value,
+      }),
+    ),
+  }
+  const built = local.schema({ zone, date, jsonType, ...query })
   expect(built.schema.getType("TimeZone")).not.toBe(existing)
   expect(existing.parseValue("UTC")).toBe("variable:UTC")
   expect(
@@ -222,8 +257,9 @@ class Patch extends Schema.Class<Patch>("Patch")(
 ) {}
 
 test("input descriptions, omission, explicit clearing, nested lists and defaults", async () => {
-  const query = G.query({
-    patch: G.field("JSON", {
+  const query = G.queryField(
+    "patch",
+    G.field("JSON", {
       args: {
         input: Patch,
         count: G.default(Schema.Int, 3),
@@ -234,7 +270,7 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
         return { ...input, count, labels }
       },
     }),
-  })
+  )
   const built = G.schema({ query })
   const sdl = printSchema(built.schema)
   expect(sdl).toContain('"""A partial update."""')
@@ -265,15 +301,16 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
 })
 
 test("null diagnostics do not blame a permissive JSON field when another field fails", async () => {
-  const query = G.query({
-    value: G.field("String", {
+  const query = G.queryField(
+    "value",
+    G.field("String", {
       args: {
         json: Schema.optionalKey(JSONValue),
         label: Schema.NonEmptyString,
       },
       resolve: (_, { label }) => label,
     }),
-  })
+  )
   const result = await execute({ query }, '{value(json:null,label:"")}')
   expect(result.errors?.[0]?.message).toBe("Invalid arguments")
 })
@@ -283,8 +320,9 @@ test("DateTime decoding reaches native Date fields inside input classes and list
     dates: Schema.Array(Schema.Date),
     stored: Schema.DateFromString,
   }) {}
-  const query = G.query({
-    times: G.list("DateTime", {
+  const query = G.queryField(
+    "times",
+    G.list("DateTime", {
       args: { input: Times },
       resolve: (_, { input }) => {
         expect(input).toBeInstanceOf(Times)
@@ -293,7 +331,7 @@ test("DateTime decoding reaches native Date fields inside input classes and list
         return [...input.dates, input.stored]
       },
     }),
-  })
+  )
   expect(
     await execute(
       { query },
@@ -308,12 +346,13 @@ test("codec scalars such as TimeZone require quoted string literals", async () =
   const zoneValue = Schema.String
   const local = createBuilder<Register<typeof zoneValue, "TimeZone">>()
   const zone = local.scalar("TimeZone", zoneValue)
-  const query = local.query({
-    zone: local.field("TimeZone", {
+  const query = local.queryField(
+    "zone",
+    local.field("TimeZone", {
       args: { value: zone.schema },
       resolve: (_, { value }) => value,
     }),
-  })
+  )
   const result = await Effect.runPromise(
     local.execute(local.schema({ zone, query }), {
       source: "{zone(value:UTC)}",

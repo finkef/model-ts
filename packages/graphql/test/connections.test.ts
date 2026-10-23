@@ -41,30 +41,45 @@ const nodes = Array.from(
 )
 
 test("abstract nodes, typed edges and renamed directory coexist with a real LibraryConnection", async () => {
-  const query = G.query({
-    directory: G.connection("Library", {
-      name: "LibraryDirectoryConnection",
-      edgeName: "LibraryDirectoryEdge",
-      nodes: () => nodes,
-    }),
-    connected: G.field(
-      "LibraryConnection",
-      () => new LibraryConnection({ token: "secret" }),
+  const query = {
+    directoryField: G.queryField(
+      "directory",
+      G.connection("Library", {
+        name: "LibraryDirectoryConnection",
+        edgeName: "LibraryDirectoryEdge",
+        nodes: () => nodes,
+      }),
     ),
-    holdings: G.connection("Node", { nodes: () => nodes }),
-    search: G.connection("SearchResult", {
-      args: { terms: Schema.Array(Schema.String) },
-      nodes: (_, { terms }) =>
-        terms.length
-          ? [nodes[0]!, new LibraryConnection({ token: "hit" })]
-          : [],
-    }),
-    edge: G.field("SearchResultEdge", () => ({
-      cursor: "opaque",
-      node: nodes[0]!,
-    })),
-  })
-  const built = G.schema({ ...definitions, query })
+    connectedField: G.queryField(
+      "connected",
+      G.field(
+        "LibraryConnection",
+        () => new LibraryConnection({ token: "secret" }),
+      ),
+    ),
+    holdingsField: G.queryField(
+      "holdings",
+      G.connection("Node", { nodes: () => nodes }),
+    ),
+    searchField: G.queryField(
+      "search",
+      G.connection("SearchResult", {
+        args: { terms: Schema.Array(Schema.String) },
+        nodes: (_, { terms }) =>
+          terms.length
+            ? [nodes[0]!, new LibraryConnection({ token: "hit" })]
+            : [],
+      }),
+    ),
+    edgeField: G.queryField(
+      "edge",
+      G.field("SearchResultEdge", () => ({
+        cursor: "opaque",
+        node: nodes[0]!,
+      })),
+    ),
+  }
+  const built = G.schema({ ...definitions, ...query })
   expect(
     await Effect.runPromise(
       G.execute(built, {
@@ -105,13 +120,14 @@ test("abstract nodes, typed edges and renamed directory coexist with a real Libr
 })
 
 test("before-only defaults backward; zero, null and explicit sizes retain their meaning", async () => {
-  const query = G.query({
-    page: G.connection("Library", {
+  const query = G.queryField(
+    "page",
+    G.connection("Library", {
       name: "Catalog",
       nodes: () => nodes,
       totalCount: () => Effect.succeed(nodes.length),
     }),
-  })
+  )
   const built = G.schema({ ...definitions, query })
   for (const [args, ids] of [
     [`before:"${encodeCursor(4)}"`, ["2", "3"]],
@@ -150,8 +166,9 @@ test("totalCount runs only when selected and retains decoded args, context and s
     { readonly tenant: string }
   >()
   let calls = 0
-  const query = local.query({
-    page: local.connection("Library", {
+  const query = local.queryField(
+    "page",
+    local.connection("Library", {
       args: { filter: Schema.NumberFromString },
       nodes: () => nodes,
       totalCount: (_, { filter }, { tenant }) => {
@@ -159,7 +176,7 @@ test("totalCount runs only when selected and retains decoded args, context and s
         return Count.useSync(({ value }) => value + filter + tenant.length)
       },
     }),
-  })
+  )
   const built = local.schema({
     library: local.object(Library, { id: local.id() }),
     query,
@@ -189,13 +206,14 @@ test("totalCount runs only when selected and retains decoded args, context and s
 })
 
 test("lazy totalCount failures use the field error policy", async () => {
-  const query = G.query({
-    page: G.connection("Library", {
+  const query = G.queryField(
+    "page",
+    G.connection("Library", {
       name: "Catalog",
       resolve: () => Effect.succeed(slice(nodes, { first: 1 })),
       totalCount: () => Effect.die(new Error("private count failure")),
     }),
-  })
+  )
   const built = G.schema({ ...definitions, query })
   expect(
     await Effect.runPromise(
@@ -225,8 +243,9 @@ test("paged resolvers receive opaque storage cursors and return their page uncha
       endCursor: opaque,
     },
   }
-  const query = G.query({
-    page: G.connection("Library", {
+  const query = G.queryField(
+    "page",
+    G.connection("Library", {
       name: "Catalog",
       args: { filter: Schema.String },
       resolve: (_, args) => {
@@ -234,7 +253,7 @@ test("paged resolvers receive opaque storage cursors and return their page uncha
         return page
       },
     }),
-  })
+  )
   expect(
     await Effect.runPromise(
       G.execute(G.schema({ ...definitions, query }), {
@@ -256,8 +275,18 @@ test("paged resolvers receive opaque storage cursors and return their page uncha
 })
 
 test("only names actually derived are claimed, and incompatible reused shapes fail assembly", () => {
-  const build = (fields: Parameters<typeof G.query>[0]) =>
-    G.schema({ ...definitions, query: G.query(fields) })
+  const build = (
+    fields: Readonly<Record<string, Parameters<typeof G.queryField>[1]>>,
+  ) =>
+    G.schema({
+      ...definitions,
+      ...Object.fromEntries(
+        Object.entries(fields).map(([name, field]) => [
+          name,
+          G.queryField(name, field),
+        ]),
+      ),
+    })
   expect(() =>
     build({ bad: G.connection("Library", { nodes: () => nodes }) }),
   ).toThrow("Duplicate GraphQL name: LibraryConnection")
@@ -310,15 +339,21 @@ test("generated connections print Relay descriptions, explicit names and nullabi
       ),
     ),
   )
-  const query = G.query({
-    search: G.connection("SearchResult", { nodes: () => nodes }),
-    directory: G.connection("Library", {
-      name: "LibraryDirectoryConnection",
-      nodes: () => nodes,
-    }),
-  })
+  const query = {
+    searchField: G.queryField(
+      "search",
+      G.connection("SearchResult", { nodes: () => nodes }),
+    ),
+    directoryField: G.queryField(
+      "directory",
+      G.connection("Library", {
+        name: "LibraryDirectoryConnection",
+        nodes: () => nodes,
+      }),
+    ),
+  }
   const actual = lexicographicSortSchema(
-    G.schema({ ...definitions, query }).schema,
+    G.schema({ ...definitions, ...query }).schema,
   )
   for (const name of [
     "LibraryDirectoryConnection",
@@ -333,9 +368,10 @@ test("generated connections print Relay descriptions, explicit names and nullabi
 })
 
 test("PageInfo cannot be reused as an edge name", () => {
-  const query = G.query({
-    page: G.connection("Node", { edgeName: "PageInfo", nodes: () => nodes }),
-  })
+  const query = G.queryField(
+    "page",
+    G.connection("Node", { edgeName: "PageInfo", nodes: () => nodes }),
+  )
   expect(() => G.schema({ ...definitions, query })).toThrow(
     "Incompatible derived type PageInfo",
   )
@@ -370,8 +406,9 @@ it.effect(
         { id: local.id() },
       )
       const node = local.interface("Node", Node, { id: local.id() })
-      const query = local.query({
-        page: local.connection("Node", {
+      const query = local.queryField(
+        "page",
+        local.connection("Node", {
           authorize: () => Effect.succeed(true),
           resolve: (_, args) =>
             List.paginate(args, {
@@ -380,7 +417,7 @@ it.effect(
               ExpressionAttributeValues: { ":pk": "WORKSPACE#w1" },
             }),
         }),
-      })
+      )
       const built = local.schema({ list, node, query })
       // Validation errors survive Effect authorization before DynamoDB.paginate runs.
       for (const args of ["first:101", "first:-1", "first:1,last:1"]) {

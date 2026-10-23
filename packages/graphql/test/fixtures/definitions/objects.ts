@@ -81,6 +81,7 @@ export const FixtureType = GraphQL.object(
     effectNullable: GraphQL.nullable("String", () => Effect.succeed(undefined)),
   },
 )
-export const Query = GraphQL.query({
-  fixture: GraphQL.field("Fixture", () => fixture),
-})
+export const Query = GraphQL.queryField(
+  "fixture",
+  GraphQL.field("Fixture", () => fixture),
+)

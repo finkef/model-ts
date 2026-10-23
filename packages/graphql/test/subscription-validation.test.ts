@@ -12,7 +12,7 @@ function fixture() {
   let sources = 0
   const GraphQL = createBuilder<Register<typeof Payload>>()
   const events = () =>
-    GraphQL.events("Payload", {
+    GraphQL.field("Payload", {
       subscribe: () => {
         sources++
         return Stream.succeed(new Payload({ text: "hello", extra: "world" }))
@@ -23,10 +23,12 @@ function fixture() {
       text: GraphQL.string(),
       extra: GraphQL.string(),
     }),
-    query: GraphQL.query({
-      ping: GraphQL.field("String", () => "pong"),
-    }),
-    subscription: GraphQL.subscription({ event: events(), other: events() }),
+    queryField: GraphQL.queryField(
+      "ping",
+      GraphQL.field("String", () => "pong"),
+    ),
+    event: GraphQL.subscriptionField("event", events()),
+    other: GraphQL.subscriptionField("other", events()),
   })
   return { adapter: executor(schema), sources: () => sources }
 }

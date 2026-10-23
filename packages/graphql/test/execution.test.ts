@@ -6,6 +6,7 @@ import {
   Effect,
   Fiber,
   Layer,
+  Option,
   Schema,
   Stream,
 } from "effect"
@@ -42,7 +43,10 @@ const G = createBuilder<
 })
 const node = G.object(Node, { id: G.id() })
 const context = { tenant: "tenant-1" }
-const query = G.query({ ping: G.field("String", (_, __, ctx) => ctx.tenant) })
+const query = G.queryField(
+  "ping",
+  G.field("String", (_, __, ctx) => ctx.tenant),
+)
 const visible = new PublicError({ message: "Safe", member: "member" })
 const secret = new Error("private-backend-detail")
 const reports = () => {
@@ -85,9 +89,15 @@ for (const operation of ["query", "mutation"] as const) {
             },
           }),
         }
-        const definition =
-          operation === "query" ? G.query(fields) : G.mutation(fields)
-        const schema = G.schema({ node, query, definition })
+        const definition = Object.fromEntries(
+          Object.entries(fields).map(([name, field]) => [
+            name,
+            operation === "query"
+              ? G.queryField(name, field)
+              : G.mutationField(name, field),
+          ]),
+        )
+        const schema = G.schema({ node, query, ...definition })
         for (const name of [
           "sync",
           "effect",
@@ -144,9 +154,15 @@ for (const operation of ["query", "mutation"] as const) {
             })
           }),
         }
-        const definition =
-          operation === "query" ? G.query(fields) : G.mutation(fields)
-        const schema = G.schema({ node, query, definition })
+        const definition = Object.fromEntries(
+          Object.entries(fields).map(([name, field]) => [
+            name,
+            operation === "query"
+              ? G.queryField(name, field)
+              : G.mutationField(name, field),
+          ]),
+        )
+        const schema = G.schema({ node, query, ...definition })
         const result = yield* Testing.execute(
           schema,
           { source: `${operation} { ${Object.keys(fields).join(" ")} }` },
@@ -190,28 +206,43 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const report = reports()
-      const subscription = G.subscription({
-        setup: G.events("String", {
-          subscribe: () => {
-            throw secret
-          },
-        }),
-        stream: G.events("String", { subscribe: () => Stream.die(secret) }),
-        failed: G.events("String", {
-          subscribe: () =>
-            Stream.fail(new PrivateError({ message: "private" })),
-        }),
-        publicSetup: G.events("String", {
-          subscribe: () => {
-            throw visible
-          },
-        }),
-        publicStream: G.events("String", {
-          subscribe: () => Stream.fail(visible),
-        }),
-      })
-      const schema = G.schema({ node, query, subscription })
-      for (const name of Object.keys(subscription.fields)) {
+      const subscription = {
+        setup: G.subscriptionField(
+          "setup",
+          G.field("String", {
+            subscribe: () => {
+              throw secret
+            },
+          }),
+        ),
+        stream: G.subscriptionField(
+          "stream",
+          G.field("String", { subscribe: () => Stream.die(secret) }),
+        ),
+        failed: G.subscriptionField(
+          "failed",
+          G.field("String", {
+            subscribe: () =>
+              Stream.fail(new PrivateError({ message: "private" })),
+          }),
+        ),
+        publicSetup: G.subscriptionField(
+          "publicSetup",
+          G.field("String", {
+            subscribe: () => {
+              throw visible
+            },
+          }),
+        ),
+        publicStream: G.subscriptionField(
+          "publicStream",
+          G.field("String", {
+            subscribe: () => Stream.fail(visible),
+          }),
+        ),
+      }
+      const schema = G.schema({ node, query, ...subscription })
+      for (const name of Object.keys(subscription)) {
         const result = yield* Stream.runCollect(
           Testing.subscribe(
             schema,
@@ -247,8 +278,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let calls = 0
-      const subscription = G.subscription({
-        events: G.events("String", {
+      const subscription = G.subscriptionField(
+        "events",
+        G.field("String", {
           args: { prefix: Schema.String },
           authorize: (value, args, ctx) =>
             Effect.map(Gate, (gate) => {
@@ -259,7 +291,7 @@ it.effect(
             }),
           subscribe: () => Stream.make("allowed", "denied"),
         }),
-      })
+      )
       const schema = G.schema({ node, query, subscription })
       const result = yield* Stream.runCollect(
         Testing.subscribe(
@@ -278,12 +310,13 @@ it.effect(
   "executor consumes the parsed document, preserves context/services, validates and subscribes",
   () =>
     Effect.gen(function* () {
-      const subscription = G.subscription({
-        events: G.events("String", {
+      const subscription = G.subscriptionField(
+        "events",
+        G.field("String", {
           subscribe: (_, __, ctx) =>
             Stream.fromEffect(Effect.map(Gate, () => ctx.tenant)),
         }),
-      })
+      )
       const adapter = executor(G.schema({ node, query, subscription }))
       expect(adapter.validation).toBe("executor")
       const input = {
@@ -320,9 +353,10 @@ it.effect(
 
 it.effect("telemetry defects cannot replace the original error", () =>
   Effect.gen(function* () {
-    const definition = G.query({
-      broken: G.nullable("String", () => Effect.die(secret)),
-    })
+    const definition = G.queryField(
+      "broken",
+      G.nullable("String", () => Effect.die(secret)),
+    )
     const result = yield* execute(
       G.schema({ node, query, definition }),
       { source: "{broken}" },
@@ -345,8 +379,9 @@ it.effect("telemetry defects cannot replace the original error", () =>
 it.effect("subscription interruption closes the source exactly once", () =>
   Effect.gen(function* () {
     let closed = 0
-    const subscription = G.subscription({
-      events: G.events("String", {
+    const subscription = G.subscriptionField(
+      "events",
+      G.field("String", {
         subscribe: () =>
           Stream.make("one", "two").pipe(
             Stream.onExit(() =>
@@ -356,7 +391,7 @@ it.effect("subscription interruption closes the source exactly once", () =>
             ),
           ),
       }),
-    })
+    )
     const result = yield* Stream.runCollect(
       subscribe(
         G.schema({ node, query, subscription }),
@@ -376,14 +411,15 @@ it.effect(
       const started = yield* Deferred.make<void>()
       const stopped = yield* Deferred.make<void>()
       const report = reports()
-      const definition = G.query({
-        waiting: G.field("String", () =>
+      const definition = G.queryField(
+        "waiting",
+        G.field("String", () =>
           Effect.gen(function* () {
             yield* Deferred.succeed(started, undefined)
             return yield* Effect.never
           }).pipe(Effect.ensuring(Deferred.succeed(stopped, undefined))),
         ),
-      })
+      )
       const fiber = yield* execute(
         G.schema({ node, query, definition }),
         { source: "{waiting}" },
@@ -399,9 +435,10 @@ it.effect(
 it.effect("graphql-js serialization errors are masked and reported", () =>
   Effect.gen(function* () {
     const report = reports()
-    const definition = G.query({
-      invalid: G.nullable("Float", () => Number.NaN),
-    })
+    const definition = G.queryField(
+      "invalid",
+      G.nullable("Float", () => Number.NaN),
+    )
     const result = yield* Testing.execute(
       G.schema({ node, query, definition }),
       { source: "{invalid}" },
@@ -427,7 +464,7 @@ it.effect("a JavaScript Promise authorization cannot bypass the gate", () =>
         return "private"
       },
     }
-    const definition = G.query({ blocked: G.nullable("String", options) })
+    const definition = G.queryField("blocked", G.nullable("String", options))
     // Model an untyped JS caller without weakening the public TypeScript API.
     Reflect.set(options, "authorize", () => Promise.resolve(false))
     const result = yield* Testing.execute(
@@ -445,14 +482,16 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const G = createBuilder<{}, null>()
-      const query = G.query({
-        check: G.field("Boolean", (_, __, context) => context === null),
-      })
-      const subscription = G.subscription({
-        check: G.events("Boolean", {
+      const query = G.queryField(
+        "check",
+        G.field("Boolean", (_, __, context) => context === null),
+      )
+      const subscription = G.subscriptionField(
+        "check",
+        G.field("Boolean", {
           subscribe: (_, __, context) => Stream.succeed(context === null),
         }),
-      })
+      )
       const built = G.schema({ query, subscription })
       expect(yield* execute(built, { source: "{check}" }, null)).toEqual({
         data: { check: true },
@@ -470,8 +509,9 @@ it.effect(
   () =>
     Effect.gen(function* () {
       let setups = 0
-      const subscription = G.subscription({
-        dated: G.events("String", {
+      const subscription = G.subscriptionField(
+        "dated",
+        G.field("String", {
           args: { at: Schema.Date, label: Schema.optionalKey(Schema.String) },
           subscribe: (_, { at }) => {
             setups++
@@ -483,7 +523,7 @@ it.effect(
             return Effect.succeed(true)
           },
         }),
-      })
+      )
       const schema = G.schema({ node, query, subscription })
       const valid = yield* Stream.runCollect(
         Testing.subscribe(
@@ -510,5 +550,79 @@ it.effect(
         "Schema.optionalKey(Schema.NullOr(S))",
       )
       expect(setups).toBe(1)
+    }),
+)
+
+it.effect(
+  "subscription field wrappers normalize delivered objects and lists after authorization",
+  () =>
+    Effect.gen(function* () {
+      const value = new Node({ id: "one" })
+      const optional = Option.some(value)
+      const calls: unknown[] = []
+      const subscription = {
+        nullable: G.subscriptionField(
+          "nullable",
+          G.nullable("Node", {
+            subscribe: () => Stream.make(optional, Option.none()),
+            authorize: (event) => {
+              calls.push(event)
+              return true
+            },
+          }),
+        ),
+        list: G.subscriptionField(
+          "list",
+          G.list("Node", { subscribe: () => Stream.succeed([value]) }),
+        ),
+        nullableList: G.subscriptionField(
+          "nullableList",
+          G.nullable(G.list("Node"), {
+            subscribe: () => Stream.make([value], null),
+          }),
+        ),
+        nullableElements: G.subscriptionField(
+          "nullableElements",
+          G.list(G.nullable("Node"), {
+            subscribe: () => Stream.succeed([optional, Option.none()]),
+          }),
+        ),
+        wrappedRef: G.subscriptionField(
+          "wrappedRef",
+          G.field(G.nullable(G.list("Node")), {
+            subscribe: () => Stream.make([value], undefined),
+          }),
+        ),
+      }
+      const built = G.schema({ node, query, ...subscription })
+      const collect = (field: string) =>
+        Stream.runCollect(
+          Testing.subscribe(
+            built,
+            { source: `subscription { ${field} { id } }` },
+            context,
+          ),
+        )
+      expect(yield* collect("nullable")).toEqual([
+        { data: { nullable: { id: "one" } } },
+        { data: { nullable: null } },
+      ])
+      expect(calls[0]).toBe(optional)
+      expect(calls).toHaveLength(2)
+      expect(yield* collect("list")).toEqual([
+        { data: { list: [{ id: "one" }] } },
+      ])
+      expect(yield* collect("nullableList")).toEqual([
+        { data: { nullableList: [{ id: "one" }] } },
+        { data: { nullableList: null } },
+      ])
+      expect(yield* collect("nullableElements")).toEqual([
+        { data: { nullableElements: [{ id: "one" }, null] } },
+      ])
+      expect(yield* collect("wrappedRef")).toEqual([
+        { data: { wrappedRef: [{ id: "one" }] } },
+        { data: { wrappedRef: null } },
+      ])
+      expect(G).not.toHaveProperty("events")
     }),
 )

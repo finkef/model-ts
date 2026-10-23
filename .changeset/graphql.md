@@ -13,3 +13,7 @@ Return JSON-safe formatted query and subscription results from the executor whil
 Declare executor-owned schema validation so transports can preserve scalar input error policy without validating the same document twice.
 
 Validate subscriptions by collecting root response keys through fragments. Accept merged single-root selections, reject multiple keys and root introspection, and reject root `@skip`/`@include` without evaluating variables while preserving nested conditional selections.
+
+Define subscription fields with `GraphQL.field`, `GraphQL.nullable`, or `GraphQL.list` and a `subscribe` callback returning an Effect Stream. Require `subscribe` in `GraphQL.subscriptionField` definitions and reject it on object, interface, query, and mutation fields. Remove the unreleased `GraphQL.events` helper. Preserve per-value authorization, decoded arguments, service requirements, error policy, cancellation and finalizers, subscription-root validation, and the `GraphQL.subscribe` execution API.
+
+Replace root field maps with `GraphQL.queryField(name, field)`, `GraphQL.mutationField(name, field)`, and `GraphQL.subscriptionField(name, field)`. Export one constant per root field through the schema barrel; assembly merges fields by root and rejects duplicate names with the root and field in the diagnostic. Retain field checks, request context, service requirements, and schema completeness checking.

@@ -15,8 +15,9 @@ export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
   starred: Schema.optionalKey(Schema.Boolean),
 }) {}
 
-export const ListUpdateMutation = GraphQL.mutation({
-  listUpdate: GraphQL.field("ListEdge", {
+export const ListUpdateMutation = GraphQL.mutationField(
+  "listUpdate",
+  GraphQL.field("ListEdge", {
     args: {
       id: GraphQL.id(ListId).annotate({ description: "The list ID." }),
       input: ListUpdateInput,
@@ -41,4 +42,4 @@ export const ListUpdateMutation = GraphQL.mutation({
         return { cursor: yield* updated.cursor(), node: updated }
       }),
   }),
-})
+)

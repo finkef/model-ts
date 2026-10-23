@@ -93,8 +93,36 @@ export interface FieldConfig<
   C,
 > extends Description {
   readonly args?: Args
+  readonly subscribe?: never
   readonly resolve: Resolve<S, ArgsOf<NoInfer<Args>>, A, E, R, C>
   readonly authorize?: Resolve<S, ArgsOf<NoInfer<Args>>, boolean, E, AR, C>
+}
+
+/** Subscription setup returns a stream; authorization receives each delivered value. */
+export interface SubscriptionConfig<
+  S,
+  Args extends ArgFields,
+  A,
+  G,
+  R,
+  AR,
+  C,
+> extends Description {
+  readonly args?: Args
+  readonly subscribe: (
+    source: S,
+    args: ArgsOf<NoInfer<Args>>,
+    context: C,
+  ) => Stream.Stream<A, NoInfer<G>, R>
+  readonly authorize?: Resolve<
+    A,
+    ArgsOf<NoInfer<Args>>,
+    boolean,
+    NoInfer<G>,
+    AR,
+    C
+  >
+  readonly resolve?: never
 }
 
 export interface UnionFieldConfig<
@@ -148,6 +176,7 @@ export interface PagedConnection<
   CR,
   C,
 > extends Description {
+  readonly subscribe?: never
   readonly authorize?: Resolve<S, ArgsOf<NoInfer<Args>>, boolean, G, AR, C>
   readonly totalCount?: Resolve<S, ArgsOf<NoInfer<Args>>, number, G, CR, C>
   /** Overrides the default "<Node>Connection" name. */
@@ -176,6 +205,7 @@ export interface NodesConnection<
   CR,
   C,
 > extends Description {
+  readonly subscribe?: never
   readonly authorize?: Resolve<S, ArgsOf<NoInfer<Args>>, boolean, G, AR, C>
   readonly totalCount?: Resolve<S, ArgsOf<NoInfer<Args>>, number, G, CR, C>
   readonly name?: string
@@ -236,16 +266,29 @@ export interface SourceSlot<S> {
   readonly [fieldSource]: (source: S) => void
 }
 
-export type SourceField<S, R, C = {}> = SourceSlot<S> & NoInfer<Field<R, C>>
+export type SourceField<
+  S,
+  R,
+  C = {},
+  Subscription extends boolean = false,
+> = SourceSlot<S> & NoInfer<Field<R, C> & SubscriptionMarker<Subscription>>
 
-export type FieldMap<S = never, C = {}> = Readonly<
-  Record<string, SourceField<S, unknown, C>>
->
+export type SubscriptionMarker<Subscription extends boolean> =
+  Subscription extends true
+    ? { readonly "~subscription": true }
+    : { readonly "~subscription"?: false }
+
+export type FieldMap<
+  S = never,
+  C = {},
+  Subscription extends boolean = false,
+> = Readonly<Record<string, SourceField<S, unknown, C, Subscription>>>
 
 export declare const defaultRef: unique symbol
 /** Phantom declaration used by both local and root default-source checks. */
 
 export interface DefaultField<R, T, C = {}> extends Field<R, C> {
+  readonly "~subscription"?: false
   readonly [defaultRef]: T
 }
 
@@ -253,6 +296,7 @@ export type SourceDefault<S, R, T, C = {}> = SourceSlot<S> &
   NoInfer<DefaultField<R, T, C>>
 
 export interface DefaultOptions<S, G, AR, C> extends Description {
+  readonly subscribe?: never
   readonly authorize?: Resolve<S, {}, boolean, G, AR, C>
   readonly resolve?: never
   readonly args?: never
@@ -294,6 +338,24 @@ export interface NullableFields<Types, G, C> extends ScalarHelpers<
   C,
   true
 > {
+  <
+    S,
+    const T extends Ref<Types>,
+    R = never,
+    const Args extends ArgFields = {},
+    AR = never,
+  >(
+    of: T,
+    config: SubscriptionConfig<
+      S,
+      Args,
+      NullableOf<Types, NoInfer<T>>,
+      G,
+      R,
+      AR,
+      C
+    >,
+  ): SourceField<S, R | AR, C, true>
   <const T extends Ref<Types>>(
     of: T,
   ): OutputRef<NullableOf<Types, T>> &
@@ -355,31 +417,6 @@ export interface Fields<Types, G, C = {}> extends Omit<
   ): SourceDefault<S, AR, "ID", C>
   /** Exposes a string schema, such as a branded ID, as a GraphQL `ID` argument or input field. */
   id<S extends Schema.Top & Schema.Schema<string>>(schema: S): S["Rebuild"]
-  events<
-    S,
-    const T extends Ref<Types>,
-    R = never,
-    const Args extends ArgFields = {},
-    AR = never,
-  >(
-    type: T,
-    config: Description & {
-      readonly authorize?: Resolve<
-        Value<Types, NoInfer<T>>,
-        ArgsOf<NoInfer<Args>>,
-        boolean,
-        NoInfer<G>,
-        AR,
-        C
-      >
-      readonly args?: Args
-      readonly subscribe: (
-        source: S,
-        args: ArgsOf<NoInfer<Args>>,
-        context: C,
-      ) => Stream.Stream<Value<Types, NoInfer<T>>, NoInfer<G>, R>
-    },
-  ): SourceField<S, R | AR, C>
   // Keep shorthand first: the broader overload widens literal returns before TS7 checks them.
   field<S, const T extends NamesOfKind<Types, "enum">, const A extends string>(
     type: T &
@@ -388,6 +425,16 @@ export interface Fields<Types, G, C = {}> extends Omit<
         : "Return a registered enum model literal"),
     resolve: (source: S, args: {}, context: C) => A,
   ): SourceField<S, never, C>
+  field<
+    S,
+    const T extends Ref<Types>,
+    R = never,
+    const Args extends ArgFields = {},
+    AR = never,
+  >(
+    type: T,
+    config: SubscriptionConfig<S, Args, Value<Types, NoInfer<T>>, G, R, AR, C>,
+  ): SourceField<S, R | AR, C, true>
   field<S, const T extends Ref<Types>, AR = never>(
     type: T,
     options?: DefaultOptions<S, G, AR, C>,
@@ -416,6 +463,16 @@ export interface Fields<Types, G, C = {}> extends Omit<
           UnionRule<Types, T, E> &
           ResultRule<Types, T>),
   ): SourceField<S, R | AR, C>
+  list<
+    S,
+    const T extends Ref<Types>,
+    R = never,
+    const Args extends ArgFields = {},
+    AR = never,
+  >(
+    of: T,
+    config: SubscriptionConfig<S, Args, ListOf<Types, NoInfer<T>>, G, R, AR, C>,
+  ): SourceField<S, R | AR, C, true>
   list<const T extends Ref<Types>>(
     of: T,
   ): OutputRef<ListOf<Types, T>> &

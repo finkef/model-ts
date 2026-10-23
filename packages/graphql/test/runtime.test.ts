@@ -226,7 +226,10 @@ test("declared fields need no model AST inspection", async () => {
   const local = createBuilder<Register<typeof model, "Explicit">>()
   const object = local.object("Explicit", model, {}, { value: local.string() })
   // Use a scalar query to include the object without requiring a new registry ref.
-  const query = local.query({ hello: local.field("String", () => "ok") })
+  const query = local.queryField(
+    "hello",
+    local.field("String", () => "ok"),
+  )
   const built = local.schema({ object, query })
   expect(
     await local
@@ -327,15 +330,16 @@ class NestedInput extends Schema.Class<NestedInput>("NestedInput")({
 class OuterInput extends Schema.Class<OuterInput>("OuterInput")({
   nested: NestedInput,
 }) {}
-const NestedQuery = GraphQL.query({
-  nested: GraphQL.field("String", {
+const NestedQuery = GraphQL.queryField(
+  "nested",
+  GraphQL.field("String", {
     args: { input: OuterInput },
     resolve: (_, { input }) =>
       input instanceof OuterInput && input.nested instanceof NestedInput
         ? input.nested.label
         : "wrong",
   }),
-})
+)
 test("nested input names and decoded classes come from identifiers", async () => {
   const built = GraphQL.schema({ ...definitions, NestedQuery })
   expect(printSchema(built.schema)).toContain("input NestedInput {")
@@ -358,8 +362,9 @@ test("decode failure without declared UserInputError remains BAD_USER_INPUT", as
   expect(result.errors?.[0]?.extensions.code).toBe("BAD_USER_INPUT")
 })
 test("nested decode path in UserInputError", async () => {
-  const query = GraphQL.query({
-    nestedEdge: GraphQL.field("ListEdge", {
+  const query = GraphQL.queryField(
+    "nestedEdge",
+    GraphQL.field("ListEdge", {
       args: { input: OuterInput },
       errors: [UserInputError],
       resolve: () =>
@@ -369,7 +374,7 @@ test("nested decode path in UserInputError", async () => {
           ),
         ),
     }),
-  })
+  )
   const built = GraphQL.schema({ ...definitions, query })
   const result = await GraphQL.execute(
     built,
@@ -387,16 +392,27 @@ test("nested decode path in UserInputError", async () => {
 })
 
 test("errors preserve public/internal/defect policy", async () => {
-  const query = GraphQL.query({
-    internal: GraphQL.nullable("String", () =>
-      Effect.fail(new DynamoDBError({ operation: "secret", cause: "secret" })),
+  const query = {
+    internalField: GraphQL.queryField(
+      "internal",
+      GraphQL.nullable("String", () =>
+        Effect.fail(
+          new DynamoDBError({ operation: "secret", cause: "secret" }),
+        ),
+      ),
     ),
-    defect: GraphQL.nullable("String", () => Effect.die(new Error("secret"))),
-    thrown: GraphQL.nullable("String", () => {
-      throw new Error("secret")
-    }),
-  })
-  const built = GraphQL.schema({ ...definitions, query })
+    defectField: GraphQL.queryField(
+      "defect",
+      GraphQL.nullable("String", () => Effect.die(new Error("secret"))),
+    ),
+    thrownField: GraphQL.queryField(
+      "thrown",
+      GraphQL.nullable("String", () => {
+        throw new Error("secret")
+      }),
+    ),
+  }
+  const built = GraphQL.schema({ ...definitions, ...query })
   const result = await GraphQL.execute(
     built,
     { source: "{internal defect thrown}" },
@@ -410,13 +426,14 @@ test("errors preserve public/internal/defect policy", async () => {
 })
 test("internal errors cannot be exposed as result members", () => {
   expect(() => {
-    const query = GraphQL.query({
-      bad: GraphQL.field("List", {
+    const query = GraphQL.queryField(
+      "bad",
+      GraphQL.field("List", {
         errors: [DynamoDBError],
         resolve: () =>
           Effect.fail(new DynamoDBError({ operation: "x", cause: "x" })),
       }),
-    })
+    )
     GraphQL.schema({ ...definitions, query })
   }).toThrow("Internal errors cannot be exposed")
 })
@@ -512,15 +529,16 @@ test("default page size is 20, independently of the maximum of 100", async () =>
     internal: [DynamoDBError, ItemDecodeError],
   })
   const object = local.object(List, { id: local.id() })
-  const query = local.query({
-    page: local.connection("List", {
+  const query = local.queryField(
+    "page",
+    local.connection("List", {
       nodes: () =>
         List.load(List.key(ListId.make("l1"))).pipe(
           Effect.map((list) => Array.from({ length: 120 }, () => list)),
         ),
       totalCount: () => 120,
     }),
-  })
+  )
   const built = local.schema({ object, query })
   const result = await local
     .execute(built, {
