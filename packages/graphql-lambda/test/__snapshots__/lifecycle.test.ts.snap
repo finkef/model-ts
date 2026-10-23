@@ -1,0 +1,36 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`documents four-role single-table storage and aligned TTL without indexes 1`] = `
+[
+  {
+    "PK": "GRAPHQL#CONNECTION#"c1"",
+    "SK": "CONNECTION",
+    "tag": "GraphQLConnection",
+    "ttl": 7200,
+  },
+  {
+    "PK": "GRAPHQL#CONNECTION#"c1"",
+    "SK": "OPERATION#"1"",
+    "tag": "GraphQLSubscriptionOperation",
+    "ttl": 7200,
+  },
+  {
+    "PK": "GRAPHQL#EVENT#event-1",
+    "SK": "EVENT",
+    "tag": "GraphQLPublishedEvent",
+    "ttl": 7200,
+  },
+  {
+    "PK": "GRAPHQL#TOPIC#"organization"",
+    "SK": "["c1","1"]",
+    "tag": "GraphQLSubscription",
+    "ttl": 7200,
+  },
+  {
+    "PK": "GRAPHQL#TOPIC#"user"",
+    "SK": "["c1","1"]",
+    "tag": "GraphQLSubscription",
+    "ttl": 7200,
+  },
+]
+`;

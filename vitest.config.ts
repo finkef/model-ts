@@ -9,6 +9,15 @@ const env = { TZ: "UTC" }
  */
 const resolve = {
   alias: {
+    "@model-ts/dynamodb/Sandbox": fileURLToPath(
+      new URL("./packages/dynamodb/src/Sandbox.ts", import.meta.url),
+    ),
+    "@model-ts/dynamodb": fileURLToPath(
+      new URL("./packages/dynamodb/src/index.ts", import.meta.url),
+    ),
+    "@model-ts/graphql": fileURLToPath(
+      new URL("./packages/graphql/src/index.ts", import.meta.url),
+    ),
     "@model-ts/core": fileURLToPath(
       new URL("./packages/core/src/index.ts", import.meta.url),
     ),
@@ -35,6 +44,17 @@ const graphqlResolve = {
 export default defineConfig({
   test: {
     projects: [
+      ...(["memory", "local"] as const).map((engine) => ({
+        resolve,
+        test: {
+          name: `graphql-lambda:${engine}`,
+          root: "packages/graphql-lambda",
+          include: ["test/**/*.test.ts"],
+          provide: { graphqlDynamoDB: engine },
+          testTimeout: 30_000,
+          env,
+        },
+      })),
       {
         test: {
           name: "graphql:types",
