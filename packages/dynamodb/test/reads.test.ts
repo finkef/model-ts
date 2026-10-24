@@ -195,3 +195,81 @@ describe("load", () => {
     }),
   )
 })
+
+describe("loadOption", () => {
+  it.effect("returns Some for a stored item and None for a missing key", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(1))
+
+      const found = yield* Post.loadOption(makePost(1))
+      const missing = yield* Post.loadOption({ PK: "POST#nope", SK: "POST" })
+
+      expect(Option.getOrThrow(found)).toBeInstanceOf(Post)
+      expect(Option.getOrThrow(found).title).toBe("Post 1")
+      expect(Option.isNone(missing)).toBe(true)
+    }),
+  )
+
+  it.effect("shares one BatchGetItem with concurrent loads", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(1))
+
+      const { value, spans } = yield* recordSpans(
+        Effect.all(
+          [
+            Post.load(makePost(1)),
+            Post.loadOption(makePost(1)),
+            Post.loadOption({ PK: "POST#nope", SK: "POST" }),
+          ],
+          { concurrency: "unbounded" },
+        ),
+      )
+
+      expect(value[0].title).toBe("Post 1")
+      expect(Option.map(value[1], (post) => post.title)).toEqual(
+        Option.some("Post 1"),
+      )
+      expect(Option.isNone(value[2])).toBe(true)
+      const calls = spans.filter((span) => span.kind === "client")
+      expect(calls.map((span) => span.name)).toEqual(["DynamoDB.BatchGetItem"])
+      expect(
+        spans.filter((span) => span.name === "DynamoDB.loadOption"),
+      ).toHaveLength(2)
+    }),
+  )
+
+  it.effect("recovers a soft-deleted item when asked to", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      const post = makePost(1)
+      yield* sandbox.seed(post)
+      yield* post.softDelete()
+
+      const live = yield* Post.loadOption(post)
+      const recovered = yield* Post.loadOption(post, { recover: true })
+
+      expect(Option.isNone(live)).toBe(true)
+      expect(Option.getOrThrow(recovered).isDeleted).toBe(true)
+    }),
+  )
+
+  it.effect("still fails when the stored item does not decode", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed({
+        PK: "POST#post_001",
+        SK: "POST",
+        _tag: "Post",
+        id: 1,
+      })
+
+      const error = yield* Effect.flip(
+        Post.loadOption(Post.key(PostId.make("post_001"))),
+      )
+
+      expect(error).toBeInstanceOf(ItemDecodeError)
+    }),
+  )
+})

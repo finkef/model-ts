@@ -78,11 +78,11 @@ class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
 
 The provider adds:
 
-| On        | Members                                                                                      |
-| --------- | -------------------------------------------------------------------------------------------- |
-| instances | `put`, `update`, `delete`, `softDelete`, `applyUpdate`, `operation`, `keys`, `cursor`        |
-| the class | `get`, `load`, `loadMany`, `query`, `stream`, `paginate`, `updateRaw`, `delete`, `operation` |
-| unions    | `get`, `load`, `loadMany`, `query`, `stream`, `paginate`                                     |
+| On        | Members                                                                                                    |
+| --------- | ---------------------------------------------------------------------------------------------------------- |
+| instances | `put`, `update`, `delete`, `softDelete`, `applyUpdate`, `operation`, `keys`, `cursor`                      |
+| the class | `get`, `load`, `loadOption`, `loadMany`, `query`, `stream`, `paginate`, `updateRaw`, `delete`, `operation` |
+| unions    | `get`, `load`, `loadOption`, `loadMany`, `query`, `stream`, `paginate`                                     |
 
 Instance members need `PK` and `SK`; calling them on a model without keys is a
 type error.
@@ -133,15 +133,16 @@ closes.
 
 ## Reads
 
-| Member                                          | Returns                                            | Fails with               |
-| ----------------------------------------------- | -------------------------------------------------- | ------------------------ |
-| `Post.get(key, { consistentRead? })`            | `Post`, from one GetItem                           | `DynamoDB.GetError`      |
-| `Post.load(key, { consistentRead?, recover? })` | `Post`, batched with concurrent loads              | `DynamoDB.GetError`      |
-| `Post.loadMany(keys, options?)`                 | `Array<Post>`, in key order                        | `DynamoDB.GetError`      |
-| `Post.query(params)`                            | `Array<Post>` with `meta.lastEvaluatedKey`         | `DynamoDB.QueryError`    |
-| `Post.stream(params)`                           | `Stream<Post>`, one Query per page, on demand      | `DynamoDB.QueryError`    |
-| `Post.paginate(input, params)`                  | a Relay connection (see [Pagination](#pagination)) | `DynamoDB.PaginateError` |
-| `DynamoDB.query(params, { posts: Post, ... })`  | items grouped by model, plus `_unknown` and `meta` | `DynamoDB.QueryError`    |
+| Member                                          | Returns                                            | Fails with                 |
+| ----------------------------------------------- | -------------------------------------------------- | -------------------------- |
+| `Post.get(key, { consistentRead? })`            | `Post`, from one GetItem                           | `DynamoDB.GetError`        |
+| `Post.load(key, { consistentRead?, recover? })` | `Post`, batched with concurrent loads              | `DynamoDB.GetError`        |
+| `Post.loadOption(key, options?)`                | `Option<Post>`, `None` when the key holds no item  | `DynamoDB.LoadOptionError` |
+| `Post.loadMany(keys, options?)`                 | `Array<Post>`, in key order                        | `DynamoDB.GetError`        |
+| `Post.query(params)`                            | `Array<Post>` with `meta.lastEvaluatedKey`         | `DynamoDB.QueryError`      |
+| `Post.stream(params)`                           | `Stream<Post>`, one Query per page, on demand      | `DynamoDB.QueryError`      |
+| `Post.paginate(input, params)`                  | a Relay connection (see [Pagination](#pagination)) | `DynamoDB.PaginateError`   |
+| `DynamoDB.query(params, { posts: Post, ... })`  | items grouped by model, plus `_unknown` and `meta` | `DynamoDB.QueryError`      |
 
 `load` is the read to reach for. Loads issued in the same tick are combined
 into BatchGetItem calls, as DataLoader combines them in the io-ts versions.
@@ -152,6 +153,18 @@ Effect: every level of a nested query reads its items in one BatchGetItem.
 Loads only share a batch when they run on the same `DynamoDB` layer, so build
 it once, for example in a `ManagedRuntime`, and not with `Effect.provide` in
 each resolver.
+
+Use `loadOption` when a missing item is an expected outcome, such as settings a
+user has never saved or a lookup by slug. It is `load` with `Option.none()` in place
+of `ItemNotFoundError`, so it batches and caches the same way, and decode and
+DynamoDB errors still fail. A resolver of a nullable `@model-ts/graphql` field
+can return the `Option` as is; `None` resolves to `null`.
+
+```ts
+const settings = Settings.loadOption(Settings.key(userId)).pipe(
+  Effect.map(Option.getOrElse(() => new Settings({ userId }))),
+)
+```
 
 Query parameters are those of the AWS `QueryCommand` without `TableName`. Pass
 `fetchAllPages: true` to follow `LastEvaluatedKey` to the end. Each item is
@@ -411,15 +424,15 @@ Every operation runs in a span named after its `DynamoDB` static. Model members
 such as `Post.load` create the same spans, and `loadMany`,
 `stream` and a model's `query` run inside the spans of the operations they call.
 
-| Span                                                                                                                                   | Attributes                                                                                   |
-| -------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| `DynamoDB.get`, `DynamoDB.load`, `DynamoDB.put`, `DynamoDB.update`, `DynamoDB.updateRaw`, `DynamoDB.deleteItem`, `DynamoDB.softDelete` | `model_ts.model` (`"Post \| Comment"` for a union), `model_ts.key` (`"PK / SK"`)             |
-| `DynamoDB.delete`                                                                                                                      | `model_ts.key`                                                                               |
-| `DynamoDB.query`                                                                                                                       | `model_ts.models`, `aws.dynamodb.index_name`, `aws.dynamodb.count`, `model_ts.unknown_count` |
-| `DynamoDB.paginate`                                                                                                                    | none; its Queries are `DynamoDB.query` spans                                                 |
-| `DynamoDB.bulk`                                                                                                                        | `model_ts.operations`, `model_ts.transactions`                                               |
-| `DynamoDB.transactWrite`, one per transaction of `bulk`                                                                                | none                                                                                         |
-| `DynamoDB.batchGet`                                                                                                                    | `batchSize`, and a link to the `DynamoDB.load` span of every load it served                  |
+| Span                                                                                                                                                          | Attributes                                                                                           |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| `DynamoDB.get`, `DynamoDB.load`, `DynamoDB.loadOption`, `DynamoDB.put`, `DynamoDB.update`, `DynamoDB.updateRaw`, `DynamoDB.deleteItem`, `DynamoDB.softDelete` | `model_ts.model` (`"Post \| Comment"` for a union), `model_ts.key` (`"PK / SK"`)                     |
+| `DynamoDB.delete`                                                                                                                                             | `model_ts.key`                                                                                       |
+| `DynamoDB.query`                                                                                                                                              | `model_ts.models`, `aws.dynamodb.index_name`, `aws.dynamodb.count`, `model_ts.unknown_count`         |
+| `DynamoDB.paginate`                                                                                                                                           | none; its Queries are `DynamoDB.query` spans                                                         |
+| `DynamoDB.bulk`                                                                                                                                               | `model_ts.operations`, `model_ts.transactions`                                                       |
+| `DynamoDB.transactWrite`, one per transaction of `bulk`                                                                                                       | none                                                                                                 |
+| `DynamoDB.batchGet`                                                                                                                                           | `batchSize`, and a link to the `DynamoDB.load` or `DynamoDB.loadOption` span of every load it served |
 
 Inside them, every AWS call has a client span named `DynamoDB.<Command>`
 (`DynamoDB.GetItem`, `DynamoDB.Query`, …) with the OpenTelemetry attributes for

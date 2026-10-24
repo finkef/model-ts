@@ -226,6 +226,20 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
   static readonly load = Table.load
 
   /**
+   * `load` for a key that may hold no item: `Option.none()` when it holds
+   * none, instead of failing with `ItemNotFoundError`. Batched and cached
+   * like `load`.
+   *
+   * ```ts
+   * const post = yield* Post.loadOption(key)
+   * if (Option.isNone(post)) return yield* createPost(key)
+   * ```
+   *
+   * @since 7.2.0
+   */
+  static readonly loadOption = Table.loadOption
+
+  /**
    * `load` for several keys, batched. Fails with the first error; wrap the
    * loads in `Effect.option` or `Effect.exit` yourself to keep partial results.
    *
@@ -378,6 +392,8 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
 export declare namespace DynamoDB {
   /** @since 7.0.0 */
   export type GetError = ItemNotFoundError | ItemDecodeError | DynamoDBError
+  /** @since 7.2.0 */
+  export type LoadOptionError = ItemDecodeError | DynamoDBError
   /** @since 7.0.0 */
   export type QueryError = ItemDecodeError | DynamoDBError
   /** @since 7.0.0 */
