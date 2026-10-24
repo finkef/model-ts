@@ -3,9 +3,15 @@
  * must stay an error, or the build fails.
  */
 import { Model } from "@model-ts/core"
-import { Effect, Schema } from "effect"
-import { DynamoDB, Operation } from "../src/index.ts"
-import { inPartition, makePost, Post } from "./fixtures.ts"
+import { Effect, Option, Schema } from "effect"
+import { DynamoDB, Operation, type Recovered } from "../src/index.ts"
+import {
+  type Comment,
+  inPartition,
+  makePost,
+  Post,
+  PostContent,
+} from "./fixtures.ts"
 
 // A model whose fields all have defaults works with the DynamoDB statics.
 class Counter extends Model.Class<Counter>()("Counter", DynamoDB.provider, {
@@ -46,3 +52,25 @@ DynamoDB.updateRaw(Post, makePost(1), { views: 1, GSI2SK: null })
 DynamoDB.updateRaw(Post, makePost(1), { typo: 42 })
 // @ts-expect-error PK is a key, not a field
 Operation.updateRaw(Post, makePost(1), { PK: "POST#2" })
+
+// loadOption keeps the model type, for unions and recovered items too, and a
+// missing item is None, so ItemNotFoundError is not in its error channel.
+export const maybePost: Effect.Effect<
+  Option.Option<Post>,
+  DynamoDB.LoadOptionError,
+  DynamoDB
+> = Post.loadOption(makePost(1))
+export const maybeContent: Effect.Effect<
+  Option.Option<Post | Comment>,
+  DynamoDB.LoadOptionError,
+  DynamoDB
+> = PostContent.loadOption(makePost(1))
+export const maybeRecovered: Effect.Effect<
+  Option.Option<Post & Recovered>,
+  DynamoDB.LoadOptionError,
+  DynamoDB
+> = DynamoDB.loadOption(Post, makePost(1), { recover: true })
+Post.loadOption(makePost(1)).pipe(
+  // @ts-expect-error loadOption cannot fail with ItemNotFoundError
+  Effect.catchTag("ItemNotFoundError", () => Effect.succeed(Option.none())),
+)

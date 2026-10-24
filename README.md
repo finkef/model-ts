@@ -366,6 +366,9 @@ const program = Effect.gen(function* () {
 })
 ```
 
+When a missing item is expected, `Post.loadOption(key)` says so directly: it
+returns `Option.none()` and has no `ItemNotFoundError` to handle.
+
 | Error                         | Raised when                                                                         |
 | ----------------------------- | ----------------------------------------------------------------------------------- |
 | `ItemNotFoundError`           | No item is stored under the key.                                                    |
@@ -551,7 +554,7 @@ call site.
 | `getProvider(client)`                                 | the constant `DynamoDB.provider` plus a `DynamoDB` layer                                                                                                  |
 | `new Client({ tableName })`                           | `DynamoDB.layer({ tableName, cursors })`; `cursors` is required (`{ encryptionKey }` or `"plain"`)                                                        |
 | `Promise` results, thrown errors                      | `Effect` results, typed errors (see [Errors](#errors))                                                                                                    |
-| `X.load(key, { null: true })`                         | `X.load(key).pipe(Effect.catchTag("ItemNotFoundError", () => Effect.succeed(null)))`                                                                      |
+| `X.load(key, { null: true })`                         | `X.loadOption(key)`, an `Option`; `Option.getOrNull` gives the old `null`                                                                                 |
 | `X.loadMany(keys)` with a result or error per key     | `X.loadMany(keys)` fails on the first error; for per-key results, `Effect.forEach(keys, (key) => Effect.exit(X.load(key)), { concurrency: "unbounded" })` |
 | `X.iterator(...)` / async iteration                   | `X.stream(...)`, an Effect `Stream`                                                                                                                       |
 | `encodeDDBCursor(item, key)` / `decodeDDBCursor(...)` | `item.cursor()` or `DynamoDB.cursor(item)`; only `paginate` reads cursors                                                                                 |

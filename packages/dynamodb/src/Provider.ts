@@ -18,7 +18,7 @@
  * @since 7.0.0
  */
 import { type Model, Provider } from "@model-ts/core"
-import type { Effect, Stream } from "effect"
+import type { Effect, Option, Stream } from "effect"
 import type { DynamoDB } from "./DynamoDB.ts"
 import { modelOf } from "./internal/item.ts"
 import { keysOf } from "./internal/keys.ts"
@@ -118,6 +118,19 @@ export interface DynamoDBReads<Self> {
     key: Key,
     options?: DynamoDB.LoadOptions,
   ): Effect.Effect<Self, DynamoDB.GetError, DynamoDB>
+  /** See `DynamoDB.loadOption`: `load`, with `Option.none()` for a missing key. */
+  loadOption(
+    key: Key,
+    options: DynamoDB.LoadOptions & { readonly recover: true },
+  ): Effect.Effect<
+    Option.Option<Self & Recovered>,
+    DynamoDB.LoadOptionError,
+    DynamoDB
+  >
+  loadOption(
+    key: Key,
+    options?: DynamoDB.LoadOptions,
+  ): Effect.Effect<Option.Option<Self>, DynamoDB.LoadOptionError, DynamoDB>
   /** See `DynamoDB.loadMany`. */
   loadMany(
     keys: Iterable<Key>,
@@ -219,11 +232,30 @@ function load(this: Decodable, key: Key, options?: DynamoDB.LoadOptions) {
   return Table.load(this, key, options)
 }
 
+function loadOption(
+  this: Decodable,
+  key: Key,
+  options: DynamoDB.LoadOptions & { readonly recover: true },
+): Effect.Effect<
+  Option.Option<Key & Recovered>,
+  DynamoDB.LoadOptionError,
+  DynamoDB
+>
+function loadOption(
+  this: Decodable,
+  key: Key,
+  options?: DynamoDB.LoadOptions,
+): Effect.Effect<Option.Option<Key>, DynamoDB.LoadOptionError, DynamoDB>
+function loadOption(this: Decodable, key: Key, options?: DynamoDB.LoadOptions) {
+  return Table.loadOption(this, key, options)
+}
+
 const reads = {
   get(this: Decodable, key: Key, options?: DynamoDB.ReadOptions) {
     return Table.get(this, key, options)
   },
   load,
+  loadOption,
   loadMany(
     this: Decodable,
     keys: Iterable<Key>,

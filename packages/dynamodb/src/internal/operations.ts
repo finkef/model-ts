@@ -105,7 +105,8 @@ export const get: <A extends Key>(
   span("DynamoDB.get"),
 )
 
-const loadItem = Effect.fnUntraced(function* <A extends Key>(
+/** The item at `key`, or its soft-deleted copy with `recover`, if any. */
+const find = Effect.fnUntraced(function* <A extends Key>(
   model: Decodable<A>,
   key: Key,
   options?: DynamoDB.LoadOptions,
@@ -113,13 +114,32 @@ const loadItem = Effect.fnUntraced(function* <A extends Key>(
   yield* Effect.annotateCurrentSpan(spanAttributes(model, key))
   const consistentRead = options?.consistentRead ?? false
   const raw = yield* read(keyOf(key), consistentRead)
-  if (raw) return yield* decodeItem(model, raw)
+  if (raw) return Option.some<A>(yield* decodeItem(model, raw))
   if (options?.recover) {
     const deleted = yield* read(deletedKey(key), consistentRead)
-    if (deleted) return markRecovered(yield* decodeItem(model, deleted))
+    if (deleted)
+      return Option.some<A>(markRecovered(yield* decodeItem(model, deleted)))
   }
+  return Option.none<A>()
+})
+
+const loadItem = Effect.fnUntraced(function* <A extends Key>(
+  model: Decodable<A>,
+  key: Key,
+  options?: DynamoDB.LoadOptions,
+) {
+  const item = yield* find(model, key, options)
+  if (Option.isSome(item)) return item.value
   return yield* new ItemNotFoundError({ key: keyOf(key) })
 }, span("DynamoDB.load"))
+
+const loadOptionItem = Effect.fnUntraced(function* <A extends Key>(
+  model: Decodable<A>,
+  key: Key,
+  options?: DynamoDB.LoadOptions,
+) {
+  return yield* find(model, key, options)
+}, span("DynamoDB.loadOption"))
 
 /**
  * The stored item at `key`. With a request cache, an eventually consistent
@@ -197,6 +217,32 @@ export function load<A extends Key>(
   options?: DynamoDB.LoadOptions,
 ): Effect.Effect<A | (A & Recovered), DynamoDB.GetError, DynamoDB> {
   return loadItem(model, key, options)
+}
+
+export function loadOption<A extends Key>(
+  model: Decodable<A>,
+  key: Key,
+  options: DynamoDB.LoadOptions & { readonly recover: true },
+): Effect.Effect<
+  Option.Option<A & Recovered>,
+  DynamoDB.LoadOptionError,
+  DynamoDB
+>
+export function loadOption<A extends Key>(
+  model: Decodable<A>,
+  key: Key,
+  options?: DynamoDB.LoadOptions,
+): Effect.Effect<Option.Option<A>, DynamoDB.LoadOptionError, DynamoDB>
+export function loadOption<A extends Key>(
+  model: Decodable<A>,
+  key: Key,
+  options?: DynamoDB.LoadOptions,
+): Effect.Effect<
+  Option.Option<A | (A & Recovered)>,
+  DynamoDB.LoadOptionError,
+  DynamoDB
+> {
+  return loadOptionItem(model, key, options)
 }
 
 export const loadMany = <A extends Key>(
