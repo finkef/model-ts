@@ -874,6 +874,27 @@ valid Date or parseable date string and serializes to ISO.
 `graphql-type-json` convention. Literal JSON rejects unquoted enum values. For
 stricter validation, use `Schema.Json.annotate({ graphqlType: "JSON" })`.
 
+To give the JSON scalar a `@specifiedBy` URL or its own description, register
+it with an annotated `JSONValue`. The builder keeps the built-in JSON parsing
+and takes `specifiedByURL` and `description` from the annotations:
+
+```ts
+import { JSONValue } from "@model-ts/graphql"
+import { GraphQL, type Register } from "../api/graphql.ts"
+
+const specifiedByURL =
+  "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf"
+const AnnotatedJSON = JSONValue.annotate({ specifiedByURL })
+declare module "../api/graphql.ts" {
+  interface Types extends Register<typeof AnnotatedJSON, "JSON"> {}
+}
+export const JSONType = GraphQL.scalar("JSON", AnnotatedJSON)
+```
+
+The schema then prints `scalar JSON @specifiedBy(url: "...")`. To set the
+metadata on the scalar itself, pass `jsonScalar({ specifiedByURL, description })`
+as the third argument; it has the same parsing as the built-in scalar.
+
 Custom scalars pair a registered name with a Schema codec:
 
 `examples/custom-scalar.ts`
@@ -1274,6 +1295,7 @@ functions such as `executor` are separate exports, not builder methods.
 | `ExecutionResult`, `FormattedExecutionResult`                 | Direct graphql-js results and formatted executor results          |
 | `ErrorReporter`                                               | Optional service for masked-failure telemetry                     |
 | `ID`, `DateTime`, `JSONValue`                                 | Built-in input schemas                                            |
+| `jsonScalar({ specifiedByURL?, description? })`               | The built-in JSON scalar, with its own metadata                   |
 | `id`, `input`, `defaulted`                                    | Package-level schema annotation helpers                           |
 | `Connection`, `Edge`, `PageInfo`, `ConnectionArgs`            | Structural pagination types                                       |
 | `@model-ts/graphql/Testing`                                   | Test clients, the graphql tag, and normalized snapshots           |

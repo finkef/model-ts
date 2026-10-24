@@ -1,7 +1,8 @@
 import { Context, Effect, Schema } from "effect"
-import { createBuilder } from "../src/GraphQL.ts"
+import { createBuilder, type JSONValue } from "../src/GraphQL.ts"
 import type {
   Register,
+  Registration,
   BuiltSchema,
   Connection,
   Edge,
@@ -140,3 +141,11 @@ createBuilder<{}>().withErrorPolicy({
   // @ts-expect-error a fixed message needs a public error to apply to
   publicMessages: { Gone: "Not found" },
 })
+
+// A schema of unknown values, such as JSONValue, registers as a scalar.
+export type JSONKind = Assert<
+  Equal<
+    Register<typeof JSONValue, "JSON">,
+    { readonly JSON: Registration<"scalar", unknown> }
+  >
+>

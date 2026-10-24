@@ -36,6 +36,7 @@ export {
   type ErrorPolicyOptions,
 } from "./Errors.ts"
 export { ID, JSONValue, DateTime, id, input, defaulted } from "./SchemaTypes.ts"
+export { jsonScalar, type JSONScalarOptions } from "./Scalars.ts"
 export {
   executor,
   type Executor,
