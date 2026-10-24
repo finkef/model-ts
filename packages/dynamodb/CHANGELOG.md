@@ -1,5 +1,7 @@
 # @model-ts/dynamodb
 
+## 7.4.0
+
 ## 7.3.0
 
 ### Minor Changes
