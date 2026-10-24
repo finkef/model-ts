@@ -1,5 +1,11 @@
 # @model-ts/dynamodb
 
+## 7.2.0
+
+### Minor Changes
+
+- 4770e44: Add `loadOption` to models, unions and `DynamoDB`. It loads like `load`, batched and cached, but returns `Option.none()` for a key that holds no item instead of failing with `ItemNotFoundError`.
+
 ## 7.1.0
 
 ### Minor Changes
