@@ -254,6 +254,25 @@ export const loadMany = <A extends Key>(
     concurrency: "unbounded",
   })
 
+export function where<A extends Key>(
+  model: Decodable<A>,
+  predicate: (item: A) => boolean,
+): DynamoDB.Where<A>
+// The declaration above gives callers the model type; the step itself only
+// needs a key to report and a value that is either an item or an Option.
+export function where(_model: Decodable, predicate: (item: Key) => boolean) {
+  return <E, R>(read: Effect.Effect<Key | Option.Option<Key>, E, R>) =>
+    Effect.flatMap(
+      read,
+      (value): Effect.Effect<Key | Option.Option<Key>, ItemNotFoundError> => {
+        if (Option.isOption(value))
+          return Effect.succeed(Option.filter(value, predicate))
+        if (predicate(value)) return Effect.succeed(value)
+        return Effect.fail(new ItemNotFoundError({ key: keyOf(value) }))
+      },
+    )
+}
+
 export const query: <const R extends DynamoDB.QueryModels>(
   params: DynamoDB.QueryParams,
   models: R,

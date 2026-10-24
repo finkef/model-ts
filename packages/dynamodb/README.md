@@ -78,11 +78,11 @@ class Post extends Model.Class<Post>()("Post", DynamoDB.provider, {
 
 The provider adds:
 
-| On        | Members                                                                                                    |
-| --------- | ---------------------------------------------------------------------------------------------------------- |
-| instances | `put`, `update`, `delete`, `softDelete`, `applyUpdate`, `operation`, `keys`, `cursor`                      |
-| the class | `get`, `load`, `loadOption`, `loadMany`, `query`, `stream`, `paginate`, `updateRaw`, `delete`, `operation` |
-| unions    | `get`, `load`, `loadOption`, `loadMany`, `query`, `stream`, `paginate`                                     |
+| On        | Members                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------- |
+| instances | `put`, `update`, `delete`, `softDelete`, `applyUpdate`, `operation`, `keys`, `cursor`                               |
+| the class | `get`, `load`, `loadOption`, `loadMany`, `where`, `query`, `stream`, `paginate`, `updateRaw`, `delete`, `operation` |
+| unions    | `get`, `load`, `loadOption`, `loadMany`, `where`, `query`, `stream`, `paginate`                                     |
 
 Instance members need `PK` and `SK`; calling them on a model without keys is a
 type error.
@@ -165,6 +165,37 @@ const settings = Settings.loadOption(Settings.key(userId)).pipe(
   Effect.map(Option.getOrElse(() => new Settings({ userId }))),
 )
 ```
+
+`where` keeps a loaded item only when a predicate holds. The predicate can be
+any synchronous check of the item, such as a field comparison or a model method
+like "belongs to this organization". Put it after the read in `pipe`; the
+predicate is typed with the model.
+
+```ts
+const archiveList = Effect.fn("archiveList")(function* (
+  id: ListId,
+  organizationId: OrganizationId,
+) {
+  const list = yield* List.load(List.key(id)).pipe(
+    List.where((list) => list.isBelongingToOrganization(organizationId)),
+  )
+  return yield* list.update({ archived: true })
+})
+
+const membership = Membership.loadOption(Membership.key(id)).pipe(
+  Membership.where(
+    (membership) =>
+      membership.isBelongingToUser(userId) && membership.isActive(),
+  ),
+)
+```
+
+After a read of an item, a rejected item fails with `ItemNotFoundError` for its
+key, so a caller can't tell it apart from a key that holds no item. After a read
+of an `Option`, such as `loadOption` or your own finder, it becomes
+`Option.none()` and the error type stays as it was. `where` runs after the
+read, so the read still batches and caches, and steps can be chained.
+`DynamoDB.where(List, predicate)` is the same step.
 
 Query parameters are those of the AWS `QueryCommand` without `TableName`. Pass
 `fetchAllPages: true` to follow `LastEvaluatedKey` to the end. Each item is

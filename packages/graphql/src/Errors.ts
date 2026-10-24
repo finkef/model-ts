@@ -19,12 +19,22 @@ export interface ErrorPolicyOptions<
   readonly publicCodes?: [P[number]] extends [never]
     ? never
     : Partial<Record<ErrorsOf<NoInfer<P>>["_tag"], string>>
+  /**
+   * A fixed message for a public error. Clients get only this message and the
+   * error's code: neither its own message nor any declared field is exposed.
+   * Use it to expose errors whose fields are internal, such as a not-found
+   * error that carries a storage key.
+   */
+  readonly publicMessages?: [P[number]] extends [never]
+    ? never
+    : Partial<Record<ErrorsOf<NoInfer<P>>["_tag"], string>>
 }
 
 export interface ErrorPolicy {
   readonly internal: readonly ErrorSchema[]
   readonly public: readonly ErrorSchema[]
   readonly publicCodes?: Readonly<Record<string, string>>
+  readonly publicMessages?: Readonly<Record<string, string>>
 }
 
 export const defaultErrorPolicy: ErrorPolicy = { internal: [], public: [] }
@@ -97,15 +107,22 @@ function visibleFailure(
   }
   const visible = policy.public.find(matches)
   if (visible) {
-    const { _tag, message, ...extensions } = declaredFields(visible, error)
     const tag = errorName(visible)
-    return fieldError(String(message ?? tag), {
-      ...extensions,
-      code: policy.publicCodes?.[tag] ?? tag,
-    })
+    const code = entry(policy.publicCodes, tag) ?? tag
+    const fixed = entry(policy.publicMessages, tag)
+    if (fixed !== undefined) return fieldError(fixed, { code })
+    const { _tag, message, ...extensions } = declaredFields(visible, error)
+    return fieldError(String(message ?? tag), { ...extensions, code })
   }
   return undefined
 }
+
+// Own entries only, so a tag such as "constructor" never reads the prototype.
+const entry = (
+  record: Readonly<Record<string, string>> | undefined,
+  tag: string,
+): string | undefined =>
+  record && Object.hasOwn(record, tag) ? record[tag] : undefined
 
 export const recoverCause = (
   cause: Cause.Cause<unknown>,

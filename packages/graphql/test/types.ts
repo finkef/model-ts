@@ -124,3 +124,19 @@ export type MutationRequirements = Assert<
     DynamoDB
   >
 >
+
+// publicMessages names tags of the policy's public errors, like publicCodes.
+class Gone extends Schema.TaggedError<Gone>()("Gone", { key: Schema.String }) {}
+createBuilder<{}>().withErrorPolicy({
+  public: [Gone],
+  publicMessages: { Gone: "Not found" },
+})
+createBuilder<{}>().withErrorPolicy({
+  public: [Gone],
+  // @ts-expect-error Undeclared is not a public error
+  publicMessages: { Undeclared: "Not found" },
+})
+createBuilder<{}>().withErrorPolicy({
+  // @ts-expect-error a fixed message needs a public error to apply to
+  publicMessages: { Gone: "Not found" },
+})

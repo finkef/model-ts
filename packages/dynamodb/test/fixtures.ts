@@ -48,6 +48,10 @@ export class Comment extends Model.Class<Comment>()(
   get SK() {
     return `COMMENT#${this.id}`
   }
+
+  isOnPost(postId: PostId) {
+    return this.postId === postId
+  }
 }
 
 /** A post and its comments share a partition. */

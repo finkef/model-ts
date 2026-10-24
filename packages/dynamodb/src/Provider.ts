@@ -131,6 +131,8 @@ export interface DynamoDBReads<Self> {
     key: Key,
     options?: DynamoDB.LoadOptions,
   ): Effect.Effect<Option.Option<Self>, DynamoDB.LoadOptionError, DynamoDB>
+  /** See `DynamoDB.where`: keeps a loaded item only when `predicate` holds. */
+  where(predicate: (item: Self) => boolean): DynamoDB.Where<Self>
   /** See `DynamoDB.loadMany`. */
   loadMany(
     keys: Iterable<Key>,
@@ -256,6 +258,9 @@ const reads = {
   },
   load,
   loadOption,
+  where(this: Decodable, predicate: (item: Key) => boolean) {
+    return Table.where(this, predicate)
+  },
   loadMany(
     this: Decodable,
     keys: Iterable<Key>,
