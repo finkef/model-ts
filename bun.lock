@@ -22,7 +22,7 @@
     },
     "packages/core": {
       "name": "@model-ts/core",
-      "version": "7.1.0",
+      "version": "7.2.0",
       "devDependencies": {
         "effect": "4.0.5",
       },
@@ -32,7 +32,7 @@
     },
     "packages/dynamodb": {
       "name": "@model-ts/dynamodb",
-      "version": "7.1.0",
+      "version": "7.2.0",
       "devDependencies": {
         "@model-ts/core": "*",
         "effect": "4.0.5",
@@ -52,7 +52,7 @@
     },
     "packages/eventbridge": {
       "name": "@model-ts/eventbridge",
-      "version": "7.1.0",
+      "version": "7.2.0",
       "devDependencies": {
         "@model-ts/core": "*",
         "effect": "4.0.5",
@@ -65,7 +65,7 @@
     },
     "packages/graphql": {
       "name": "@model-ts/graphql",
-      "version": "7.1.0",
+      "version": "7.2.0",
       "devDependencies": {
         "@model-ts/core": "*",
         "@model-ts/dynamodb": "*",
@@ -79,7 +79,7 @@
     },
     "packages/graphql-lambda": {
       "name": "@model-ts/graphql-lambda",
-      "version": "7.1.0",
+      "version": "7.2.0",
       "devDependencies": {
         "@aws-sdk/client-apigatewaymanagementapi": "^3.1079.0",
         "@effect/platform-node": "4.0.5",
