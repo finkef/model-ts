@@ -52,6 +52,13 @@ export function scalar<A, I>(
   name: string,
   codec: Schema.Codec<A, I>,
 ): GraphQLScalarType {
+  // "JSON" registered with a permissive schema such as `JSONValue` keeps the
+  // built-in JSON parsing and takes the schema's metadata.
+  if (name === "JSON" && codec.ast._tag === "Unknown")
+    return jsonScalar({
+      ...metadata(codec.ast),
+      specifiedByURL: annotations(codec.ast).specifiedByURL,
+    })
   const decode = Schema.decodeUnknownSync(codec)
   const encode = Schema.encodeUnknownSync(codec)
   const decodeInput = (value: unknown) => {
@@ -110,13 +117,40 @@ function jsonLiteral(
   }
 }
 
-/** Like graphql-type-json, variables and outputs are deliberately unrestricted JS values. */
-export const jsonScalar = () =>
+/** Metadata of the built-in JSON scalar. */
+export interface JSONScalarOptions {
+  /** Replaces the default description, which cites ECMA-404. */
+  readonly description?: string | undefined
+  /** Printed as `@specifiedBy(url: ...)`. */
+  readonly specifiedByURL?: string | undefined
+}
+
+/**
+ * The built-in `JSON` scalar. Like graphql-type-json, variables and outputs
+ * are deliberately unrestricted JS values; literals are JSON values, and enum
+ * literals are rejected at any depth. Pass it to `GraphQL.scalar("JSON", ...)`
+ * to give the scalar its own metadata.
+ *
+ * ```ts
+ * const specifiedByURL =
+ *   "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf"
+ * export const JSONType = GraphQL.scalar(
+ *   "JSON",
+ *   JSONValue.annotate({ specifiedByURL }),
+ *   jsonScalar({ specifiedByURL }),
+ * )
+ * ```
+ */
+export const jsonScalar = (
+  options: JSONScalarOptions = {},
+): GraphQLScalarType =>
   guardScalar(
     new GraphQLScalarType({
       name: "JSON",
       description:
+        options.description ??
         "The `JSON` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).",
+      specifiedByURL: options.specifiedByURL,
       serialize: (value) => value,
       parseValue: (value) => value,
       parseLiteral: jsonLiteral,

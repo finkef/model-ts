@@ -6,6 +6,7 @@ import {
   DateTime,
   JSONValue,
   input,
+  jsonScalar,
   type Register,
 } from "../src/GraphQL.ts"
 
@@ -322,4 +323,64 @@ test("codec scalars such as TimeZone require quoted string literals", async () =
     }),
   )
   expect(result.errors?.[0]?.message).toContain("quote the value as a string")
+})
+
+const ecma404 =
+  "https://ecma-international.org/wp-content/uploads/ECMA-404_2nd_edition_december_2017.pdf"
+const AnnotatedJSON = JSONValue.annotate({ specifiedByURL: ecma404 })
+interface JSONTypes extends Register<typeof AnnotatedJSON, "JSON"> {}
+
+for (const [path, adopted] of [
+  ["jsonScalar", jsonScalar({ specifiedByURL: ecma404 })],
+  ["an annotated JSONValue", undefined],
+] as const) {
+  test(`JSON declares @specifiedBy through ${path} and keeps its parsing`, async () => {
+    const local = createBuilder<JSONTypes>()
+    const json = local.scalar("JSON", AnnotatedJSON, adopted)
+    const built = local.schema({
+      json,
+      echoField: local.queryField("echo", "JSON", {
+        args: { value: JSONValue, annotated: Schema.optionalKey(json.schema) },
+        resolve: (_, { value }) => value,
+      }),
+    })
+    const run = (source: string, variableValues?: Record<string, unknown>) =>
+      Effect.runPromise(local.execute(built, { source, variableValues }))
+
+    expect(printSchema(built.schema)).toContain(
+      `"""\nThe \`JSON\` scalar type represents JSON values as specified by [ECMA-404](http://www.ecma-international.org/publications/files/ECMA-ST/ECMA-404.pdf).\n"""\nscalar JSON @specifiedBy(url: "${ecma404}")`,
+    )
+    // An adopted jsonScalar is already guarded, so it is not cloned again.
+    expect(
+      adopted === undefined || built.schema.getType("JSON") === adopted,
+    ).toBe(true)
+
+    const value = { date: new Date("2026-10-22T00:00:00Z"), missing: undefined }
+    expect(
+      await run("query($value:JSON!){echo(value:$value)}", { value }),
+    ).toEqual({ data: { echo: value } })
+    expect(await run('{echo(value:{a:[1,true,null,"text"]})}')).toEqual({
+      data: { echo: { a: [1, true, null, "text"] } },
+    })
+    for (const literal of ["UNQUOTED", "{a:[UNQUOTED]}"]) {
+      const { errors } = await run(`{echo(value:${literal})}`)
+      expect(errors?.map((error) => error.extensions.code)).toEqual([
+        "BAD_USER_INPUT",
+      ])
+    }
+  })
+}
+
+test("jsonScalar without options keeps the default metadata", () => {
+  const json = jsonScalar()
+  expect(json.description).toContain("ECMA-404")
+  expect(json.specifiedByURL).toBeUndefined()
+  expect(jsonScalar({ description: "Any JSON value" }).description).toBe(
+    "Any JSON value",
+  )
+  expect(
+    printSchema(
+      G.schema({ output: G.queryField("output", "JSON", () => 1) }).schema,
+    ),
+  ).not.toContain("@specifiedBy")
 })

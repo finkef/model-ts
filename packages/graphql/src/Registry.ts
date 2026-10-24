@@ -35,11 +35,14 @@ export type Tag<M extends Model> = M["Type"] extends {
 export type InferKind<M extends Model> =
   M extends Schema.Literals<readonly string[]>
     ? "enum"
-    : M extends Schema.Union<readonly Schema.Top[]>
-      ? "union"
-      : M["Type"] extends string | number | boolean | Date
-        ? "scalar"
-        : "object"
+    : // An unknown value, such as `JSONValue`, can only be a scalar.
+      unknown extends M["Type"]
+      ? "scalar"
+      : M extends Schema.Union<readonly Schema.Top[]>
+        ? "union"
+        : M["Type"] extends string | number | boolean | Date
+          ? "scalar"
+          : "object"
 /** Tagged models need no name; non-object abstract types specify their kind. */
 
 export type Register<
