@@ -4,10 +4,16 @@
  */
 import { Model } from "@model-ts/core"
 import { Effect, Option, Schema } from "effect"
-import { DynamoDB, Operation, type Recovered } from "../src/index.ts"
 import {
-  type Comment,
+  DynamoDB,
+  type ItemNotFoundError,
+  Operation,
+  type Recovered,
+} from "../src/index.ts"
+import {
+  Comment,
   inPartition,
+  makeComment,
   makePost,
   Post,
   PostContent,
@@ -74,3 +80,60 @@ Post.loadOption(makePost(1)).pipe(
   // @ts-expect-error loadOption cannot fail with ItemNotFoundError
   Effect.catchTag("ItemNotFoundError", () => Effect.succeed(Option.none())),
 )
+
+type Equal<A, B> =
+  (<T>() => T extends A ? 1 : 2) extends <T>() => T extends B ? 1 : 2
+    ? true
+    : false
+type Assert<T extends true> = T
+class Denied extends Schema.TaggedError<Denied>()("Denied", {}) {}
+
+// where adds ItemNotFoundError to a read of an item and keeps the type of a
+// read of an Option, whatever else the read can fail with.
+const ownPost = Effect.fail(new Denied()).pipe(
+  Effect.as(makePost(1)),
+  Post.where((post) => post.authorId === "ada"),
+)
+export type WhereOnItem = Assert<
+  Equal<typeof ownPost, Effect.Effect<Post, Denied | ItemNotFoundError>>
+>
+const maybeOwnPost = Effect.fail(new Denied()).pipe(
+  Effect.as(Option.some(makePost(1))),
+  Post.where((post) => post.authorId === "ada"),
+)
+export type WhereOnOption = Assert<
+  Equal<typeof maybeOwnPost, Effect.Effect<Option.Option<Post>, Denied>>
+>
+const loadedOwnPost = Post.loadOption(makePost(1)).pipe(
+  Post.where((post) => post.authorId === "ada"),
+)
+export type WhereAfterLoadOption = Assert<
+  Equal<
+    typeof loadedOwnPost,
+    Effect.Effect<Option.Option<Post>, DynamoDB.LoadOptionError, DynamoDB>
+  >
+>
+const recoveredOwnPost = Post.load(makePost(1), { recover: true }).pipe(
+  DynamoDB.where(Post, (post) => post.authorId === "ada"),
+)
+export type WhereKeepsRecovered = Assert<
+  Equal<
+    typeof recoveredOwnPost,
+    Effect.Effect<Post & Recovered, DynamoDB.GetError, DynamoDB>
+  >
+>
+
+// The predicate is typed with the model, or with the members of a union.
+const comment = makeComment(makePost(1), 1)
+Comment.load(comment).pipe(
+  Comment.where((comment) => comment.isOnPost(makePost(1).id)),
+)
+Comment.load(comment).pipe(
+  // @ts-expect-error a plain string is not a PostId
+  Comment.where((comment) => comment.isOnPost("post_001")),
+)
+PostContent.load(comment).pipe(
+  PostContent.where((item) => item._tag === "Comment" && item.body !== ""),
+)
+// @ts-expect-error a Post predicate cannot narrow a read of a Comment
+Comment.load(comment).pipe(Post.where(() => true))

@@ -45,6 +45,7 @@ import {
   Effect,
   Exit,
   Layer,
+  type Option,
   Request,
   RequestResolver,
   Result,
@@ -248,6 +249,29 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
   static readonly loadMany = Table.loadMany
 
   /**
+   * A pipe step that keeps a loaded item only when `predicate` holds, for
+   * rules such as "belongs to this organization". It runs after the read, so
+   * the read still batches and caches.
+   *
+   * - After `load`, an item the predicate rejects fails with
+   *   `ItemNotFoundError` for its key, as if the key held no item.
+   * - After `loadOption` or any read of an `Option`, it becomes
+   *   `Option.none()` and the error type stays the same.
+   *
+   * ```ts
+   * const list = yield* List.load(List.key(id)).pipe(
+   *   List.where((list) => list.organizationId === organizationId),
+   * )
+   * ```
+   *
+   * `DynamoDB.where(List, predicate)` is the same step; the model only types
+   * the predicate.
+   *
+   * @since 7.3.0
+   */
+  static readonly where = Table.where
+
+  /**
    * Runs a Query and decodes each item with the model its `_tag` names.
    *
    * - An item tagged with one of the models must decode with it; otherwise the
@@ -394,6 +418,19 @@ export declare namespace DynamoDB {
   export type GetError = ItemNotFoundError | ItemDecodeError | DynamoDBError
   /** @since 7.2.0 */
   export type LoadOptionError = ItemDecodeError | DynamoDBError
+  /**
+   * The pipe step `where` returns. It takes a read of an item or of an
+   * `Option` of one; only a read of an item gains `ItemNotFoundError`.
+   *
+   * @since 7.3.0
+   */
+  export type Where<Self> = <A extends Self | Option.Option<Self>, E, R>(
+    read: Effect.Effect<A, E, R>,
+  ) => Effect.Effect<
+    A,
+    [A] extends [Option.Option<unknown>] ? E : E | ItemNotFoundError,
+    R
+  >
   /** @since 7.0.0 */
   export type QueryError = ItemDecodeError | DynamoDBError
   /** @since 7.0.0 */

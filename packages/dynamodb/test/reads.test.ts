@@ -1,9 +1,14 @@
 import { marshall } from "@aws-sdk/util-dynamodb"
 import { describe, expect, it as vitest } from "@effect/vitest"
 import { Effect, Exit, Option } from "effect"
-import { docVersion, DynamoDB, ItemDecodeError } from "../src/index.ts"
+import {
+  docVersion,
+  DynamoDB,
+  ItemDecodeError,
+  ItemNotFoundError,
+} from "../src/index.ts"
 import { Sandbox } from "../src/Sandbox.ts"
-import { makePost, Post, PostId } from "./fixtures.ts"
+import { makeComment, makePost, Post, PostContent, PostId } from "./fixtures.ts"
 import { it, recordSpans } from "./utils.ts"
 
 describe("load with unprocessed keys", () => {
@@ -270,6 +275,92 @@ describe("loadOption", () => {
       )
 
       expect(error).toBeInstanceOf(ItemDecodeError)
+    }),
+  )
+})
+
+describe("where", () => {
+  it.effect("passes a matching item through and keeps the batch", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(1), makePost(2))
+      const byAda = Post.where((post) => post.authorId === "ada")
+
+      const { value, spans } = yield* recordSpans(
+        Effect.all(
+          [
+            Post.load(makePost(1)).pipe(byAda),
+            Post.load(makePost(2)).pipe(byAda),
+          ],
+          { concurrency: "unbounded" },
+        ),
+      )
+
+      expect(value.map((post) => post.title)).toEqual(["Post 1", "Post 2"])
+      expect(value[0]).toBeInstanceOf(Post)
+      const calls = spans.filter((span) => span.kind === "client")
+      expect(calls.map((span) => span.name)).toEqual(["DynamoDB.BatchGetItem"])
+    }),
+  )
+
+  it.effect("fails a rejected item with ItemNotFoundError for its key", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(1))
+
+      const error = yield* Effect.flip(
+        Post.load(makePost(1)).pipe(
+          Post.where((post) => post.authorId === "grace"),
+        ),
+      )
+
+      expect(error).toBeInstanceOf(ItemNotFoundError)
+      expect(error).toMatchObject({
+        key: { PK: "POST#post_001", SK: "POST" },
+      })
+    }),
+  )
+
+  it.effect("turns a rejected Option into None", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      const post = makePost(1)
+      const comment = makeComment(post, 1)
+      yield* sandbox.seed(post, comment)
+
+      const rejected = yield* Post.loadOption(post).pipe(
+        Post.where((post) => post.authorId === "grace"),
+      )
+      const kept = yield* PostContent.loadOption(comment).pipe(
+        PostContent.where((item) => item._tag === "Comment"),
+      )
+
+      expect(Option.isNone(rejected)).toBe(true)
+      expect(Option.map(kept, (item) => item._tag)).toEqual(
+        Option.some("Comment"),
+      )
+    }),
+  )
+
+  it.effect("chains: every step must hold", () =>
+    Effect.gen(function* () {
+      const sandbox = yield* Sandbox
+      yield* sandbox.seed(makePost(1))
+      const byAda = Post.where((post) => post.authorId === "ada")
+      const published = Post.where((post) => post.publishedAt !== null)
+
+      const once = yield* Post.load(makePost(1)).pipe(
+        byAda,
+        Post.where((post) => post.title === "Post 1"),
+      )
+      const error = yield* Effect.flip(
+        Post.load(makePost(1)).pipe(byAda, published),
+      )
+      const none = yield* Post.loadOption(makePost(1)).pipe(byAda, published)
+
+      expect(once.title).toBe("Post 1")
+      expect(error._tag).toBe("ItemNotFoundError")
+      expect(Option.isNone(none)).toBe(true)
     }),
   )
 })

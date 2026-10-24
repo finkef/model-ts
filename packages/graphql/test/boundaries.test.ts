@@ -570,3 +570,150 @@ it.effect(
       }
     }),
 )
+
+it.effect(
+  "a public error with a fixed message exposes only that message and its code",
+  () =>
+    Effect.gen(function* () {
+      class Missing extends Schema.TaggedError<Missing>()("Missing", {
+        message: Schema.String,
+        key: Schema.String,
+      }) {}
+      class Node extends Schema.TaggedClass<Node>()("Node", {
+        id: Schema.String,
+      }) {}
+      class Other extends Schema.TaggedClass<Other>()("Other", {
+        id: Schema.String,
+      }) {}
+      const abstract = Schema.Union([Node, Other])
+      const output = Schema.String
+      const missing = new Missing({
+        message: "No item at ORG#secret-key",
+        key: "ORG#secret-key",
+      })
+      // Declared in two calls, so the second must keep the first's messages.
+      const GraphQL = createBuilder<
+        Register<typeof Node> &
+          Register<typeof Other> &
+          Register<typeof Missing> &
+          Register<typeof abstract, "Abstract"> &
+          Register<typeof output, "Output">
+      >()
+        .withErrorPolicy({
+          public: [Missing],
+          publicCodes: { Missing: "NOT_FOUND" },
+          publicMessages: { Missing: "Not found" },
+        })
+        .withErrorPolicy({ public: [PublicInput] })
+      const schema = GraphQL.schema({
+        node: GraphQL.object(Node, { id: GraphQL.id() }),
+        other: GraphQL.object(Other, { id: GraphQL.id() }),
+        missingObject: GraphQL.object(Missing, {
+          message: GraphQL.string(),
+          key: GraphQL.string(),
+        }),
+        abstract: GraphQL.union("Abstract", abstract, {
+          members: ["Node", "Other"],
+          resolveType: () => {
+            throw missing
+          },
+        }),
+        output: GraphQL.scalar(
+          "Output",
+          output,
+          new GraphQLScalarType({
+            name: "Output",
+            serialize: () => {
+              throw missing
+            },
+          }),
+        ),
+        failed: GraphQL.queryField("failed", GraphQL.nullable("String"), () =>
+          Effect.fail(missing),
+        ),
+        thrown: GraphQL.queryField("thrown", GraphQL.nullable("String"), () => {
+          throw missing
+        }),
+        authorized: GraphQL.queryField(
+          "authorized",
+          GraphQL.nullable("String"),
+          { authorize: () => Effect.fail(missing), resolve: () => "never" },
+        ),
+        abstractField: GraphQL.queryField(
+          "abstract",
+          GraphQL.nullable("Abstract"),
+          () => new Node({ id: "id" }),
+        ),
+        scalarField: GraphQL.queryField(
+          "scalar",
+          GraphQL.nullable("Output"),
+          () => "value",
+        ),
+        unchanged: GraphQL.queryField(
+          "unchanged",
+          GraphQL.nullable("String"),
+          () => Effect.fail(publicInput),
+        ),
+        member: GraphQL.queryField("member", "Node", {
+          errors: [Missing],
+          resolve: () => Effect.fail(missing),
+        }),
+        setup: GraphQL.subscriptionField("setup", "String", {
+          subscribe: () => {
+            throw missing
+          },
+        }),
+        stream: GraphQL.subscriptionField("stream", "String", {
+          subscribe: () => Stream.fail(missing),
+        }),
+      })
+      const result = yield* execute(schema, {
+        source:
+          "{failed thrown authorized abstract{__typename} scalar unchanged member{__typename ...on Missing{key}}}",
+      })
+      const errors = (result.errors ?? []).map((error) => ({
+        field: error.path?.[0],
+        message: error.message,
+        extensions: error.extensions,
+      }))
+      const fixed = { message: "Not found", extensions: { code: "NOT_FOUND" } }
+      expect(errors).toEqual(
+        expect.arrayContaining(
+          ["failed", "thrown", "authorized", "abstract", "scalar"].map(
+            (field) => ({ field, ...fixed }),
+          ),
+        ),
+      )
+      // Errors without a fixed message, and members of a field's errors
+      // union, are unchanged.
+      expect(errors.find((error) => error.field === "unchanged")).toEqual({
+        field: "unchanged",
+        message: "Choose another value",
+        extensions: { field: "value", code: "PublicInput" },
+      })
+      expect(errors).toHaveLength(6)
+      expect(result.data?.member).toEqual({
+        __typename: "Missing",
+        key: "ORG#secret-key",
+      })
+
+      for (const field of ["setup", "stream"]) {
+        const events = yield* Stream.runCollect(
+          subscribe(schema, { source: `subscription { ${field} }` }),
+        )
+        expect(
+          events.map((event) =>
+            event.errors?.map(({ message, extensions }) => ({
+              message,
+              extensions,
+            })),
+          ),
+        ).toEqual([[fixed]])
+      }
+
+      const { member: _member, ...rest } = result.data ?? {}
+      expect(JSON.stringify({ errors: result.errors, rest })).not.toContain(
+        "secret-key",
+      )
+    }),
+)

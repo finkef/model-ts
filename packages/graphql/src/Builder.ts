@@ -95,6 +95,10 @@ function make<Types, G, C>(
           internal: [...policy.internal, ...(options.internal ?? [])],
           public: [...policy.public, ...(options.public ?? [])],
           publicCodes: { ...policy.publicCodes, ...options.publicCodes },
+          publicMessages: {
+            ...policy.publicMessages,
+            ...options.publicMessages,
+          },
         },
         maxPageSize,
         defaultPageSize,

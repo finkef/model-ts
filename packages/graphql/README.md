@@ -1057,6 +1057,7 @@ Choose the public error code exposed to clients:
 `examples/error-policy.ts`
 
 ```ts
+import { ItemNotFoundError } from "@model-ts/dynamodb"
 import { createBuilder, ErrorReporter } from "@model-ts/graphql"
 import { Cause, Effect, Layer, Schema } from "effect"
 import type { AppContext, Types } from "../api/graphql.ts"
@@ -1065,8 +1066,12 @@ class AccessDenied extends Schema.TaggedError<AccessDenied>()("AccessDenied", {
   message: Schema.String,
 }) {}
 export const GraphQL = createBuilder<Types, AppContext>().withErrorPolicy({
-  public: [AccessDenied],
-  publicCodes: { AccessDenied: "ACCESS_DENIED" },
+  public: [AccessDenied, ItemNotFoundError],
+  publicCodes: {
+    AccessDenied: "ACCESS_DENIED",
+    ItemNotFoundError: "NOT_FOUND",
+  },
+  publicMessages: { ItemNotFoundError: "Not found" },
 })
 export const Reporting = Layer.succeed(ErrorReporter, {
   report: ({ cause, coordinate, phase }) =>
@@ -1086,6 +1091,14 @@ errors in `internal`; unclassified resolver failures and defects are masked as
 arbitrary thrown exception does not make it public. This policy also applies to
 custom scalar callbacks and abstract-type resolution. Ordinary graphql-js
 document diagnostics remain available to clients.
+
+Some errors are safe to report but carry fields that are not, such as the
+storage key of an `ItemNotFoundError`. Give their tag a fixed message in
+`publicMessages`: clients then get only that message and the error's code, here
+`{ message: "Not found", extensions: { code: "NOT_FOUND" } }`, and never the
+error's own message or fields. The keys must be tags of the `public` errors. A
+field that lists the error in its `errors` union still returns it as a union
+member with its declared fields.
 
 Provide `Reporting` alongside the application's service layers, for example with
 `Layer.mergeAll(Sandbox.layerMemory(), Reporting)`. The optional `ErrorReporter`
