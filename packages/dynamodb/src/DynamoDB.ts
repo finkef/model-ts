@@ -249,9 +249,10 @@ export class DynamoDB extends Context.Service<DynamoDB, DynamoDBService>()(
   static readonly loadMany = Table.loadMany
 
   /**
-   * A pipe step that keeps a loaded item only when `predicate` holds, for
-   * rules such as "belongs to this organization". It runs after the read, so
-   * the read still batches and caches.
+   * A pipe step that keeps a loaded item only when `predicate` holds. Any
+   * synchronous check of the item works, such as "belongs to this
+   * organization". It runs after the read, so the read still batches and
+   * caches.
    *
    * - After `load`, an item the predicate rejects fails with
    *   `ItemNotFoundError` for its key, as if the key held no item.

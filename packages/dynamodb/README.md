@@ -166,9 +166,10 @@ const settings = Settings.loadOption(Settings.key(userId)).pipe(
 )
 ```
 
-`where` keeps a loaded item only when a predicate holds, for rules that live
-on the model, such as "belongs to this organization". Put it after the read in
-`pipe`; the predicate is typed with the model.
+`where` keeps a loaded item only when a predicate holds. The predicate can be
+any synchronous check of the item, such as a field comparison or a model method
+like "belongs to this organization". Put it after the read in `pipe`; the
+predicate is typed with the model.
 
 ```ts
 const archiveList = Effect.fn("archiveList")(function* (
