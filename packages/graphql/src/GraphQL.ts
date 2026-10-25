@@ -35,7 +35,16 @@ export {
   type ErrorReport,
   type ErrorPolicyOptions,
 } from "./Errors.ts"
-export { ID, JSONValue, DateTime, id, input, defaulted } from "./SchemaTypes.ts"
+export {
+  ID,
+  JSONValue,
+  DateTime,
+  id,
+  input,
+  defaulted,
+  arg,
+  type ArgOptions,
+} from "./SchemaTypes.ts"
 export { jsonScalar, type JSONScalarOptions } from "./Scalars.ts"
 export {
   executor,

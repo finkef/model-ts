@@ -46,6 +46,59 @@ export function defaulted<
   return schema.annotate({ graphqlDefault: value })
 }
 
+/** Documentation of one argument or input field. */
+export interface ArgOptions {
+  readonly description?: string | undefined
+  /** Only optional arguments and input fields can be deprecated. */
+  readonly deprecationReason?: string | undefined
+}
+
+/**
+ * Describes an argument or input field without changing its type. A named
+ * input type keeps its own description on its `input` definition.
+ *
+ * ```ts
+ * args: {
+ *   input: GraphQL.arg(FavoriteMoveInput, {
+ *     description: "The favorite to move and where to.",
+ *   }),
+ * }
+ * ```
+ *
+ * It sets key annotations, as `schema.annotateKey(options)` does, so it also
+ * works on the fields of an input class and composes with `Schema.optionalKey`
+ * and `GraphQL.default`.
+ */
+export function arg<S extends Schema.Top>(
+  schema: S,
+  options: ArgOptions,
+): S["Rebuild"] {
+  const { description, deprecationReason } = options
+  return schema.annotateKey({
+    ...(description === undefined ? {} : { description }),
+    ...(deprecationReason === undefined ? {} : { deprecationReason }),
+  })
+}
+
+/**
+ * A nullable argument or input field: it may be omitted or `null`, as a
+ * nullable GraphQL argument may. Decoding keeps the two apart, so an update
+ * can leave an omitted field unchanged and clear one that is `null`. It is
+ * `Schema.optionalKey(Schema.NullOr(schema))`, described like `arg`.
+ *
+ * ```ts
+ * args: {
+ *   note: GraphQL.nullable.arg(Schema.String, { description: "Null clears it." }),
+ * }
+ * ```
+ */
+export function nullableArg<S extends Schema.Top>(
+  schema: S,
+  options: ArgOptions = {},
+): Schema.optionalKey<Schema.NullOr<S>> {
+  return arg(Schema.optionalKey(Schema.NullOr(schema)), options)
+}
+
 export const invalid = (message: string): never => {
   throw new Error(message)
 }

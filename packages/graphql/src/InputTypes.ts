@@ -34,7 +34,7 @@ export function structure(ast: SchemaAST.AST): SchemaAST.Objects | undefined {
 /**
  * Metadata of an argument or input field. A named input object's description
  * belongs to its `input` definition, so an argument or field of that type is
- * only described by its own key annotations (`annotateKey`). Scalar, enum and
+ * only described by its own key annotations (`GraphQL.arg`). Scalar, enum and
  * list arguments keep their schema's metadata.
  */
 function describeUse(ast: SchemaAST.AST, type: GraphQLInputType) {
@@ -113,7 +113,7 @@ export class InputTypes {
         const description = typeMetadata(ast).description
         if (owner && description !== existing.description)
           return invalid(
-            `${coordinate}: input ${ref} is described differently here than where it was first used. Keep its description on the schema that defines it, and describe this argument or field with annotateKey({ description })`,
+            `${coordinate}: input ${ref} is described differently here than where it was first used. Keep its description on the schema that defines it, and describe this argument or field with GraphQL.arg(schema, { description })`,
           )
         return wrap(existing)
       }
@@ -212,7 +212,7 @@ export function optionalNullMessage(
     if (value === null) {
       const nullable = Schema.is(Schema.toEncoded(Schema.make(ast)))(null)
       return SchemaAST.isOptional(ast) && !nullable
-        ? `${path}: null is not accepted by Schema.optionalKey(S); omit the field or use Schema.optionalKey(Schema.NullOr(S)) to allow clearing it`
+        ? `${path}: null is not accepted by Schema.optionalKey(S); omit the field or use GraphQL.nullable.arg(S) to allow clearing it`
         : undefined
     }
     if (ast._tag === "Union") {

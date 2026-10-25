@@ -284,7 +284,7 @@ export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
   "ListUpdateInput",
 )({
   name: Schema.optionalKey(Schema.NonEmptyString),
-  description: Schema.optionalKey(Schema.NullOr(Schema.String)),
+  description: GraphQL.nullable.arg(Schema.String),
 }) {}
 
 export const ListUpdateMutation = GraphQL.mutationField("listUpdate", "List", {
@@ -497,6 +497,11 @@ GraphQL omission and explicit null have different meanings:
 | `Schema.NullOr(Schema.String)`                     | Schema decoding requires the key | Accepted        |
 | `Schema.optionalKey(Schema.NullOr(Schema.String))` | Accepted                         | Accepted        |
 
+A nullable GraphQL argument can be omitted or `null`, which is the last row.
+`GraphQL.nullable.arg(Schema.String)` writes it without the wrappers, and takes
+the same `{ description, deprecationReason }` as `GraphQL.arg`. Decoding keeps
+an omitted key apart from `null`.
+
 GraphQL itself cannot express “omittable but not null” or “required but nullable”;
 Schema decoding enforces those distinctions after GraphQL coercion. For updates,
 model-ts drops undefined values. Omit a field to leave it unchanged; send `null`
@@ -507,22 +512,41 @@ model field. Null is a stored value, not a DynamoDB attribute removal.
 null items; `Schema.NullOr(Schema.Array(S))` allows a null list. Schema descriptions
 on input classes and fields become GraphQL descriptions.
 
-A named input type's description belongs to its `input` definition. An argument
-or input field of that type has no description unless it gets its own with
-`annotateKey`, which describes the key without changing the type:
+Describe an argument or input field with `GraphQL.arg(schema, { description,
+deprecationReason })`. It documents the argument without changing its type, and
+works the same on the fields of an input class:
 
 ```ts
-args: {
-  input: FavoriteMoveInput.annotateKey({
-    description: "The favorite to move and where to.",
-  }),
-}
+class FavoriteMoveInput extends Schema.Class<FavoriteMoveInput>(
+  "FavoriteMoveInput",
+)(
+  {
+    favoriteId: Schema.String,
+    note: GraphQL.arg(Schema.optionalKey(Schema.String), {
+      description: "Kept in the history.",
+    }),
+  },
+  { description: "A new position for one of the user's favorites." },
+) {}
+
+export const FavoriteMove = GraphQL.mutationField("favoriteMove", "String", {
+  args: {
+    input: GraphQL.arg(FavoriteMoveInput, {
+      description: "The favorite to move and where to.",
+    }),
+  },
+  resolve: (_, { input }) => input.favoriteId,
+})
 ```
 
-`FavoriteMoveInput.annotate({ description })` would describe the type instead.
-An input type described differently at two uses fails to assemble, because
+A named input type's description belongs to its `input` definition, so an
+argument or input field of that type is only described by `GraphQL.arg` (which
+sets Effect key annotations, like `annotateKey`).
+`FavoriteMoveInput.annotate({ description })` would describe the type instead,
+and an input type described differently at two uses fails to assemble, because
 GraphQL gives it one description. Scalar, enum and list arguments keep their
-schema's description.
+schema's description unless `GraphQL.arg` gives them their own. Only optional
+arguments and input fields can be deprecated.
 
 Use `GraphQL.default(schema, decodedValue)` for argument defaults:
 
@@ -540,7 +564,7 @@ export const GreetingQuery = GraphQL.queryField("greeting", "String", {
 
 Defaults are validated and encoded with their schema. An explicit null sent to an
 optional-only input reports its path and suggests omitting the key or using
-`Schema.optionalKey(Schema.NullOr(S))`.
+`GraphQL.nullable.arg(S)`.
 
 ## Enums
 
@@ -1295,27 +1319,27 @@ The package root exports named functions and types, plus a `GraphQL` namespace.
 The quick start calls its application-specific builder `GraphQL`; package-level
 functions such as `executor` are separate exports, not builder methods.
 
-| API                                                           | Purpose                                                           |
-| ------------------------------------------------------------- | ----------------------------------------------------------------- |
-| `createBuilder<Types, Context>(options?)`                     | Create definitions and field helpers for one registry and context |
-| `Register<typeof Model, Name?, Kind?>`                        | Extend the registry with a model                                  |
-| Builder `.object`, `.interface`, `.union`, `.enum`, `.scalar` | Define named output types                                         |
-| Builder `.queryField`, `.mutationField`, `.subscriptionField` | Define one named operation field                                  |
-| Builder `.id()`, `.string()`, `.nullable`, `.list`, `.field`  | Define output fields                                              |
-| Builder `.connection`                                         | Define connection fields                                          |
-| Builder `.field`, `.nullable`, `.list` with `{ subscribe }`   | Define subscription fields returning Effect Streams               |
-| Builder `.id(Schema)`, `.input`, `.default`                   | Annotate argument/input schemas                                   |
-| Builder `.withErrorPolicy`                                    | Classify global public and internal typed failures                |
-| Builder `.schema(definitions)`                                | Check completeness and build a `BuiltSchema<R, C>`                |
-| `execute`, `subscribe` (also on the builder)                  | Run source-text requests as Effects or Streams                    |
-| `executor(built)`                                             | Execute parsed documents with JSON-safe formatted results         |
-| `ExecutionResult`, `FormattedExecutionResult`                 | Direct graphql-js results and formatted executor results          |
-| `ErrorReporter`                                               | Optional service for masked-failure telemetry                     |
-| `ID`, `DateTime`, `JSONValue`                                 | Built-in input schemas                                            |
-| `jsonScalar({ specifiedByURL?, description? })`               | The built-in JSON scalar, with its own metadata                   |
-| `id`, `input`, `defaulted`                                    | Package-level schema annotation helpers                           |
-| `Connection`, `Edge`, `PageInfo`, `ConnectionArgs`            | Structural pagination types                                       |
-| `@model-ts/graphql/Testing`                                   | Test clients, the graphql tag, and normalized snapshots           |
+| API                                                                  | Purpose                                                           |
+| -------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| `createBuilder<Types, Context>(options?)`                            | Create definitions and field helpers for one registry and context |
+| `Register<typeof Model, Name?, Kind?>`                               | Extend the registry with a model                                  |
+| Builder `.object`, `.interface`, `.union`, `.enum`, `.scalar`        | Define named output types                                         |
+| Builder `.queryField`, `.mutationField`, `.subscriptionField`        | Define one named operation field                                  |
+| Builder `.id()`, `.string()`, `.nullable`, `.list`, `.field`         | Define output fields                                              |
+| Builder `.connection`                                                | Define connection fields                                          |
+| Builder `.field`, `.nullable`, `.list` with `{ subscribe }`          | Define subscription fields returning Effect Streams               |
+| Builder `.id(Schema)`, `.input`, `.default`, `.arg`, `.nullable.arg` | Annotate argument/input schemas                                   |
+| Builder `.withErrorPolicy`                                           | Classify global public and internal typed failures                |
+| Builder `.schema(definitions)`                                       | Check completeness and build a `BuiltSchema<R, C>`                |
+| `execute`, `subscribe` (also on the builder)                         | Run source-text requests as Effects or Streams                    |
+| `executor(built)`                                                    | Execute parsed documents with JSON-safe formatted results         |
+| `ExecutionResult`, `FormattedExecutionResult`                        | Direct graphql-js results and formatted executor results          |
+| `ErrorReporter`                                                      | Optional service for masked-failure telemetry                     |
+| `ID`, `DateTime`, `JSONValue`                                        | Built-in input schemas                                            |
+| `jsonScalar({ specifiedByURL?, description? })`                      | The built-in JSON scalar, with its own metadata                   |
+| `id`, `input`, `defaulted`, `arg`                                    | Package-level schema annotation helpers                           |
+| `Connection`, `Edge`, `PageInfo`, `ConnectionArgs`                   | Structural pagination types                                       |
+| `@model-ts/graphql/Testing`                                          | Test clients, the graphql tag, and normalized snapshots           |
 
 ## Development
 

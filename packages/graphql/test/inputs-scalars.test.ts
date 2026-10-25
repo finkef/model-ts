@@ -264,9 +264,7 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
   expect(invalid.errors?.[0]?.message).toContain(
     "input.label: null is not accepted by Schema.optionalKey(S)",
   )
-  expect(invalid.errors?.[0]?.message).toContain(
-    "Schema.optionalKey(Schema.NullOr(S))",
-  )
+  expect(invalid.errors?.[0]?.message).toContain("GraphQL.nullable.arg(S)")
   expect(invalid.errors?.[0]?.extensions.code).toBe("BAD_USER_INPUT")
   expect(
     (await execute({ query }, "{patch(input:{tags:[null]})}")).errors,
@@ -471,4 +469,108 @@ test("an input type described differently at two uses fails to assemble", () => 
       "input Filter is described differently here than where it was first used",
     )
   }
+})
+
+test("GraphQL.arg describes arguments and input fields and keeps decoding", async () => {
+  class Point extends Schema.Class<Point>("Point")(
+    {
+      x: Schema.Number,
+      label: G.arg(Schema.optionalKey(Schema.String), {
+        description: "Shown next to the point.",
+        deprecationReason: "Use caption.",
+      }),
+    },
+    { description: "A point on the board." },
+  ) {}
+  const built = G.schema({
+    query: G.queryField("ping", "String", () => "pong"),
+    place: G.mutationField("place", "String", {
+      args: {
+        point: G.arg(Point, { description: "Where to place it." }),
+        note: Schema.optionalKey(
+          G.arg(Schema.String.annotate({ description: "A string." }), {
+            description: "Kept in the history.",
+          }),
+        ),
+        times: G.arg(G.default(Schema.Number, 1), {
+          description: "How often to place it.",
+        }),
+        legacy: G.arg(Schema.optionalKey(Schema.String), {
+          deprecationReason: "Use note.",
+        }),
+      },
+      resolve: (_, { point, note, times }) =>
+        `${point instanceof Point} ${point.x} ${note ?? "-"} ${times}`,
+    }),
+  })
+  const printed = printSchema(built.schema)
+
+  expect(printed).toContain(`  place(
+    """Where to place it."""
+    point: Point!
+
+    """Kept in the history."""
+    note: String
+
+    """How often to place it."""
+    times: Float! = 1
+    legacy: String @deprecated(reason: "Use note.")
+  ): String!`)
+  expect(printed).toContain(`"""A point on the board."""
+input Point {
+  x: Float!
+
+  """Shown next to the point."""
+  label: String @deprecated(reason: "Use caption.")
+}`)
+  expect(
+    await Effect.runPromise(
+      G.execute(built, {
+        source: 'mutation { place(point: { x: 2 }, note: "n") }',
+      }),
+    ),
+  ).toEqual({ data: { place: "true 2 n 1" } })
+})
+
+test("GraphQL.nullable.arg is omittable or null and keeps the two apart", async () => {
+  class Rename extends Schema.Class<Rename>("Rename")({
+    title: G.nullable.arg(Schema.String, {
+      description: "Null clears the title.",
+    }),
+  }) {}
+  const seen: Array<Record<string, unknown>> = []
+  const built = G.schema({
+    query: G.queryField("ping", "String", () => "pong"),
+    rename: G.mutationField("rename", "String", {
+      args: { input: Rename, note: G.nullable.arg(Schema.String) },
+      resolve: (_, args) => {
+        seen.push({
+          ...args.input,
+          ...("note" in args ? { note: args.note } : {}),
+        })
+        return "ok"
+      },
+    }),
+  })
+  const printed = printSchema(built.schema)
+  expect(printed).toContain("rename(input: Rename!, note: String): String!")
+  expect(printed).toContain(`input Rename {
+  """Null clears the title."""
+  title: String
+}`)
+
+  for (const source of [
+    "mutation { rename(input: {}) }",
+    "mutation { rename(input: { title: null }, note: null) }",
+    'mutation { rename(input: { title: "New" }, note: "n") }',
+  ])
+    expect(await Effect.runPromise(G.execute(built, { source }))).toEqual({
+      data: { rename: "ok" },
+    })
+  expect(seen).toEqual([
+    {},
+    { title: null, note: null },
+    { title: "New", note: "n" },
+  ])
+  expect("title" in seen[0]!).toBe(false)
 })
