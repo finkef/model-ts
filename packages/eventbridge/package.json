@@ -1,6 +1,6 @@
 {
   "name": "@model-ts/eventbridge",
-  "version": "7.5.0",
+  "version": "7.6.0",
   "description": "Publish @model-ts/core models as EventBridge events, built on Effect.",
   "keywords": [
     "effect",

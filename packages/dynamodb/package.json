@@ -1,6 +1,6 @@
 {
   "name": "@model-ts/dynamodb",
-  "version": "7.5.0",
+  "version": "7.6.0",
   "description": "Single-table DynamoDB for @model-ts/core models, built on Effect: typed errors, batching, transactions, tracing and an in-memory sandbox.",
   "keywords": [
     "dynamodb",

@@ -1,5 +1,7 @@
 # @model-ts/eventbridge
 
+## 7.6.0
+
 ## 7.5.0
 
 ## 7.4.0
