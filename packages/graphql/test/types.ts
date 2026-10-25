@@ -166,3 +166,12 @@ export type ArgKeepsOptionality = Assert<
     { readonly list?: ListId }
   >
 >
+
+// nullable.arg is an optional, nullable key.
+const nullableNote = GraphQL.nullable.arg(Schema.String)
+export type NullableArgType = Assert<
+  Equal<
+    Schema.Struct<{ note: typeof nullableNote }>["Type"],
+    { readonly note?: string | null }
+  >
+>

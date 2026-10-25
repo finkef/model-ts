@@ -14,7 +14,7 @@ import {
   config,
   resolverField,
 } from "./Resolver.ts"
-import { id, invalid } from "./SchemaTypes.ts"
+import { id, invalid, nullableArg } from "./SchemaTypes.ts"
 import { eventField } from "./Subscription.ts"
 
 export function makeFields<Types, G, C>(
@@ -102,7 +102,9 @@ export function makeFields<Types, G, C>(
     field,
     connection,
     list: wrapped("list"),
-    nullable: Object.assign(wrapped("nullable"), scalarHelpers(true)),
+    nullable: Object.assign(wrapped("nullable"), scalarHelpers(true), {
+      arg: nullableArg,
+    }),
   } as unknown as Fields<Types, G, C>
   return {
     fields,

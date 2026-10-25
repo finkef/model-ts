@@ -80,6 +80,25 @@ export function arg<S extends Schema.Top>(
   })
 }
 
+/**
+ * A nullable argument or input field: it may be omitted or `null`, as a
+ * nullable GraphQL argument may. Decoding keeps the two apart, so an update
+ * can leave an omitted field unchanged and clear one that is `null`. It is
+ * `Schema.optionalKey(Schema.NullOr(schema))`, described like `arg`.
+ *
+ * ```ts
+ * args: {
+ *   note: GraphQL.nullable.arg(Schema.String, { description: "Null clears it." }),
+ * }
+ * ```
+ */
+export function nullableArg<S extends Schema.Top>(
+  schema: S,
+  options: ArgOptions = {},
+): Schema.optionalKey<Schema.NullOr<S>> {
+  return arg(Schema.optionalKey(Schema.NullOr(schema)), options)
+}
+
 export const invalid = (message: string): never => {
   throw new Error(message)
 }

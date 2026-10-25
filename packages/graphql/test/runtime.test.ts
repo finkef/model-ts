@@ -93,7 +93,7 @@ describe("example", () => {
     expect(result.data?.listUpdate).toMatchObject({
       __typename: "UserInputError",
       field: "name",
-      message: expect.stringContaining("Schema.optionalKey(Schema.NullOr(S))"),
+      message: expect.stringContaining("GraphQL.nullable.arg(S)"),
     })
   })
   test("unknown ID", async () => {

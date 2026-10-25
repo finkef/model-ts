@@ -512,7 +512,7 @@ it.effect(
       )
       expect(invalid[0]?.errors?.[0]?.extensions?.code).toBe("BAD_USER_INPUT")
       expect(invalid[0]?.errors?.[0]?.message).toContain(
-        "Schema.optionalKey(Schema.NullOr(S))",
+        "GraphQL.nullable.arg(S)",
       )
       expect(setups).toBe(1)
     }),

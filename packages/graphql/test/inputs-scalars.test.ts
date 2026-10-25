@@ -264,9 +264,7 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
   expect(invalid.errors?.[0]?.message).toContain(
     "input.label: null is not accepted by Schema.optionalKey(S)",
   )
-  expect(invalid.errors?.[0]?.message).toContain(
-    "Schema.optionalKey(Schema.NullOr(S))",
-  )
+  expect(invalid.errors?.[0]?.message).toContain("GraphQL.nullable.arg(S)")
   expect(invalid.errors?.[0]?.extensions.code).toBe("BAD_USER_INPUT")
   expect(
     (await execute({ query }, "{patch(input:{tags:[null]})}")).errors,
@@ -532,4 +530,47 @@ input Point {
       }),
     ),
   ).toEqual({ data: { place: "true 2 n 1" } })
+})
+
+test("GraphQL.nullable.arg is omittable or null and keeps the two apart", async () => {
+  class Rename extends Schema.Class<Rename>("Rename")({
+    title: G.nullable.arg(Schema.String, {
+      description: "Null clears the title.",
+    }),
+  }) {}
+  const seen: Array<Record<string, unknown>> = []
+  const built = G.schema({
+    query: G.queryField("ping", "String", () => "pong"),
+    rename: G.mutationField("rename", "String", {
+      args: { input: Rename, note: G.nullable.arg(Schema.String) },
+      resolve: (_, args) => {
+        seen.push({
+          ...args.input,
+          ...("note" in args ? { note: args.note } : {}),
+        })
+        return "ok"
+      },
+    }),
+  })
+  const printed = printSchema(built.schema)
+  expect(printed).toContain("rename(input: Rename!, note: String): String!")
+  expect(printed).toContain(`input Rename {
+  """Null clears the title."""
+  title: String
+}`)
+
+  for (const source of [
+    "mutation { rename(input: {}) }",
+    "mutation { rename(input: { title: null }, note: null) }",
+    'mutation { rename(input: { title: "New" }, note: "n") }',
+  ])
+    expect(await Effect.runPromise(G.execute(built, { source }))).toEqual({
+      data: { rename: "ok" },
+    })
+  expect(seen).toEqual([
+    {},
+    { title: null, note: null },
+    { title: "New", note: "n" },
+  ])
+  expect("title" in seen[0]!).toBe(false)
 })

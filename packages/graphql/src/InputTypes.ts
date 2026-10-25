@@ -212,7 +212,7 @@ export function optionalNullMessage(
     if (value === null) {
       const nullable = Schema.is(Schema.toEncoded(Schema.make(ast)))(null)
       return SchemaAST.isOptional(ast) && !nullable
-        ? `${path}: null is not accepted by Schema.optionalKey(S); omit the field or use Schema.optionalKey(Schema.NullOr(S)) to allow clearing it`
+        ? `${path}: null is not accepted by Schema.optionalKey(S); omit the field or use GraphQL.nullable.arg(S) to allow clearing it`
         : undefined
     }
     if (ast._tag === "Union") {
