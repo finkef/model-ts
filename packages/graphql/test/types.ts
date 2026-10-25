@@ -150,28 +150,51 @@ export type JSONKind = Assert<
   >
 >
 
-// arg keeps the schema's type, optionality included.
-const describedArg = GraphQL.arg(Schema.optionalKey(ListId), {
-  description: "The list.",
-})
-export type ArgKeepsType = Assert<
+// annotate describes the argument and keeps the schema's type.
+const describedList = GraphQL.annotate(ListId, { description: "The list." })
+export type AnnotateKeepsType = Assert<
   Equal<
-    [typeof describedArg.Type, typeof describedArg.Encoded],
+    [typeof describedList.Type, typeof describedList.Encoded],
     [ListId, typeof ListId.Encoded]
   >
 >
-export type ArgKeepsOptionality = Assert<
-  Equal<
-    Schema.Struct<{ list: typeof describedArg }>["Type"],
-    { readonly list?: ListId }
-  >
->
+GraphQL.annotate(ListId, {
+  description: "The list.",
+  // @ts-expect-error GraphQL cannot deprecate a required argument or input field
+  deprecationReason: "Use workspace.",
+})
 
-// nullable.arg is an optional, nullable key.
-const nullableNote = GraphQL.nullable.arg(Schema.String)
-export type NullableArgType = Assert<
+// optional may be omitted, optional.nullable may also be null, and a default
+// makes the decoded key required while it stays optional on the wire.
+const inputs = Schema.Struct({
+  list: GraphQL.optional(ListId, { description: "The list." }),
+  note: GraphQL.optional.nullable(Schema.String),
+  limit: GraphQL.optional(Schema.Int, { default: 20 }),
+  color: GraphQL.optional.nullable(Schema.String, { default: null }),
+})
+export type OptionalTypes = Assert<
   Equal<
-    Schema.Struct<{ note: typeof nullableNote }>["Type"],
-    { readonly note?: string | null }
+    typeof inputs.Type,
+    {
+      readonly list?: ListId
+      readonly note?: string | null
+      readonly limit: number
+      readonly color: string | null
+    }
   >
 >
+export type OptionalEncoded = Assert<
+  Equal<
+    typeof inputs.Encoded,
+    {
+      readonly list?: string
+      readonly note?: string | null
+      readonly limit?: number
+      readonly color?: string | null
+    }
+  >
+>
+// @ts-expect-error a default has the schema's decoded type
+GraphQL.optional(Schema.Int, { default: "20" })
+// @ts-expect-error null is only a default of optional.nullable
+GraphQL.optional(Schema.Int, { default: null })

@@ -41,9 +41,11 @@ export {
   DateTime,
   id,
   input,
-  defaulted,
-  arg,
-  type ArgOptions,
+  annotate,
+  optional,
+  type AnnotateOptions,
+  type OptionalOptions,
+  type DefaultOptions,
 } from "./SchemaTypes.ts"
 export { jsonScalar, type JSONScalarOptions } from "./Scalars.ts"
 export {

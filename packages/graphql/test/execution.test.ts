@@ -473,16 +473,27 @@ it.effect(
 )
 
 it.effect(
-  "subscription setup and delivery preserve native Date decoding and optional-null diagnostics",
+  "subscription setup and delivery preserve native Date decoding, optional arguments and null diagnostics",
   () =>
     Effect.gen(function* () {
       let setups = 0
       const subscription = G.subscriptionField("dated", "String", {
-        args: { at: Schema.Date, label: Schema.optionalKey(Schema.String) },
-        subscribe: (_, { at }) => {
+        args: {
+          at: Schema.Date,
+          label: G.optional(Schema.String),
+          count: G.optional(Schema.Int, { default: 2 }),
+          note: G.optional.nullable(Schema.String),
+        },
+        subscribe: (_, { at, count, ...rest }) => {
           setups++
           expect(at).toBeInstanceOf(Date)
-          return Stream.succeed(at.toISOString())
+          return Stream.succeed(
+            [
+              at.toISOString(),
+              count,
+              "note" in rest ? String(rest.note) : "omitted",
+            ].join(" "),
+          )
         },
         authorize: (_, { at }) => {
           expect(at).toBeInstanceOf(Date)
@@ -490,31 +501,31 @@ it.effect(
         },
       })
       const schema = G.schema({ node, query, subscription })
-      const valid = yield* Stream.runCollect(
-        Testing.subscribe(
-          schema,
-          {
-            source: 'subscription {dated(at:"2026-10-23T00:00:00Z")}',
-          },
-          context,
-        ),
-      )
-      expect(valid).toEqual([{ data: { dated: "2026-10-23T00:00:00.000Z" } }])
-      const invalid = yield* Stream.runCollect(
-        Testing.subscribe(
-          schema,
-          {
-            source:
-              'subscription {dated(at:"2026-10-23T00:00:00Z",label:null)}',
-          },
-          context,
-        ),
-      )
-      expect(invalid[0]?.errors?.[0]?.extensions?.code).toBe("BAD_USER_INPUT")
-      expect(invalid[0]?.errors?.[0]?.message).toContain(
-        "GraphQL.nullable.arg(S)",
-      )
-      expect(setups).toBe(1)
+      const run = (args: string) =>
+        Stream.runCollect(
+          Testing.subscribe(
+            schema,
+            {
+              source: `subscription {dated(at:"2026-10-23T00:00:00Z"${args})}`,
+            },
+            context,
+          ),
+        )
+      expect(yield* run("")).toEqual([
+        { data: { dated: "2026-10-23T00:00:00.000Z 2 omitted" } },
+      ])
+      expect(yield* run(",note:null,count:3")).toEqual([
+        { data: { dated: "2026-10-23T00:00:00.000Z 3 null" } },
+      ])
+      for (const [args, message] of [
+        [",label:null", "label cannot be null."],
+        [",count:null", "count cannot be null."],
+      ]) {
+        const invalid = yield* run(args)
+        expect(invalid[0]?.errors?.[0]?.extensions?.code).toBe("BAD_USER_INPUT")
+        expect(invalid[0]?.errors?.[0]?.message).toBe(message)
+      }
+      expect(setups).toBe(2)
     }),
 )
 

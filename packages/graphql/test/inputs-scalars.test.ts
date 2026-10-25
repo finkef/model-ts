@@ -236,7 +236,7 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
   const query = G.queryField("patch", "JSON", {
     args: {
       input: Patch,
-      count: G.default(Schema.Int, 3),
+      count: G.optional(Schema.Int, { default: 3 }),
       labels: Schema.optionalKey(Schema.Array(Schema.String)),
     },
     resolve: (_, { input, count, labels }) => {
@@ -261,10 +261,7 @@ test("input descriptions, omission, explicit clearing, nested lists and defaults
     },
   })
   const invalid = await execute({ query }, "{patch(input:{label:null})}")
-  expect(invalid.errors?.[0]?.message).toContain(
-    "input.label: null is not accepted by Schema.optionalKey(S)",
-  )
-  expect(invalid.errors?.[0]?.message).toContain("GraphQL.nullable.arg(S)")
+  expect(invalid.errors?.[0]?.message).toBe("label cannot be null.")
   expect(invalid.errors?.[0]?.extensions.code).toBe("BAD_USER_INPUT")
   expect(
     (await execute({ query }, "{patch(input:{tags:[null]})}")).errors,
@@ -471,53 +468,67 @@ test("an input type described differently at two uses fails to assemble", () => 
   }
 })
 
-test("GraphQL.arg describes arguments and input fields and keeps decoding", async () => {
+test("GraphQL.annotate describes arguments and input fields without changing their type", async () => {
   class Point extends Schema.Class<Point>("Point")(
     {
-      x: Schema.Number,
-      label: G.arg(Schema.optionalKey(Schema.String), {
+      x: G.annotate(Schema.Number, { description: "Distance from the left." }),
+      label: G.optional(Schema.String, {
         description: "Shown next to the point.",
         deprecationReason: "Use caption.",
       }),
     },
     { description: "A point on the board." },
   ) {}
+  class Placement extends Schema.Class<Placement>("Placement")(
+    { point: G.annotate(Point, { description: "Where to place it." }) },
+    { description: "Something to place." },
+  ) {}
   const built = G.schema({
     query: G.queryField("ping", "String", () => "pong"),
     place: G.mutationField("place", "String", {
       args: {
-        point: G.arg(Point, { description: "Where to place it." }),
-        note: Schema.optionalKey(
-          G.arg(Schema.String.annotate({ description: "A string." }), {
-            description: "Kept in the history.",
-          }),
-        ),
-        times: G.arg(G.default(Schema.Number, 1), {
+        placement: G.annotate(Placement, { description: "What to place." }),
+        origin: Point,
+        note: G.annotate(Schema.String.annotate({ description: "A string." }), {
+          description: "Kept in the history.",
+        }),
+        times: G.optional(Schema.Number, {
+          default: 1,
           description: "How often to place it.",
         }),
-        legacy: G.arg(Schema.optionalKey(Schema.String), {
-          deprecationReason: "Use note.",
-        }),
+        legacy: G.optional(Schema.String, { deprecationReason: "Use note." }),
       },
-      resolve: (_, { point, note, times }) =>
-        `${point instanceof Point} ${point.x} ${note ?? "-"} ${times}`,
+      resolve: (_, { placement, origin, note, times }) =>
+        [
+          placement instanceof Placement && placement.point instanceof Point,
+          placement.point.x - origin.x,
+          note,
+          times,
+        ].join(" "),
     }),
   })
   const printed = printSchema(built.schema)
 
   expect(printed).toContain(`  place(
-    """Where to place it."""
-    point: Point!
+    """What to place."""
+    placement: Placement!
+    origin: Point!
 
     """Kept in the history."""
-    note: String
+    note: String!
 
     """How often to place it."""
-    times: Float! = 1
+    times: Float = 1
     legacy: String @deprecated(reason: "Use note.")
   ): String!`)
+  expect(printed).toContain(`"""Something to place."""
+input Placement {
+  """Where to place it."""
+  point: Point!
+}`)
   expect(printed).toContain(`"""A point on the board."""
 input Point {
+  """Distance from the left."""
   x: Float!
 
   """Shown next to the point."""
@@ -526,51 +537,116 @@ input Point {
   expect(
     await Effect.runPromise(
       G.execute(built, {
-        source: 'mutation { place(point: { x: 2 }, note: "n") }',
+        source:
+          'mutation { place(placement: { point: { x: 3 } }, origin: { x: 1 }, note: "n") }',
       }),
     ),
   ).toEqual({ data: { place: "true 2 n 1" } })
 })
 
-test("GraphQL.nullable.arg is omittable or null and keeps the two apart", async () => {
+test("GraphQL.optional rejects null and GraphQL.optional.nullable keeps it apart from omission", async () => {
   class Rename extends Schema.Class<Rename>("Rename")({
-    title: G.nullable.arg(Schema.String, {
+    title: G.optional.nullable(Schema.String, {
       description: "Null clears the title.",
     }),
+    subtitle: G.optional(Schema.String),
+    tags: G.optional.nullable(Schema.Array(Schema.String), {
+      default: ["new"],
+    }),
+    rank: G.optional(Schema.Int, { default: 0 }),
   }) {}
   const seen: Array<Record<string, unknown>> = []
   const built = G.schema({
     query: G.queryField("ping", "String", () => "pong"),
     rename: G.mutationField("rename", "String", {
-      args: { input: Rename, note: G.nullable.arg(Schema.String) },
-      resolve: (_, args) => {
-        seen.push({
-          ...args.input,
-          ...("note" in args ? { note: args.note } : {}),
-        })
+      args: {
+        input: Rename,
+        note: G.optional.nullable(Schema.String),
+        count: G.optional(Schema.Int, { default: 1 }),
+        color: G.optional.nullable(Schema.String, { default: "blue" }),
+      },
+      resolve: (_, { input, ...args }) => {
+        expect(input).toBeInstanceOf(Rename)
+        seen.push({ ...args, input: { ...input } })
         return "ok"
       },
     }),
   })
   const printed = printSchema(built.schema)
-  expect(printed).toContain("rename(input: Rename!, note: String): String!")
+  expect(printed).toContain(
+    'rename(input: Rename!, note: String, count: Int = 1, color: String = "blue"): String!',
+  )
   expect(printed).toContain(`input Rename {
   """Null clears the title."""
   title: String
+  subtitle: String
+  tags: [String!] = ["new"]
+  rank: Int = 0
 }`)
 
-  for (const source of [
-    "mutation { rename(input: {}) }",
-    "mutation { rename(input: { title: null }, note: null) }",
-    'mutation { rename(input: { title: "New" }, note: "n") }',
-  ])
-    expect(await Effect.runPromise(G.execute(built, { source }))).toEqual({
+  const run = (source: string, variableValues?: Record<string, unknown>) =>
+    Effect.runPromise(G.execute(built, { source, variableValues }))
+  for (const [source, variableValues] of [
+    ["mutation { rename(input: {}) }"],
+    [
+      "mutation { rename(input: { title: null, tags: null }, note: null, color: null) }",
+    ],
+    [
+      "mutation($note: String, $count: Int) { rename(input: { rank: 2 }, note: $note, count: $count) }",
+      {},
+    ],
+  ] as const)
+    expect(await run(source, variableValues)).toEqual({
       data: { rename: "ok" },
     })
   expect(seen).toEqual([
-    {},
-    { title: null, note: null },
-    { title: "New", note: "n" },
+    { count: 1, color: "blue", input: { tags: ["new"], rank: 0 } },
+    {
+      note: null,
+      count: 1,
+      color: null,
+      input: { title: null, tags: null, rank: 0 },
+    },
+    { count: 1, color: "blue", input: { tags: ["new"], rank: 2 } },
   ])
-  expect("title" in seen[0]!).toBe(false)
+
+  for (const [source, message] of [
+    [
+      "mutation { rename(input: { subtitle: null }) }",
+      "subtitle cannot be null.",
+    ],
+    ["mutation { rename(input: { rank: null }) }", "rank cannot be null."],
+    ["mutation { rename(input: {}, count: null) }", "count cannot be null."],
+  ]) {
+    const result = await run(source)
+    expect(
+      result.errors?.map((error) => [error.message, error.extensions.code]),
+    ).toEqual([[message, "BAD_USER_INPUT"]])
+  }
+  expect(seen).toHaveLength(3)
+})
+
+test("GraphQL.optional defaults are validated and encoded with their schema", async () => {
+  expect(() => G.optional(Schema.Int, { default: 1.5 })).toThrow()
+  expect(() =>
+    G.optional.nullable(Schema.NonEmptyString, { default: "" }),
+  ).toThrow()
+  const query = G.queryField("page", "String", {
+    args: { size: G.optional(Schema.NumberFromString, { default: 20 }) },
+    resolve: (_, { size }) => `${typeof size} ${size}`,
+  })
+  const built = G.schema({ query })
+  expect(printSchema(built.schema)).toContain(
+    'page(size: String = "20"): String!',
+  )
+  expect(
+    await Effect.runPromise(G.execute(built, { source: "{ page }" })),
+  ).toEqual({ data: { page: "number 20" } })
+  expect(
+    Schema.decodeUnknownSync(
+      Schema.Struct({
+        size: G.optional(Schema.NumberFromString, { default: 20 }),
+      }),
+    )({}),
+  ).toEqual({ size: 20 })
 })
