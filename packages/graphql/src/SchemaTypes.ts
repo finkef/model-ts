@@ -55,23 +55,46 @@ export const annotations = (ast: SchemaAST.AST) => ({
   ...ast.context?.annotations,
 })
 
-export function descriptionOf(ast: SchemaAST.AST): string | undefined {
-  const own = annotations(ast).description
+/** The annotations of the type itself, without those of the key it is used under. */
+const typeAnnotations = (ast: SchemaAST.AST): Schema.Annotations.Annotations =>
+  Schema.resolveAnnotations(Schema.make(ast)) ?? {}
+
+export function descriptionOf(
+  ast: SchemaAST.AST,
+  annotationsOf: (
+    ast: SchemaAST.AST,
+  ) => Schema.Annotations.Annotations = annotations,
+): string | undefined {
+  const own = annotationsOf(ast).description
   return typeof own === "string"
     ? own
     : ast._tag === "Union"
-      ? ast.types.map(descriptionOf).find((v) => v !== undefined)
+      ? ast.types
+          .map((type) => descriptionOf(type, annotationsOf))
+          .find((v) => v !== undefined)
       : undefined
 }
 
-export function metadata(ast: SchemaAST.AST) {
-  const description = descriptionOf(ast)
-  const deprecationReason = annotations(ast).deprecationReason
+export function metadata(
+  ast: SchemaAST.AST,
+  annotationsOf: (
+    ast: SchemaAST.AST,
+  ) => Schema.Annotations.Annotations = annotations,
+) {
+  const description = descriptionOf(ast, annotationsOf)
+  const deprecationReason = annotationsOf(ast).deprecationReason
   return {
     ...(description === undefined ? {} : { description }),
     ...(deprecationReason === undefined ? {} : { deprecationReason }),
   }
 }
+
+/**
+ * Metadata of a named type. Key annotations (`annotateKey`) describe the
+ * argument or field that uses the type, never the type.
+ */
+export const typeMetadata = (ast: SchemaAST.AST) =>
+  metadata(ast, typeAnnotations)
 
 export function representation(node: {
   readonly annotations?: Schema.Annotations.Annotations | undefined
