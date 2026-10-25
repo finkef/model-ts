@@ -149,3 +149,20 @@ export type JSONKind = Assert<
     { readonly JSON: Registration<"scalar", unknown> }
   >
 >
+
+// arg keeps the schema's type, optionality included.
+const describedArg = GraphQL.arg(Schema.optionalKey(ListId), {
+  description: "The list.",
+})
+export type ArgKeepsType = Assert<
+  Equal<
+    [typeof describedArg.Type, typeof describedArg.Encoded],
+    [ListId, typeof ListId.Encoded]
+  >
+>
+export type ArgKeepsOptionality = Assert<
+  Equal<
+    Schema.Struct<{ list: typeof describedArg }>["Type"],
+    { readonly list?: ListId }
+  >
+>

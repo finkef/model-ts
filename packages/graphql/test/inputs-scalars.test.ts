@@ -472,3 +472,64 @@ test("an input type described differently at two uses fails to assemble", () => 
     )
   }
 })
+
+test("GraphQL.arg describes arguments and input fields and keeps decoding", async () => {
+  class Point extends Schema.Class<Point>("Point")(
+    {
+      x: Schema.Number,
+      label: G.arg(Schema.optionalKey(Schema.String), {
+        description: "Shown next to the point.",
+        deprecationReason: "Use caption.",
+      }),
+    },
+    { description: "A point on the board." },
+  ) {}
+  const built = G.schema({
+    query: G.queryField("ping", "String", () => "pong"),
+    place: G.mutationField("place", "String", {
+      args: {
+        point: G.arg(Point, { description: "Where to place it." }),
+        note: Schema.optionalKey(
+          G.arg(Schema.String.annotate({ description: "A string." }), {
+            description: "Kept in the history.",
+          }),
+        ),
+        times: G.arg(G.default(Schema.Number, 1), {
+          description: "How often to place it.",
+        }),
+        legacy: G.arg(Schema.optionalKey(Schema.String), {
+          deprecationReason: "Use note.",
+        }),
+      },
+      resolve: (_, { point, note, times }) =>
+        `${point instanceof Point} ${point.x} ${note ?? "-"} ${times}`,
+    }),
+  })
+  const printed = printSchema(built.schema)
+
+  expect(printed).toContain(`  place(
+    """Where to place it."""
+    point: Point!
+
+    """Kept in the history."""
+    note: String
+
+    """How often to place it."""
+    times: Float! = 1
+    legacy: String @deprecated(reason: "Use note.")
+  ): String!`)
+  expect(printed).toContain(`"""A point on the board."""
+input Point {
+  x: Float!
+
+  """Shown next to the point."""
+  label: String @deprecated(reason: "Use caption.")
+}`)
+  expect(
+    await Effect.runPromise(
+      G.execute(built, {
+        source: 'mutation { place(point: { x: 2 }, note: "n") }',
+      }),
+    ),
+  ).toEqual({ data: { place: "true 2 n 1" } })
+})
