@@ -1,5 +1,16 @@
 # @model-ts/graphql
 
+## 7.5.0
+
+### Minor Changes
+
+- 75b9da9: Add `GraphQL.arg(schema, { description, deprecationReason })` (also exported as `arg`) to document an argument or input field without changing its type. It sets Effect key annotations, so it works on the fields of input classes and composes with `Schema.optionalKey` and `GraphQL.default`.
+- 75b9da9: Add `GraphQL.nullable.arg(schema, options?)` for nullable arguments and input fields: `Schema.optionalKey(Schema.NullOr(schema))`, omittable or `null` like a nullable GraphQL argument, with the same `{ description, deprecationReason }` as `GraphQL.arg`. The error for an explicit `null` sent to an optional-only input now suggests it.
+
+### Patch Changes
+
+- 79a2467: Stop copying a named input type's description onto every argument and input field of that type. The description now appears only on the `input` definition; describe an argument or field with `annotateKey({ description })`. An input type described differently at two uses (for example `Input.annotate({ description })` at one argument) now fails to assemble instead of taking whichever description was assembled first. Key annotations no longer change a named input type's own description.
+
 ## 7.4.0
 
 ### Minor Changes
