@@ -11,6 +11,7 @@ import {
   type GraphQLInputType,
   GraphQLInputObjectType,
   GraphQLEnumType,
+  getNamedType,
   isInputType,
 } from "graphql"
 import { dateTime, jsonScalar } from "./Scalars.ts"
@@ -19,6 +20,7 @@ import {
   annotations,
   metadata,
   representation,
+  typeMetadata,
   unwrap,
 } from "./SchemaTypes.ts"
 
@@ -27,6 +29,20 @@ export function structure(ast: SchemaAST.AST): SchemaAST.Objects | undefined {
   if (ast._tag === "Declaration" && ast.typeParameters[0]?._tag === "Objects")
     return ast.typeParameters[0]
   return undefined
+}
+
+/**
+ * Metadata of an argument or input field. A named input object's description
+ * belongs to its `input` definition, so an argument or field of that type is
+ * only described by its own key annotations (`annotateKey`). Scalar, enum and
+ * list arguments keep their schema's metadata.
+ */
+function describeUse(ast: SchemaAST.AST, type: GraphQLInputType) {
+  const own = metadata(ast)
+  if (!(getNamedType(type) instanceof GraphQLInputObjectType)) return own
+  const { description: _inherited, ...rest } = own
+  const key = ast.context?.annotations?.description
+  return typeof key === "string" ? { ...rest, description: key } : rest
 }
 
 /** One mapper per assembled schema: names and AST identity never leak between schemas. */
@@ -56,9 +72,10 @@ export class InputTypes {
     coordinate: string,
   ) {
     const defaultValue: unknown = annotations(schema.ast).graphqlDefault
+    const type = this.type(schema.ast, coordinate)
     return {
-      type: this.type(schema.ast, coordinate),
-      ...metadata(schema.ast),
+      type,
+      ...describeUse(schema.ast, type),
       ...(defaultValue === undefined
         ? {}
         : {
@@ -91,6 +108,13 @@ export class InputTypes {
           return invalid(`Duplicate input name: ${ref}`)
         if (structure(ast) && !(existing instanceof GraphQLInputObjectType))
           return invalid(`Duplicate input name: ${ref}`)
+        // An input object has one description. Another one at a later use
+        // would make the result depend on which use was assembled first.
+        const description = typeMetadata(ast).description
+        if (owner && description !== existing.description)
+          return invalid(
+            `${coordinate}: input ${ref} is described differently here than where it was first used. Keep its description on the schema that defines it, and describe this argument or field with annotateKey({ description })`,
+          )
         return wrap(existing)
       }
       if (ref === "DateTime") return wrap(this.add(dateTime()))
@@ -106,7 +130,7 @@ export class InputTypes {
       const type = this.add(
         new GraphQLInputObjectType({
           name: ref,
-          ...metadata(ast),
+          ...typeMetadata(ast),
           fields: () =>
             Object.fromEntries(
               encoded.propertySignatures.map((p) => {

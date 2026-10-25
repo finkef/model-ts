@@ -384,3 +384,91 @@ test("jsonScalar without options keeps the default metadata", () => {
     ),
   ).not.toContain("@specifiedBy")
 })
+
+test("arguments and input fields do not inherit a named input type's description", () => {
+  class FavoritePosition extends Schema.Class<FavoritePosition>(
+    "FavoritePosition",
+  )(
+    { index: Schema.Number },
+    { description: "A position in the user's favorites." },
+  ) {}
+  class FavoriteMoveInput extends Schema.Class<FavoriteMoveInput>(
+    "FavoriteMoveInput",
+  )(
+    {
+      favoriteId: Schema.String,
+      position: FavoritePosition,
+      after: Schema.optionalKey(Schema.NullOr(FavoritePosition)),
+      before: FavoritePosition.annotateKey({
+        description: "Move the favorite before this position.",
+      }),
+    },
+    { description: "A new position for one of the user's favorites." },
+  ) {}
+  const built = G.schema({
+    query: G.queryField("ping", "String", () => "pong"),
+    move: G.mutationField("favoriteMove", G.nullable("String"), {
+      description: "Move one of the caller's favorites to a new position.",
+      args: { input: FavoriteMoveInput },
+      resolve: () => null,
+    }),
+    described: G.mutationField("favoriteMoveDescribed", G.nullable("String"), {
+      args: {
+        input: FavoriteMoveInput.annotateKey({
+          description: "The favorite to move and where to.",
+        }),
+        note: Schema.optionalKey(
+          Schema.String.annotate({ description: "Shown in the history." }),
+        ),
+      },
+      resolve: () => null,
+    }),
+  })
+  const printed = printSchema(built.schema)
+
+  expect(printed).toContain(`type Mutation {
+  """Move one of the caller's favorites to a new position."""
+  favoriteMove(input: FavoriteMoveInput!): String
+  favoriteMoveDescribed(
+    """The favorite to move and where to."""
+    input: FavoriteMoveInput!
+
+    """Shown in the history."""
+    note: String
+  ): String
+}`)
+  expect(printed)
+    .toContain(`"""A new position for one of the user's favorites."""
+input FavoriteMoveInput {
+  favoriteId: String!
+  position: FavoritePosition!
+  after: FavoritePosition
+
+  """Move the favorite before this position."""
+  before: FavoritePosition!
+}`)
+  expect(printed).toContain(`"""A position in the user's favorites."""
+input FavoritePosition {`)
+})
+
+test("an input type described differently at two uses fails to assemble", () => {
+  class Filter extends Schema.Class<Filter>("Filter")(
+    { term: Schema.String },
+    { description: "Narrows a search." },
+  ) {}
+  for (const order of ["annotated first", "annotated last"]) {
+    const annotated = Filter.annotate({ description: "Narrows this search." })
+    const [first, second] =
+      order === "annotated first" ? [annotated, Filter] : [Filter, annotated]
+    expect(() =>
+      G.schema({
+        query: G.queryField("search", G.nullable("String"), {
+          args: { first, second },
+          resolve: () => null,
+        }),
+      }),
+    ).toThrow(
+      "input Filter is described differently here than where it was first used",
+    )
+  }
+})

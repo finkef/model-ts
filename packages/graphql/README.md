@@ -507,6 +507,23 @@ model field. Null is a stored value, not a DynamoDB attribute removal.
 null items; `Schema.NullOr(Schema.Array(S))` allows a null list. Schema descriptions
 on input classes and fields become GraphQL descriptions.
 
+A named input type's description belongs to its `input` definition. An argument
+or input field of that type has no description unless it gets its own with
+`annotateKey`, which describes the key without changing the type:
+
+```ts
+args: {
+  input: FavoriteMoveInput.annotateKey({
+    description: "The favorite to move and where to.",
+  }),
+}
+```
+
+`FavoriteMoveInput.annotate({ description })` would describe the type instead.
+An input type described differently at two uses fails to assemble, because
+GraphQL gives it one description. Scalar, enum and list arguments keep their
+schema's description.
+
 Use `GraphQL.default(schema, decodedValue)` for argument defaults:
 
 `examples/arguments.ts`
