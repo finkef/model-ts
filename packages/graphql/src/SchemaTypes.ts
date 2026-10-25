@@ -1,5 +1,4 @@
-import type { SchemaAST } from "effect"
-import { Schema } from "effect"
+import { Effect, Schema, SchemaAST } from "effect"
 import {
   type GraphQLOutputType,
   type GraphQLNullableType,
@@ -39,64 +38,138 @@ export function input<S extends Schema.Top>(
   return schema.annotate({ graphqlType: name })
 }
 
-export function defaulted<
-  S extends Schema.Top & Schema.Codec<unknown, unknown>,
->(schema: S, value: NoInfer<S["Type"]>): S["Rebuild"] {
-  Schema.decodeUnknownSync(Schema.toType(schema))(value)
-  return schema.annotate({ graphqlDefault: value })
-}
-
-/** Documentation of one argument or input field. */
-export interface ArgOptions {
-  readonly description?: string | undefined
-  /** Only optional arguments and input fields can be deprecated. */
-  readonly deprecationReason?: string | undefined
+/** The description of one argument or input field. */
+export interface AnnotateOptions {
+  readonly description: string
 }
 
 /**
- * Describes an argument or input field without changing its type. A named
- * input type keeps its own description on its `input` definition.
+ * Describes the argument or input field that uses `schema`, without changing
+ * its type. Effect's `schema.annotate({ description })` describes the type
+ * instead, which for a named input type is its `input` definition.
  *
  * ```ts
  * args: {
- *   input: GraphQL.arg(FavoriteMoveInput, {
+ *   input: GraphQL.annotate(FavoriteMoveInput, {
  *     description: "The favorite to move and where to.",
  *   }),
  * }
  * ```
  *
- * It sets key annotations, as `schema.annotateKey(options)` does, so it also
- * works on the fields of an input class and composes with `Schema.optionalKey`
- * and `GraphQL.default`.
+ * It sets key annotations, as `schema.annotateKey(options)` does. There is no
+ * `deprecationReason`: GraphQL can only deprecate optional arguments and input
+ * fields, so `optional` and `optional.nullable` take one.
  */
-export function arg<S extends Schema.Top>(
+export function annotate<S extends Schema.Top>(
   schema: S,
-  options: ArgOptions,
+  options: AnnotateOptions,
 ): S["Rebuild"] {
-  const { description, deprecationReason } = options
-  return schema.annotateKey({
-    ...(description === undefined ? {} : { description }),
-    ...(deprecationReason === undefined ? {} : { deprecationReason }),
-  })
+  return schema.annotateKey({ description: options.description })
+}
+
+/** Documentation of an optional argument or input field. */
+export interface OptionalOptions {
+  readonly description?: string | undefined
+  readonly deprecationReason?: string | undefined
+}
+
+/** An optional argument or input field with a value used when it is omitted. */
+export interface DefaultOptions<T> extends OptionalOptions {
+  /** A decoded value, validated and encoded with the schema for the GraphQL schema. */
+  readonly default: T
 }
 
 /**
- * A nullable argument or input field: it may be omitted or `null`, as a
- * nullable GraphQL argument may. Decoding keeps the two apart, so an update
- * can leave an omitted field unchanged and clear one that is `null`. It is
- * `Schema.optionalKey(Schema.NullOr(schema))`, described like `arg`.
+ * An argument or input field that may be omitted but not `null`. With a
+ * `default`, an omitted value decodes to it and the decoded type is required.
+ * An explicit `null` fails with "<field> cannot be null.", default or not; use
+ * `optional.nullable` when `null` is a value, for example to clear a field.
  *
  * ```ts
  * args: {
- *   note: GraphQL.nullable.arg(Schema.String, { description: "Null clears it." }),
+ *   name: GraphQL.optional(Schema.String, { default: "world" }),
+ *   label: GraphQL.optional(Schema.String, { description: "Shown in lists." }),
  * }
  * ```
  */
-export function nullableArg<S extends Schema.Top>(
+function optionalInput<S extends Schema.Top>(
   schema: S,
-  options: ArgOptions = {},
-): Schema.optionalKey<Schema.NullOr<S>> {
-  return arg(Schema.optionalKey(Schema.NullOr(schema)), options)
+  options: DefaultOptions<NoInfer<S["Type"]>>,
+): Schema.withDecodingDefaultTypeKey<S>
+function optionalInput<S extends Schema.Top>(
+  schema: S,
+  options?: OptionalOptions,
+): Schema.optionalKey<S>
+function optionalInput(
+  schema: Schema.Top,
+  options?: OptionalOptions & { readonly default?: unknown },
+): Schema.Top {
+  return withKey(schema, options)
+}
+
+/**
+ * An argument or input field that may be omitted or `null`, which is how a
+ * nullable GraphQL argument behaves. Decoding keeps the two apart, so an
+ * update can leave an omitted field unchanged and write `null` for one that
+ * is sent as `null`. A `default` only replaces an omitted value.
+ *
+ * ```ts
+ * args: {
+ *   note: GraphQL.optional.nullable(Schema.String, { description: "Null clears it." }),
+ * }
+ * ```
+ */
+function nullableInput<S extends Schema.Top>(
+  schema: S,
+  options: DefaultOptions<NoInfer<S["Type"]> | null>,
+): Schema.withDecodingDefaultTypeKey<Schema.NullOr<S>>
+function nullableInput<S extends Schema.Top>(
+  schema: S,
+  options?: OptionalOptions,
+): Schema.optionalKey<Schema.NullOr<S>>
+function nullableInput(
+  schema: Schema.Top,
+  options?: OptionalOptions & { readonly default?: unknown },
+): Schema.Top {
+  return withKey(Schema.NullOr(schema), options)
+}
+
+function withKey(
+  schema: Schema.Top,
+  options: OptionalOptions & { readonly default?: unknown } = {},
+): Schema.Top {
+  const { description, deprecationReason } = options
+  const key = {
+    ...(description === undefined ? {} : { description }),
+    ...(deprecationReason === undefined ? {} : { deprecationReason }),
+  }
+  if (options.default === undefined)
+    return Schema.optionalKey(schema).annotateKey(key)
+  // A default that does not decode would only fail once the value is omitted.
+  const value = Schema.decodeUnknownSync(Schema.toType(schema))(options.default)
+  return schema
+    .pipe(Schema.withDecodingDefaultTypeKey(Effect.succeed(value)))
+    .annotateKey({ ...key, graphqlDefault: value })
+}
+
+/** Optional arguments and input fields; see `optionalInput` and `nullableInput`. */
+export const optional = Object.assign(optionalInput, {
+  nullable: nullableInput,
+})
+
+/**
+ * Whether GraphQL may omit this argument or input field. A schema with a
+ * decoding default is required once decoded but optional on the wire.
+ */
+export function isOptionalInput(ast: SchemaAST.AST): boolean {
+  return SchemaAST.isOptional(optionalSource(ast) ?? ast)
+}
+
+/** The `optionalKey(S)` a decoding default decodes from, if any. */
+export function optionalSource(ast: SchemaAST.AST): SchemaAST.AST | undefined {
+  if (SchemaAST.isOptional(ast)) return undefined
+  const source = ast.encoding?.at(-1)?.to
+  return source && SchemaAST.isOptional(source) ? source : undefined
 }
 
 export const invalid = (message: string): never => {

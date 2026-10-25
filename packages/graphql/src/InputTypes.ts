@@ -18,6 +18,8 @@ import { dateTime, jsonScalar } from "./Scalars.ts"
 import {
   invalid,
   annotations,
+  isOptionalInput,
+  optionalSource,
   metadata,
   representation,
   typeMetadata,
@@ -34,7 +36,7 @@ export function structure(ast: SchemaAST.AST): SchemaAST.Objects | undefined {
 /**
  * Metadata of an argument or input field. A named input object's description
  * belongs to its `input` definition, so an argument or field of that type is
- * only described by its own key annotations (`GraphQL.arg`). Scalar, enum and
+ * only described by its own key annotations (`GraphQL.annotate`). Scalar, enum and
  * list arguments keep their schema's metadata.
  */
 function describeUse(ast: SchemaAST.AST, type: GraphQLInputType) {
@@ -79,7 +81,7 @@ export class InputTypes {
       ...(defaultValue === undefined
         ? {}
         : {
-            // defaulted() accepts a codec; the argument map retains its decoder view.
+            // The argument map keeps the decoder view of each codec.
             defaultValue: Schema.encodeUnknownSync(
               schema as Schema.Codec<unknown, unknown>,
             )(defaultValue),
@@ -87,6 +89,9 @@ export class InputTypes {
     }
   }
   type(ast: SchemaAST.AST, coordinate: string): GraphQLInputType {
+    // A default decodes from `optionalKey(S)`, which is the GraphQL type.
+    const source = optionalSource(ast)
+    if (source) return this.type(source, coordinate)
     const nonnull = !SchemaAST.isOptional(ast)
     const wrap = (type: GraphQLInputType) =>
       nonnull ? new GraphQLNonNull(unwrap(type)) : unwrap(type)
@@ -113,7 +118,7 @@ export class InputTypes {
         const description = typeMetadata(ast).description
         if (owner && description !== existing.description)
           return invalid(
-            `${coordinate}: input ${ref} is described differently here than where it was first used. Keep its description on the schema that defines it, and describe this argument or field with GraphQL.arg(schema, { description })`,
+            `${coordinate}: input ${ref} is described differently here than where it was first used. Keep its description on the schema that defines it, and describe this argument or field with GraphQL.annotate(schema, { description })`,
           )
         return wrap(existing)
       }
@@ -199,53 +204,68 @@ export class InputTypes {
   }
 }
 
-/** Report the schema change needed to accept an explicit clear, without echoing input data. */
-export function optionalNullMessage(
+/**
+ * The `field` of a `UserInputError`: the path of the failing argument or input
+ * field, without the conventional `input` argument in front of its fields.
+ */
+export function inputField(
+  path: readonly PropertyKey[],
+  fallback: string,
+): string {
+  const rest = path.length > 1 && path[0] === "input" ? path.slice(1) : path
+  return rest.map(String).join(".") || fallback
+}
+
+/**
+ * The path of a `null` sent to an argument or input field that may only be
+ * omitted (`GraphQL.optional`). GraphQL accepts it, since its type is nullable,
+ * and the schema rejects it. The public message names the field, never the value.
+ */
+export function rejectedNull(
   args: Readonly<Record<string, Schema.ConstraintDecoder<unknown, never>>>,
   raw: Readonly<Record<string, unknown>>,
-): string | undefined {
+): readonly PropertyKey[] | undefined {
   const visit = (
     ast: SchemaAST.AST,
     value: unknown,
-    path: string,
-  ): string | undefined => {
+    path: readonly PropertyKey[],
+  ): readonly PropertyKey[] | undefined => {
     if (value === null) {
       const nullable = Schema.is(Schema.toEncoded(Schema.make(ast)))(null)
-      return SchemaAST.isOptional(ast) && !nullable
-        ? `${path}: null is not accepted by Schema.optionalKey(S); omit the field or use GraphQL.nullable.arg(S) to allow clearing it`
-        : undefined
+      return isOptionalInput(ast) && !nullable ? path : undefined
     }
     if (ast._tag === "Union") {
       for (const member of ast.types) {
-        const message = visit(member, value, path)
-        if (message) return message
+        const found = visit(member, value, path)
+        if (found) return found
       }
     }
     const object = structure(ast)
     if (object && typeof value === "object" && value !== null) {
       for (const field of object.propertySignatures) {
-        const message = visit(
-          field.type,
-          Reflect.get(value, field.name),
-          `${path}.${String(field.name)}`,
-        )
-        if (message) return message
+        const found = visit(field.type, Reflect.get(value, field.name), [
+          ...path,
+          field.name,
+        ])
+        if (found) return found
       }
     }
     if (ast._tag === "Arrays" && ast.rest[0] && Array.isArray(value)) {
       for (const [index, item] of value.entries()) {
-        const message = visit(ast.rest[0], item, `${path}[${index}]`)
-        if (message) return message
+        const found = visit(ast.rest[0], item, [...path, index])
+        if (found) return found
       }
     }
     return undefined
   }
   for (const [key, schema] of Object.entries(args)) {
-    const message = visit(schema.ast, raw[key], key)
-    if (message) return message
+    const found = visit(schema.ast, raw[key], [key])
+    if (found) return found
   }
   return undefined
 }
+
+export const nullMessage = (field: string) => `${field} cannot be null.`
 
 /** DateTime parses to ISO strings; native Schema.Date inputs still decode to Dates. */
 export function argumentDecoder(

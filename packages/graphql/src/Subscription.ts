@@ -8,7 +8,12 @@ import {
 } from "./Errors.ts"
 import { describe, normalize } from "./FieldRuntime.ts"
 import { type RuntimeRef, type Field, fieldRequirements } from "./FieldTypes.ts"
-import { argumentDecoder, optionalNullMessage } from "./InputTypes.ts"
+import {
+  argumentDecoder,
+  inputField,
+  nullMessage,
+  rejectedNull,
+} from "./InputTypes.ts"
 import { type AnyConfig } from "./Resolver.ts"
 
 /** Setup and delivery share the resolver policy; authorization runs on every event. */
@@ -38,9 +43,11 @@ export const eventField = (
             try {
               decoded = decode(raw)
             } catch {
+              const nullPath = rejectedNull(options.args ?? {}, raw)
               throw fieldError(
-                optionalNullMessage(options.args ?? {}, raw) ??
-                  "Invalid arguments",
+                nullPath
+                  ? nullMessage(inputField(nullPath, name))
+                  : "Invalid arguments",
                 { code: "BAD_USER_INPUT" },
               )
             }

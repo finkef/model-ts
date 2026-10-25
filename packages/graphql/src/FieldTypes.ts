@@ -14,7 +14,6 @@ import {
   type ErrorsOf,
   type ResultOptions,
 } from "./Results.ts"
-import type { nullableArg } from "./SchemaTypes.ts"
 
 export type Resolved<A, E, R> = A | Effect.Effect<A, E, R>
 
@@ -378,12 +377,6 @@ export interface NullableFields<Types, G, C> extends ScalarHelpers<
   C,
   true
 > {
-  /**
-   * A nullable argument or input field, omittable or `null`:
-   * `Schema.optionalKey(Schema.NullOr(schema))` with optional `GraphQL.arg`
-   * documentation.
-   */
-  readonly arg: typeof nullableArg
   <const T extends Ref<Types>>(
     of: T,
   ): OutputRef<NullableOf<Types, T>, T> &

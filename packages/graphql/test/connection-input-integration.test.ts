@@ -101,7 +101,7 @@ it.effect(
             Scope.annotate({ description: "Optional permission." }),
           ),
           input: ModelInput,
-          fallback: G.default(Scope, "user:read"),
+          fallback: G.optional(Scope, { default: "user:read" }),
         },
         resolve: (_, { scope, input, fallback }) => {
           expect(input).toBeInstanceOf(ModelInput)

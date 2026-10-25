@@ -19,7 +19,12 @@ import {
   fieldRequirements,
   type Field,
 } from "./FieldTypes.ts"
-import { argumentDecoder, optionalNullMessage } from "./InputTypes.ts"
+import {
+  argumentDecoder,
+  inputField,
+  nullMessage,
+  rejectedNull,
+} from "./InputTypes.ts"
 import { type ErrorSchema, type ResultOptions, errorName } from "./Results.ts"
 
 export interface Resolver {
@@ -98,6 +103,7 @@ export const resolverField = <R>(
               try {
                 decoded = decode(raw)
               } catch (error) {
+                const nullPath = rejectedNull(resolver.args, raw)
                 if (Schema.isSchemaError(error)) {
                   const member = resolver.members.find(
                     (member) => errorName(member) === "UserInputError",
@@ -106,31 +112,30 @@ export const resolverField = <R>(
                     const issue = SchemaIssue.makeFormatterStandardSchemaV1()(
                       error.issue,
                     ).issues[0]
-                    const path =
-                      issue?.path?.map((key) =>
-                        typeof key === "object" ? String(key.key) : String(key),
-                      ) ?? []
-                    const field =
-                      (path[0] === "input" ? path.slice(1) : path).join(".") ||
-                      name
+                    const field = inputField(
+                      nullPath ??
+                        issue?.path?.map((key) =>
+                          typeof key === "object" ? key.key : key,
+                        ) ??
+                        [],
+                      name,
+                    )
                     return Effect.fail(
                       Schema.decodeUnknownSync(member)({
                         _tag: "UserInputError",
-                        message:
-                          optionalNullMessage(resolver.args, raw) ??
-                          issue?.message ??
-                          "Invalid arguments",
+                        message: nullPath
+                          ? nullMessage(field)
+                          : (issue?.message ?? "Invalid arguments"),
                         field,
                       }),
                     )
                   }
                 }
                 throw fieldError(
-                  optionalNullMessage(resolver.args, raw) ??
-                    "Invalid arguments",
-                  {
-                    code: "BAD_USER_INPUT",
-                  },
+                  nullPath
+                    ? nullMessage(inputField(nullPath, name))
+                    : "Invalid arguments",
+                  { code: "BAD_USER_INPUT" },
                 )
               }
               return Effect.gen(function* () {

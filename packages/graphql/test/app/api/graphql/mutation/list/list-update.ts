@@ -7,12 +7,13 @@ import { GraphQL } from "../../../graphql.ts"
 export class ListUpdateInput extends Schema.Class<ListUpdateInput>(
   "ListUpdateInput",
 )({
-  name: Schema.optionalKey(
+  name: GraphQL.optional(
     Schema.NonEmptyString.check(
       Schema.isPattern(/\S/, { message: "Name must not be blank" }),
     ),
-  ).annotate({ description: "A new name. Must not be blank." }),
-  starred: Schema.optionalKey(Schema.Boolean),
+    { description: "A new name. Must not be blank." },
+  ),
+  starred: GraphQL.optional(Schema.Boolean),
 }) {}
 
 export const ListUpdateMutation = GraphQL.mutationField(

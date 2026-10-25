@@ -84,7 +84,7 @@ describe("example", () => {
       })
     })
   }
-  test("optional-only null reports a fix in the declared input error result", async () => {
+  test("optional null names the field in the declared input error result", async () => {
     const result = await handler({
       source: mutation,
       variableValues: { id: "l1", input: { name: null } },
@@ -93,7 +93,7 @@ describe("example", () => {
     expect(result.data?.listUpdate).toMatchObject({
       __typename: "UserInputError",
       field: "name",
-      message: expect.stringContaining("GraphQL.nullable.arg(S)"),
+      message: "name cannot be null.",
     })
   })
   test("unknown ID", async () => {
@@ -380,6 +380,48 @@ test("nested decode path in UserInputError", async () => {
       nestedEdge: { __typename: "UserInputError", field: "nested.label" },
     },
   })
+})
+
+test("optional null names its argument or nested input field in UserInputError", async () => {
+  class NullInner extends Schema.Class<NullInner>("NullInner")({
+    label: GraphQL.optional(Schema.String),
+  }) {}
+  class NullOuter extends Schema.Class<NullOuter>("NullOuter")({
+    inner: GraphQL.optional(NullInner),
+    items: GraphQL.optional(Schema.Array(NullInner)),
+  }) {}
+  const query = GraphQL.queryField("nullEdge", "ListEdge", {
+    args: {
+      input: GraphQL.optional(NullOuter),
+      limit: GraphQL.optional(Schema.Int, { default: 10 }),
+    },
+    errors: [UserInputError],
+    resolve: () => Effect.die("decoding fails before the resolver runs"),
+  })
+  const built = GraphQL.schema({ ...definitions, query })
+  const run = (args: string) =>
+    GraphQL.execute(
+      built,
+      {
+        source: `{nullEdge${args}{__typename ...on UserInputError{field message}}}`,
+      },
+      member,
+    ).pipe(Effect.provide(appLayer), Effect.runPromise)
+  for (const [args, field] of [
+    ["(limit: null)", "limit"],
+    ["(input: null)", "input"],
+    ["(input: {inner: {label: null}})", "inner.label"],
+    ["(input: {items: [{}, {label: null}]})", "items.1.label"],
+  ])
+    expect(await run(args)).toEqual({
+      data: {
+        nullEdge: {
+          __typename: "UserInputError",
+          field,
+          message: `${field} cannot be null.`,
+        },
+      },
+    })
 })
 
 test("errors preserve public/internal/defect policy", async () => {

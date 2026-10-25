@@ -319,7 +319,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
-        "line": 31,
+        "line": 32,
         "column": 48,
         "code": 2345
       }
@@ -385,7 +385,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
-        "line": 31,
+        "line": 32,
         "column": 58,
         "code": 2345
       }
@@ -457,7 +457,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
-        "line": 39,
+        "line": 40,
         "column": 50,
         "code": 2339
       }
@@ -468,7 +468,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
-        "line": 29,
+        "line": 30,
         "column": 7,
         "code": 2769
       }
@@ -479,7 +479,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
-        "line": 29,
+        "line": 30,
         "column": 7,
         "code": 2769
       }
@@ -523,7 +523,7 @@
     "diagnostics": [
       {
         "file": "test/app/api/graphql/mutation/list/list-update.ts",
-        "line": 20,
+        "line": 21,
         "column": 3,
         "code": 2769
       }

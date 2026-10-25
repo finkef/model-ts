@@ -20,7 +20,7 @@ import { makeFields } from "./Fields.ts"
 import { type Fields, type Requirements } from "./FieldTypes.ts"
 import { type Complete, type CompatibleContexts } from "./Registry.ts"
 import { type ErrorSchema, type ErrorsOf } from "./Results.ts"
-import { arg, input, defaulted, invalid } from "./SchemaTypes.ts"
+import { annotate, input, invalid, optional } from "./SchemaTypes.ts"
 
 export interface BuilderOptions {
   /** Largest "first"/"last" a connection accepts. Defaults to 100. */
@@ -33,9 +33,10 @@ export interface BuilderOptions {
 export interface Builder<Types, G, C = {}>
   extends DefinitionBuilder<Types, G, C>, Fields<Types, G, C> {
   input: typeof input
-  default: typeof defaulted
-  /** Describes an argument or input field; see `arg`. */
-  arg: typeof arg
+  /** Describes an argument or input field; see `annotate`. */
+  annotate: typeof annotate
+  /** Optional arguments and input fields; see `optional`. */
+  optional: typeof optional
   /** Errors any resolver may fail with, and how each reaches the response. */
   withErrorPolicy<
     const I extends readonly ErrorSchema[] = readonly [],
@@ -90,8 +91,8 @@ function make<Types, G, C>(
     ...fields,
     ...makeDefinitions<Types, G, C>(rootField),
     input,
-    default: defaulted,
-    arg,
+    annotate,
+    optional,
     withErrorPolicy: (options) =>
       make(
         {
